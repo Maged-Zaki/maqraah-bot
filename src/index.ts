@@ -7,6 +7,13 @@ import { scheduleReminder } from './scheduler';
 
 config();
 
+const requiredEnvVars = ['DISCORD_TOKEN', 'GUILD_ID', 'CHANNEL_ID'];
+for (const varName of requiredEnvVars) {
+	if (!process.env[varName]) {
+		throw new Error(`Required environment variable ${varName} is not set. Please check your .env file.`);
+	}
+}
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 (client as any).commands = new Collection();

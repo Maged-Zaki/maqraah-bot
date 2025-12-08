@@ -19,13 +19,13 @@ export async function execute(interaction: any) {
 	const role = interaction.options.getRole('role');
 	if (role) {
 		updates.roleId = role.id;
-		replyMessages.push(`Role set to \`${role}\`.`);
+		replyMessages.push(`Role set to ${role}.`);
 	}
 
 	const voicechannel = interaction.options.getChannel('voicechannel');
 	if (voicechannel) {
 		updates.voiceChannelId = voicechannel.id;
-		replyMessages.push(`Voice channel set to \`${voicechannel}\`.`);
+		replyMessages.push(`Voice channel set to ${voicechannel}.`);
 	}
 
 	const time = interaction.options.getString('time');

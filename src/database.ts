@@ -9,10 +9,9 @@ db.serialize(() => {
 	     lastPage INTEGER DEFAULT 0,
 	     lastHadith INTEGER DEFAULT 0,
 	     roleId TEXT DEFAULT 'Not set',
-	     dailyTime TEXT DEFAULT '12:00',
+	     dailyTime TEXT DEFAULT '12:00 PM',
 	     timezone TEXT DEFAULT 'Africa/Cairo',
-	     voiceChannelId TEXT DEFAULT '',
-	     textChannelId TEXT DEFAULT ''
+	     voiceChannelId TEXT DEFAULT ''
 	   )
 	 `);
 	db.run(`INSERT OR IGNORE INTO config (id) VALUES (1)`);
@@ -33,7 +32,6 @@ export interface Config {
 	dailyTime: string;
 	timezone: string;
 	voiceChannelId?: string;
-	textChannelId?: string;
 }
 
 export interface Note {

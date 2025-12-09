@@ -1,0 +1,58 @@
+name: Deploy to Remote Server
+
+on:
+  push:
+    branches: [main]
+
+env:
+  DEPLOY_PATH: /home/ubuntu/app
+  USER: ubuntu
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Copy files to remote server
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no" ./ \
+            ${{ env.USER }}@${{ secrets.SSH_HOST }}:${{ env.DEPLOY_PATH }}
+
+      - name: Create .env file on server
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ env.USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            cd ${{ env.DEPLOY_PATH }}
+            echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}" > .env
+            echo "GUILD_ID=${{ secrets.GUILD_ID }}" >> .env
+            echo "CHANNEL_ID=${{ secrets.CHANNEL_ID }}" >> .env
+          EOF
+
+      - name: Deploy application
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ env.USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            cd ${{ env.DEPLOY_PATH }}
+
+            # install dependencies
+            npm install
+
+            # build the app
+            npm run build
+
+            # start or restart with PM2
+            pm2 restart maqraah-bot || pm2 start dist/index.js --name maqraah-bot
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_rsa

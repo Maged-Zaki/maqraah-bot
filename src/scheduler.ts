@@ -29,7 +29,7 @@ export function scheduleReminder(client: Client) {
 				const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
 				if (channel && channel.isTextBased()) {
 					const nextPage = getNextPage(config.lastPage);
-					let message = `<@&${config.roleId}>\nPage: [${nextPage}](https://quran.com/page/${nextPage})\nHadith: ${config.lastHadith + 1}`;
+					let message = `<@&${config.roleId}> 📢\nPage: [${nextPage}](https://quran.com/page/${nextPage})\nHadith: ${config.lastHadith + 1}`;
 
 					const notes = await getAllNotes();
 					if (notes.length > 0) {

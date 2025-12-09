@@ -10,9 +10,9 @@ export const data = new SlashCommandBuilder()
 			.setDescription('Add a note')
 			.addStringOption((option) => option.setName('text').setDescription('The note text').setRequired(true))
 	)
-	.addSubcommand((subcommand) => subcommand.setName('show-my').setDescription('Show your personal notes'))
+	.addSubcommand((subcommand) => subcommand.setName('show-mine').setDescription('Show your personal notes'))
 	.addSubcommand((subcommand) => subcommand.setName('show-all').setDescription('Show all notes from all users'))
-	.addSubcommand((subcommand) => subcommand.setName('remove-my').setDescription('Remove all your notes'))
+	.addSubcommand((subcommand) => subcommand.setName('remove-mine').setDescription('Remove all your notes'))
 	.addSubcommand((subcommand) => subcommand.setName('remove-all').setDescription('Remove all notes for everyone'));
 
 export async function execute(interaction: any) {

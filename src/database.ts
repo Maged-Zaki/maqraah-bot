@@ -1,6 +1,10 @@
 import sqlite3 from 'sqlite3';
 
-const db = new sqlite3.Database('./maqraah.db');
+if (!process.env.DATABASE_PATH) {
+	throw new Error('DATABASE_PATH is not defined in environment variables.');
+}
+
+const db = new sqlite3.Database(process.env.DATABASE_PATH);
 
 db.serialize(() => {
 	db.run(`

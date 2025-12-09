@@ -1,11 +1,10 @@
+import { config } from 'dotenv';
+config();
 import { Client, GatewayIntentBits, Collection, Events, TextChannel, PermissionsBitField, MessageFlags } from 'discord.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { config } from 'dotenv';
 import { getConfig, updateConfig } from './database';
 import { scheduleReminder } from './scheduler';
-
-config();
 
 const requiredEnvVars = ['DISCORD_TOKEN', 'GUILD_ID', 'CHANNEL_ID'];
 for (const varName of requiredEnvVars) {

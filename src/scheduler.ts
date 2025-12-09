@@ -1,6 +1,7 @@
 import { Client } from 'discord.js';
 import * as cron from 'node-cron';
 import { getConfig, getAllNotes, deleteNotes } from './database';
+import { getNextPage } from './utils';
 
 let scheduledJob: cron.ScheduledTask | null = null;
 
@@ -27,9 +28,8 @@ export function scheduleReminder(client: Client) {
 			async () => {
 				const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
 				if (channel && channel.isTextBased()) {
-					let message = `<@&${config.roleId}>\nPage: [${config.lastPage + 1}](https://quran.com/page/${config.lastPage + 1})\nHadith: ${
-						config.lastHadith + 1
-					}`;
+					const nextPage = getNextPage(config.lastPage);
+					let message = `<@&${config.roleId}>\nPage: [${nextPage}](https://quran.com/page/${nextPage})\nHadith: ${config.lastHadith + 1}`;
 
 					const notes = await getAllNotes();
 					if (notes.length > 0) {

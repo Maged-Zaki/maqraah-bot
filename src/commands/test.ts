@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { getConfig, getAllNotes, deleteNotes } from '../database';
+import { getNextPage } from '../utils';
 
 export const data = new SlashCommandBuilder().setName('test').setDescription('Send a test reminder message with current configuration');
 
@@ -13,9 +14,8 @@ export async function execute(interaction: any) {
 		return;
 	}
 
-	let message = `<@&${config.roleId}>\nPage: [${config.lastPage + 1}](https://quran.com/page/${config.lastPage + 1})\nHadith: ${
-		config.lastHadith + 1
-	}`;
+	const nextPage = getNextPage(config.lastPage);
+	let message = `<@&${config.roleId}>\nPage: [${nextPage}](https://quran.com/page/${nextPage})\nHadith: ${config.lastHadith + 1}`;
 
 	const notes = await getAllNotes();
 	if (notes.length > 0) {

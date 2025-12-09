@@ -18,7 +18,7 @@ export async function execute(interaction: any) {
 			return;
 		}
 		updates.lastPage = lastpage;
-		replyMessages.push(`Last Qur'an page set to ${lastpage}.`);
+		replyMessages.push(`Last Qur'an page set to \`${lastpage}\`.`);
 	}
 
 	const lasthadith = interaction.options.getInteger('lasthadith');
@@ -28,7 +28,7 @@ export async function execute(interaction: any) {
 			return;
 		}
 		updates.lastHadith = lasthadith;
-		replyMessages.push(`Last Hadith set to ${lasthadith}.`);
+		replyMessages.push(`Last Hadith set to \`${lasthadith}\`.`);
 	}
 
 	if (Object.keys(updates).length > 0) {

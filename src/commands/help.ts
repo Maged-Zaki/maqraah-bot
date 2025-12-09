@@ -4,5 +4,9 @@ export const data = new SlashCommandBuilder().setName('help').setDescription('Li
 
 export async function execute(interaction: any) {
 	const commands = interaction.client.commands.map((cmd: any) => `\`${cmd.data.name}\`: ${cmd.data.description}`).join('\n');
-	await interaction.reply(`Available commands:\n\ ${commands}`);
+
+	await interaction.reply({
+		content: `Available commands:\n${commands}`,
+		ephemeral: true,
+	});
 }

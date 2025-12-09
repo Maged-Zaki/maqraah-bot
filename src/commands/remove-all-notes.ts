@@ -11,5 +11,5 @@ export async function execute(interaction: any) {
 	}
 	const noteIds = notes.map((n) => n.id);
 	await deleteNotes(noteIds);
-	await interaction.reply({ content: `Removed ${notes.length} note(s) for all users.`, flags: MessageFlags.Ephemeral });
+	await interaction.reply({ content: `Removed \`${notes.length}\` notes for all users.` });
 }

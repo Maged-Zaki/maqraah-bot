@@ -1,6 +1,6 @@
 # Maqraah Bot
 
-A Discord bot designed to help users track their daily Qur'an and Hadith reading progress. The bot sends automated reminders, tracks reading progress, and manages personal notes for spiritual growth.
+A Discord bot designed to help users track their daily Qur'an and Hadith reading progress. The bot sends automated reminders, tracks reading progress, and manages personal notes for the group to remember for the next day.
 
 ## Features
 
@@ -51,11 +51,12 @@ A Discord bot designed to help users track their daily Qur'an and Hadith reading
 
 ## Configuration
 
-The bot requires three environment variables:
+The bot requires four environment variables:
 
 - `DISCORD_TOKEN`: Your Discord bot token
 - `GUILD_ID`: The ID of your Discord server (guild)
 - `CHANNEL_ID`: The ID of the text channel where reminders will be sent
+- `DATABASE_PATH`: Path to the SQLite database file (e.g., `./maqraah.db`)
 
 ### Bot Permissions
 
@@ -70,7 +71,7 @@ Ensure your bot has the following permissions in your Discord server:
 
 ### Configuration Commands
 
-- `/configure`
+- `/configuration set`
 
   - Configure bot settings
   - Options:
@@ -79,35 +80,52 @@ Ensure your bot has the following permissions in your Discord server:
     - `time`: Daily reminder time (HH:MM AM/PM format)
     - `timezone`: Timezone for reminders (e.g., "Africa/Cairo")
 
-- `/show-configuration`
+- `/configuration show`
   - Display current bot configuration settings
 
 ### Progress Commands
 
-- `/set-progress`
+- `/progress set`
 
   - Set your current reading progress
   - Options:
-    - `lastpage`: Last Qur'an page read
-    - `lasthadith`: Last Hadith read
+    - `last-quran-page`: Last Qur'an page read
+    - `last-hadith`: Last Hadith read
 
-- `/show-progress`
+- `/progress show`
   - Display current reading progress
 
 ### Notes Commands
 
-- `/add-note`
+- `/notes add`
 
   - Add a personal note to be reminded tomorrow
   - Options:
     - `text`: The note content (required)
 
-- `/remove-my-notes`
+- `/notes show-my`
+
+  - Show your personal notes
+
+- `/notes show-all`
+
+  - Show all notes from all users
+
+- `/notes remove-my`
 
   - Remove all your personal notes
 
-- `/remove-all-notes`
+- `/notes remove-all`
   - Remove all notes from all users (admin command)
+
+### Utility Commands
+
+- `/help`
+
+  - List all available commands
+
+- `/test`
+  - Send a test reminder message with current configuration
 
 ## How It Works
 
@@ -152,7 +170,7 @@ If configured, the bot can update a voice channel's name to display the current 
 3. Start the bot: `npm start`
 4. Configure the bot:
    ```
-   /configure role:@Readers time:8:00 AM timezone:America/New_York
+   /configuration set role:@Readers time:8:00 AM timezone:America/New_York
    ```
 
 ### Daily Workflow
@@ -179,14 +197,13 @@ src/
 ├── index.ts          # Main bot file
 ├── database.ts       # SQLite database operations
 ├── scheduler.ts      # Cron job scheduling
+├── utils.ts          # Utility functions
 └── commands/         # Slash command implementations
-    ├── configure.ts
-    ├── show-configuration.ts
-    ├── set-progress.ts
-    ├── show-progress.ts
-    ├── add-note.ts
-    ├── remove-my-notes.ts
-    └── remove-all-notes.ts
+    ├── configuration.ts
+    ├── progress.ts
+    ├── notes.ts
+    ├── help.ts
+    └── test.ts
 ```
 
 ### Database Schema

@@ -21,7 +21,7 @@ export async function execute(interaction: any) {
 			const updates: any = {};
 			let replyMessages: string[] = [];
 
-			const lastpage = interaction.options.getInteger('lastpage');
+			const lastpage = interaction.options.getInteger('last-quran-page');
 			if (lastpage !== null) {
 				if (lastpage < 1 || lastpage > 604) {
 					await interaction.reply({ content: 'Quran page must be between 1 and 604.', flags: MessageFlags.Ephemeral });
@@ -31,7 +31,7 @@ export async function execute(interaction: any) {
 				replyMessages.push(`Last Qur'an page set to \`${lastpage}\`.`);
 			}
 
-			const lasthadith = interaction.options.getInteger('lasthadith');
+			const lasthadith = interaction.options.getInteger('last-hadith');
 			if (lasthadith !== null) {
 				if (lasthadith <= 0) {
 					await interaction.reply({ content: 'Hadith number must be a positive integer.', flags: MessageFlags.Ephemeral });

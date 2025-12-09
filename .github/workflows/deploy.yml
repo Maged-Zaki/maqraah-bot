@@ -29,6 +29,15 @@ jobs:
             -e "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no" ./ \
             ${{ env.USER }}@${{ secrets.SSH_HOST }}:${{ env.DEPLOY_PATH }}
 
+      - name: Prepare database file
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ env.USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            mkdir -p $(dirname "${{ vars.DATABASE_PATH }}")
+            touch "${{ vars.DATABASE_PATH }}"
+            chown -R ${{ env.USER }}:${{ env.USER }} $(dirname "${{ vars.DATABASE_PATH }}")
+            chmod 700 $(dirname "${{ vars.DATABASE_PATH }}")
+          EOF
+
       - name: Create .env file on server
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ env.USER }}@${{ secrets.SSH_HOST }} << 'EOF'

@@ -79,7 +79,7 @@ client.once('clientReady', async () => {
 			await channel.send(`
 Hello! I am the Maqraah bot. I am here to help you track your daily Qur'an and Hadith reading.
 
-To get started, please use the \`/configuration set\` command to set up your preferences. You can configure multiple settings at once.
+To get started, please use the \`/configuration update\` command to set up your preferences. You can configure multiple settings at once.
 
 Once you have configured me, I will send you a daily reminder to read your Qur'an and Hadith.
 				`);

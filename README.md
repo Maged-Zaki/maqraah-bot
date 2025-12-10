@@ -42,12 +42,7 @@ A Discord bot designed to help users track their daily Qur'an and Hadith reading
 
 4. **Configure environment variables**
    - Copy `.env.example` to `.env`
-   - Fill in your bot credentials:
-     ```
-     DISCORD_TOKEN=your_bot_token_here
-     GUILD_ID=your_guild_id_here
-     CHANNEL_ID=your_channel_id_here
-     ```
+   - Fill in your bot credentials in `.env`
 
 ## Configuration
 

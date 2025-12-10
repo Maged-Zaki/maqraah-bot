@@ -7,7 +7,7 @@ const subcommands = {
 } as const;
 
 const options = {
-	LAST_QURAN_PAGE: 'last-quran-page',
+	LAST_QURAN_PAGE_READ: 'last-quran-page-read',
 	LAST_HADITH: 'last-hadith',
 } as const;
 
@@ -18,7 +18,7 @@ export const data = new SlashCommandBuilder()
 		subcommand
 			.setName(subcommands.UPDATE)
 			.setDescription('Update daily reading progress')
-			.addIntegerOption((option) => option.setName(options.LAST_QURAN_PAGE).setDescription("Last Qur'an page read"))
+			.addIntegerOption((option) => option.setName(options.LAST_QURAN_PAGE_READ).setDescription("Last Qur'an page you've read"))
 			.addIntegerOption((option) => option.setName(options.LAST_HADITH).setDescription('Last Hadith read'))
 	)
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW).setDescription('Display current reading progress'));
@@ -31,7 +31,7 @@ export async function execute(interaction: any) {
 			const updates: any = {};
 			let replyMessages: string[] = [];
 
-			const lastpage = interaction.options.getInteger(options.LAST_QURAN_PAGE);
+			const lastpage = interaction.options.getInteger(options.LAST_QURAN_PAGE_READ);
 			if (lastpage !== null) {
 				if (lastpage < 1 || lastpage > 604) {
 					await interaction.reply({ content: 'Quran page must be between 1 and 604.', flags: MessageFlags.Ephemeral });

@@ -82,6 +82,8 @@ Hello! I am the Maqraah bot. I am here to help you track your daily Qur'an and H
 To get started, please use the \`/configuration update\` command to set up your preferences. You can configure multiple settings at once.
 
 Once you have configured me, I will send you a daily reminder to read your Qur'an and Hadith.
+
+For more information, use \`/help\` to see all available commands.
 				`);
 		} else {
 			console.error(`Missing permissions to send messages in channel ${channelId}`);

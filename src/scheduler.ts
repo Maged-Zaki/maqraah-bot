@@ -3,7 +3,7 @@ import * as cron from 'node-cron';
 import { getConfig, getAllNotes, deleteNotes } from './database';
 import { getNextPage } from './utils';
 
-let scheduledJob: cron.ScheduledTask | null = null;
+export let scheduledJob: cron.ScheduledTask | null = null;
 
 export function scheduleReminder(client: Client) {
 	getConfig().then((config) => {
@@ -17,7 +17,7 @@ export function scheduleReminder(client: Client) {
 			scheduledJob = null;
 		}
 
-		const cronTime = parseTimeToCron(config.dailyTime, config.timezone);
+		const cronTime = parseTimeToCron(config.dailyTime);
 		if (!cronTime) {
 			console.log('Invalid time format, skipping reminder.');
 			return;
@@ -51,7 +51,50 @@ export function scheduleReminder(client: Client) {
 	});
 }
 
-function parseTimeToCron(time: string, timezone: string): string | null {
+export function overrideNextReminder(client: Client, newTime: string) {
+	if (scheduledJob) {
+		scheduledJob.stop();
+		scheduledJob = null;
+	}
+
+	getConfig().then((config) => {
+		const cronTime = parseTimeToCron(newTime);
+		if (!cronTime) {
+			console.log('Invalid time format, skipping reminder.');
+			return;
+		}
+
+		const tempJob = cron.schedule(
+			cronTime,
+			async () => {
+				const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
+				if (channel && channel.isTextBased()) {
+					const nextPage = getNextPage(config.lastPage);
+					let message = `<@&${config.roleId}> 📢\nPage: [${nextPage}](https://quran.com/page/${nextPage})\nHadith: ${config.lastHadith + 1}`;
+
+					const notes = await getAllNotes();
+					if (notes.length > 0) {
+						const noteIds = notes.map((n) => n.id);
+						await deleteNotes(noteIds);
+						message += '\n\nNotes:';
+						for (const note of notes) {
+							message += `\n<@${note.userId}>: ${note.note}`;
+						}
+					}
+
+					await (channel as any).send(message);
+					tempJob.stop();
+					scheduleReminder(client);
+				}
+			},
+			{
+				timezone: config.timezone,
+			}
+		);
+	});
+}
+
+function parseTimeToCron(time: string): string | null {
 	// Assume format "HH:MM AM/PM"
 	const match = time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
 	if (!match) return null;

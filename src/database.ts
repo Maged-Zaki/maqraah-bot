@@ -28,7 +28,6 @@ db.serialize(() => {
 	   )
 	 `);
 });
-
 export interface Config {
 	lastPage: number;
 	lastHadith: number;

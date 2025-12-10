@@ -1,31 +1,39 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { addNote, getNotesByUserId, getAllNotes, deleteNotes } from '../database';
 
+const subcommands = {
+	CREATE: 'create',
+	SHOW_MINE: 'show-mine',
+	SHOW_ALL: 'show-all',
+	DELETE_MINE: 'delete-mine',
+	DELETE_ALL: 'delete-all',
+} as const;
+
 export const data = new SlashCommandBuilder()
 	.setName('notes')
 	.setDescription('Manage notes')
 	.addSubcommand((subcommand) =>
 		subcommand
-			.setName('add')
-			.setDescription('Add a note')
+			.setName(subcommands.CREATE)
+			.setDescription('Creates a new note and saves it for tomorrow')
 			.addStringOption((option) => option.setName('text').setDescription('The note text').setRequired(true))
 	)
-	.addSubcommand((subcommand) => subcommand.setName('show-mine').setDescription('Show your personal notes'))
-	.addSubcommand((subcommand) => subcommand.setName('show-all').setDescription('Show all notes from all users'))
-	.addSubcommand((subcommand) => subcommand.setName('remove-mine').setDescription('Remove all your notes'))
-	.addSubcommand((subcommand) => subcommand.setName('remove-all').setDescription('Remove all notes for everyone'));
+	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW_MINE).setDescription('Show your personal notes'))
+	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW_ALL).setDescription('Show all notes from all users'))
+	.addSubcommand((subcommand) => subcommand.setName(subcommands.DELETE_MINE).setDescription('Remove all your notes'))
+	.addSubcommand((subcommand) => subcommand.setName(subcommands.DELETE_ALL).setDescription('Remove all notes for everyone'));
 
 export async function execute(interaction: any) {
 	const subcommand = interaction.options.getSubcommand();
 
 	switch (subcommand) {
-		case 'add': {
+		case subcommands.CREATE: {
 			const text = interaction.options.getString('text');
 			await addNote(interaction.user.id, text);
 			await interaction.reply({ content: 'Note added! It will be reminded tomorrow.', flags: MessageFlags.Ephemeral });
 			break;
 		}
-		case 'show-mine': {
+		case subcommands.SHOW_MINE: {
 			const notes = await getNotesByUserId(interaction.user.id);
 			if (notes.length === 0) {
 				await interaction.reply({ content: 'You have no notes.', flags: MessageFlags.Ephemeral });
@@ -38,7 +46,7 @@ export async function execute(interaction: any) {
 			await interaction.reply({ embeds: [embed], ephemeral: true });
 			break;
 		}
-		case 'show-all': {
+		case subcommands.SHOW_ALL: {
 			const notes = await getAllNotes();
 			if (notes.length === 0) {
 				await interaction.reply({ content: 'There are no notes.', flags: MessageFlags.Ephemeral });
@@ -51,7 +59,7 @@ export async function execute(interaction: any) {
 			await interaction.reply({ embeds: [embed], ephemeral: true });
 			break;
 		}
-		case 'remove-mine': {
+		case subcommands.DELETE_MINE: {
 			const notes = await getNotesByUserId(interaction.user.id);
 			if (notes.length === 0) {
 				await interaction.reply({ content: 'You have no notes to remove.', flags: MessageFlags.Ephemeral });
@@ -62,7 +70,7 @@ export async function execute(interaction: any) {
 			await interaction.reply({ content: `Removed ${notes.length} note(s).`, flags: MessageFlags.Ephemeral });
 			break;
 		}
-		case 'remove-all': {
+		case subcommands.DELETE_ALL: {
 			const notes = await getAllNotes();
 			if (notes.length === 0) {
 				await interaction.reply({ content: 'There are no notes to remove.', flags: MessageFlags.Ephemeral });

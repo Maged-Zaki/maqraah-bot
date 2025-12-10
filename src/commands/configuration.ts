@@ -2,43 +2,55 @@ import { SlashCommandBuilder, ChannelType, MessageFlags, EmbedBuilder } from 'di
 import { updateConfig, getConfig } from '../database';
 import { scheduleReminder } from '../scheduler';
 
+const subcommands = {
+	UPDATE: 'update',
+	SHOW: 'show',
+} as const;
+
+const options = {
+	ROLE: 'role',
+	VOICE_CHANNEL: 'voicechannel',
+	TIME: 'time',
+	TIMEZONE: 'timezone',
+} as const;
+
 export const data = new SlashCommandBuilder()
 	.setName('configuration')
 	.setDescription('Manage bot configuration')
 	.addSubcommand((subcommand) =>
 		subcommand
-			.setName('set')
-			.setDescription('Set configuration settings')
-			.addRoleOption((option) => option.setName('role').setDescription('Role to ping for reminders'))
+			.setName(subcommands.UPDATE)
+			.setDescription('Update configuration settings')
+			.addRoleOption((option) => option.setName(options.ROLE).setDescription('Role to ping for reminders'))
 			.addChannelOption((option) =>
-				option.setName('voicechannel').setDescription('Voice channel to update with time').addChannelTypes(ChannelType.GuildVoice)
+				option.setName(options.VOICE_CHANNEL).setDescription('Voice channel to update with time').addChannelTypes(ChannelType.GuildVoice)
 			)
-			.addStringOption((option) => option.setName('time').setDescription('Daily reminder time (HH:MM AM/PM)'))
-			.addStringOption((option) => option.setName('timezone').setDescription('Timezone for reminders (e.g., Africa/Cairo)'))
+			.addStringOption((option) => option.setName(options.TIME).setDescription('Daily reminder time (HH:MM AM/PM)'))
+			.addStringOption((option) => option.setName(options.TIMEZONE).setDescription('Timezone for reminders (e.g., Africa/Cairo)'))
 	)
-	.addSubcommand((subcommand) => subcommand.setName('show').setDescription('Display current configuration'));
+	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW).setDescription('Display current configuration'));
 
 export async function execute(interaction: any) {
 	const subcommand = interaction.options.getSubcommand();
 
 	switch (subcommand) {
-		case 'set': {
+		case subcommands.UPDATE: {
 			const updates: any = {};
 			let replyMessages: string[] = [];
 
-			const role = interaction.options.getRole('role');
+			const role = interaction.options.getRole(options.ROLE);
 			if (role) {
 				updates.roleId = role.id;
 				replyMessages.push(`Role set to ${role}.`);
 			}
 
-			const voicechannel = interaction.options.getChannel('voicechannel');
+			const voicechannel = interaction.options.getChannel(options.VOICE_CHANNEL);
 			if (voicechannel) {
 				updates.voiceChannelId = voicechannel.id;
 				replyMessages.push(`Voice channel set to ${voicechannel}.`);
 			}
 
-			const time = interaction.options.getString('time');
+			const time = interaction.options.getString(options.TIME);
 			if (time) {
 				const timeRegex = /^\d{1,2}:\d{2} (AM|PM)$/i;
 				if (!timeRegex.test(time)) {
@@ -52,7 +64,7 @@ export async function execute(interaction: any) {
 				replyMessages.push(`Daily reminder time set to \`${time}\`.`);
 			}
 
-			const timezone = interaction.options.getString('timezone');
+			const timezone = interaction.options.getString(options.TIMEZONE);
 			if (timezone) {
 				updates.timezone = timezone;
 				replyMessages.push(`Timezone set to \`${timezone}\`.`);
@@ -93,7 +105,7 @@ export async function execute(interaction: any) {
 			}
 			break;
 		}
-		case 'show': {
+		case subcommands.SHOW: {
 			const config = await getConfig();
 			const embed = new EmbedBuilder()
 				.setTitle('Configuration')

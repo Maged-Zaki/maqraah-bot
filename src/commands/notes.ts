@@ -15,7 +15,7 @@ export const data = new SlashCommandBuilder()
 	.addSubcommand((subcommand) =>
 		subcommand
 			.setName(subcommands.CREATE)
-			.setDescription('Creates a new note and saves it for tomorrow')
+			.setDescription('Creates a new note and saves it for upcoming maqraah reminder')
 			.addStringOption((option) => option.setName('text').setDescription('The note text').setRequired(true))
 	)
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW_MINE).setDescription('Show your personal notes'))

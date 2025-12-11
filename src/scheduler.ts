@@ -1,7 +1,7 @@
 import { Client } from 'discord.js';
 import * as cron from 'node-cron';
 import { getConfig, getAllNotes, deleteNotes } from './database';
-import { getNextPage } from './utils';
+import { getNextPage, buildReminderMessage } from './utils';
 
 export let scheduledJob: cron.ScheduledTask | null = null;
 
@@ -29,16 +29,12 @@ export function scheduleReminder(client: Client) {
 				const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
 				if (channel && channel.isTextBased()) {
 					const nextPage = getNextPage(config.lastPage);
-					let message = `<@&${config.roleId}> 📢\nPage: [${nextPage}](https://quran.com/page/${nextPage})\nHadith: ${config.lastHadith + 1}`;
-
 					const notes = await getAllNotes();
+					const message = buildReminderMessage(config, nextPage, notes, true);
+
 					if (notes.length > 0) {
 						const noteIds = notes.map((n) => n.id);
 						await deleteNotes(noteIds);
-						message += '\n\nNotes:';
-						for (const note of notes) {
-							message += `\n<@${note.userId}>: ${note.note}`;
-						}
 					}
 
 					await (channel as any).send(message);
@@ -70,16 +66,12 @@ export function overrideNextReminder(client: Client, newTime: string) {
 				const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
 				if (channel && channel.isTextBased()) {
 					const nextPage = getNextPage(config.lastPage);
-					let message = `<@&${config.roleId}> 📢\nPage: [${nextPage}](https://quran.com/page/${nextPage})\nHadith: ${config.lastHadith + 1}`;
-
 					const notes = await getAllNotes();
+					const message = buildReminderMessage(config, nextPage, notes, true);
+
 					if (notes.length > 0) {
 						const noteIds = notes.map((n) => n.id);
 						await deleteNotes(noteIds);
-						message += '\n\nNotes:';
-						for (const note of notes) {
-							message += `\n<@${note.userId}>: ${note.note}`;
-						}
 					}
 
 					await (channel as any).send(message);

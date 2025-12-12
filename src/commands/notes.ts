@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
-import { addNote, getNotesByUserId, getAllNotes, deleteNotes } from '../database';
+import { notesRepository } from '../database';
 
 const subcommands = {
 	CREATE: 'create',
@@ -29,55 +29,54 @@ export async function execute(interaction: any) {
 	switch (subcommand) {
 		case subcommands.CREATE: {
 			const text = interaction.options.getString('text');
-			await addNote(interaction.user.id, text);
+			await notesRepository.addNote(interaction.user.id, text);
 			await interaction.reply({ content: 'Note added! It will be reminded tomorrow.', flags: MessageFlags.Ephemeral });
 			break;
 		}
 		case subcommands.SHOW_MINE: {
-			const notes = await getNotesByUserId(interaction.user.id);
+			const notes = await notesRepository.getNotesByUserId(interaction.user.id);
 			if (notes.length === 0) {
 				await interaction.reply({ content: 'You have no notes.', flags: MessageFlags.Ephemeral });
 				return;
 			}
 			const embed = new EmbedBuilder()
 				.setTitle('Your Notes')
-				.setDescription(notes.map((n) => `${n.note} (Added: ${new Date(n.dateAdded).toLocaleDateString()})`).join('\n'))
+				.setDescription(notes.map((n) => `${n.note}`).join('\n'))
 				.setColor(0x0099ff);
 			await interaction.reply({ embeds: [embed], ephemeral: true });
 			break;
 		}
 		case subcommands.SHOW_ALL: {
-			const notes = await getAllNotes();
+			const notes = await notesRepository.getAllNotes();
 			if (notes.length === 0) {
 				await interaction.reply({ content: 'There are no notes.', flags: MessageFlags.Ephemeral });
 				return;
 			}
 			const embed = new EmbedBuilder()
 				.setTitle('All Notes')
-				.setDescription(notes.map((n) => `<@${n.userId}>: ${n.note} (Added: ${new Date(n.dateAdded).toLocaleDateString()})`).join('\n'))
+				.setDescription(notes.map((n) => `<@${n.userId}>: ${n.note}`).join('\n'))
 				.setColor(0x0099ff);
 			await interaction.reply({ embeds: [embed], ephemeral: true });
 			break;
 		}
 		case subcommands.DELETE_MINE: {
-			const notes = await getNotesByUserId(interaction.user.id);
+			const notes = await notesRepository.getNotesByUserId(interaction.user.id);
 			if (notes.length === 0) {
 				await interaction.reply({ content: 'You have no notes to remove.', flags: MessageFlags.Ephemeral });
 				return;
 			}
 			const noteIds = notes.map((n) => n.id);
-			await deleteNotes(noteIds);
+			await notesRepository.deleteNotes(noteIds);
 			await interaction.reply({ content: `Removed ${notes.length} note(s).`, flags: MessageFlags.Ephemeral });
 			break;
 		}
 		case subcommands.DELETE_ALL: {
-			const notes = await getAllNotes();
+			const notes = await notesRepository.getAllNotes();
 			if (notes.length === 0) {
 				await interaction.reply({ content: 'There are no notes to remove.', flags: MessageFlags.Ephemeral });
 				return;
 			}
-			const noteIds = notes.map((n) => n.id);
-			await deleteNotes(noteIds);
+			await notesRepository.deleteAllNotes();
 			await interaction.reply({ content: `Removed \`${notes.length}\` notes for all users.` });
 			break;
 		}

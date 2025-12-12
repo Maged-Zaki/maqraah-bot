@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
-import { getConfig, updateConfig } from '../database';
+import { configurationRepository, progressRepository } from '../database';
 
 const subcommands = {
 	UPDATE: 'update',
@@ -52,7 +52,7 @@ export async function execute(interaction: any) {
 			}
 
 			if (Object.keys(updates).length > 0) {
-				await updateConfig(updates);
+				await configurationRepository.updateConfiguration(updates);
 				await interaction.reply(replyMessages.join('\n'));
 			} else {
 				await interaction.reply({ content: 'No options provided.', flags: MessageFlags.Ephemeral });
@@ -60,12 +60,12 @@ export async function execute(interaction: any) {
 			break;
 		}
 		case subcommands.SHOW: {
-			const config = await getConfig();
+			const progress = await progressRepository.getProgress();
 			const embed = new EmbedBuilder()
 				.setTitle('Reading Progress')
 				.addFields(
-					{ name: "Last Qur'an Page", value: `${config.lastPage}`, inline: true },
-					{ name: 'Last Hadith', value: `${config.lastHadith}`, inline: true }
+					{ name: "Last Qur'an Page", value: `${progress.lastPage}`, inline: true },
+					{ name: 'Last Hadith', value: `${progress.lastHadith}`, inline: true }
 				)
 				.setColor(0x0099ff);
 

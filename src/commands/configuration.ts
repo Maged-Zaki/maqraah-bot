@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, ChannelType, MessageFlags, EmbedBuilder } from 'discord.js';
-import { updateConfig, getConfig } from '../database';
+import { configurationRepository } from '../database';
 import { scheduleReminder } from '../scheduler';
 
 const subcommands = {
@@ -71,7 +71,7 @@ export async function execute(interaction: any) {
 			}
 
 			if (Object.keys(updates).length > 0) {
-				await updateConfig(updates);
+				await configurationRepository.updateConfiguration(updates);
 
 				// If time or timezone or role updated, reschedule
 				if (updates.dailyTime || updates.timezone || updates.roleId) {
@@ -80,9 +80,9 @@ export async function execute(interaction: any) {
 
 				// If time updated, update voice channel name
 				if (updates.dailyTime) {
-					const config = await getConfig();
-					if (config.voiceChannelId) {
-						const vc = interaction.guild?.channels.cache.get(config.voiceChannelId);
+					const configuration = await configurationRepository.getConfiguration();
+					if (configuration.voiceChannelId) {
+						const vc = interaction.guild?.channels.cache.get(configuration.voiceChannelId);
 						if (vc && vc.isVoiceBased()) {
 							const permissions = vc.permissionsFor(interaction.client.user!);
 							if (permissions?.has('ManageChannels')) {
@@ -106,14 +106,14 @@ export async function execute(interaction: any) {
 			break;
 		}
 		case subcommands.SHOW: {
-			const config = await getConfig();
+			const configuration = await configurationRepository.getConfiguration();
 			const embed = new EmbedBuilder()
 				.setTitle('Configuration')
 				.addFields(
-					{ name: 'Reminder Time', value: config.dailyTime, inline: true },
-					{ name: 'Timezone', value: config.timezone, inline: true },
-					{ name: 'Role', value: config.roleId ? `<@&${config.roleId}>` : 'Not set', inline: true },
-					{ name: 'Voice Channel', value: config.voiceChannelId ? `<#${config.voiceChannelId}>` : 'Not set', inline: true }
+					{ name: 'Reminder Time', value: configuration.dailyTime, inline: true },
+					{ name: 'Timezone', value: configuration.timezone, inline: true },
+					{ name: 'Role', value: configuration.roleId ? `<@&${configuration.roleId}>` : 'Not set', inline: true },
+					{ name: 'Voice Channel', value: configuration.voiceChannelId ? `<#${configuration.voiceChannelId}>` : 'Not set', inline: true }
 				)
 				.setColor(0x0099ff);
 

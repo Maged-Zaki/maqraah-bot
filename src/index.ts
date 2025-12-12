@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { Client, GatewayIntentBits, Collection, Events, TextChannel, PermissionsBitField, MessageFlags } from 'discord.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getConfig, updateConfig } from './database';
+import { configurationRepository } from './database';
 import { scheduleReminder } from './scheduler';
 
 const requiredEnvVars = ['DISCORD_TOKEN', 'GUILD_ID', 'CHANNEL_ID'];
@@ -38,29 +38,10 @@ async function registerCommands(client: Client) {
 	}
 }
 
-async function ensureDefaultConfig(client: Client) {
-	const guildId = process.env.GUILD_ID;
-	if (guildId) {
-		const guild = client.guilds.cache.get(guildId);
-		if (guild) {
-			const config = await getConfig();
-			if (!config.roleId || !config.dailyTime || !config.timezone) {
-				await updateConfig({
-					roleId: guild.roles.everyone.id,
-					dailyTime: '12:00 PM',
-					timezone: 'Africa/Cairo',
-				});
-				console.log('Default configuration set.');
-			}
-		}
-	}
-}
-
 client.once('clientReady', async () => {
 	console.log(`Logged in as ${client.user?.tag}!`);
 
 	await registerCommands(client);
-	await ensureDefaultConfig(client);
 
 	// Schedule daily reminder
 	scheduleReminder(client);
@@ -108,7 +89,7 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 client.on(Events.GuildCreate, async (guild) => {
-	await updateConfig({ roleId: guild.roles.everyone.id });
+	await configurationRepository.updateConfiguration({ roleId: guild.roles.everyone.id });
 	console.log(`Joined guild ${guild.name}, set role to @everyone`);
 });
 

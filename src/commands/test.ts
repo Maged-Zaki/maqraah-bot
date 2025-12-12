@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { getConfig, getAllNotes } from '../database';
-import { getNextPage, buildReminderMessage } from '../utils';
+import { configurationRepository, progressRepository, notesRepository } from '../database';
+import { buildReminderMessage } from '../utils';
 const subcommands = {
 	IGNORE_MENTION: 'ignore-mention',
 	MENTION_EVERYONE: 'mention-everyone',
@@ -28,23 +28,14 @@ export async function execute(interaction: any) {
 			return;
 	}
 
-	const config = await getConfig();
-	if (!config.roleId || !process.env.CHANNEL_ID) {
-		await interaction.reply({
-			content: 'Configuration incomplete. Please set role and ensure channel is configured.',
-			flags: MessageFlags.Ephemeral,
-		});
-		return;
-	}
+	const [config, progress, notes] = await Promise.all([
+		configurationRepository.getConfiguration(),
+		progressRepository.getProgress(),
+		notesRepository.getAllNotes(),
+	]);
 
-	const nextPage = getNextPage(config.lastPage);
-	const notes = await getAllNotes();
-	const message = buildReminderMessage(config, nextPage, notes, mentionRole);
+	const message = buildReminderMessage(config, progress, notes, mentionRole);
 
-	if (interaction.channel && interaction.channel.isTextBased()) {
-		await interaction.channel.send(message);
-		await interaction.reply({ content: 'Test reminder sent!', flags: MessageFlags.Ephemeral });
-	} else {
-		await interaction.reply({ content: 'Cannot send message in this channel.', flags: MessageFlags.Ephemeral });
-	}
+	await interaction.channel.send(message);
+	await interaction.reply({ content: 'Test reminder sent!', flags: MessageFlags.Ephemeral });
 }

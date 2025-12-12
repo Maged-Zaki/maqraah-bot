@@ -5,85 +5,85 @@ import { getNextPage, buildReminderMessage } from './utils';
 
 export let scheduledJob: cron.ScheduledTask | null = null;
 
-export function scheduleReminder(client: Client) {
-	getConfig().then((config) => {
-		if (!config.roleId || !process.env.CHANNEL_ID) {
-			console.log('Role or channel not set, skipping reminder setup.');
-			return;
-		}
+export async function scheduleReminder(client: Client) {
+	const config = await getConfig();
+	if (!config.roleId || !process.env.CHANNEL_ID) {
+		console.log('Role or channel not set, skipping reminder setup.');
+		return;
+	}
 
-		if (scheduledJob) {
-			scheduledJob.stop();
-			scheduledJob = null;
-		}
-
-		const cronTime = parseTimeToCron(config.dailyTime);
-		if (!cronTime) {
-			console.log('Invalid time format, skipping reminder.');
-			return;
-		}
-
-		scheduledJob = cron.schedule(
-			cronTime,
-			async () => {
-				const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
-				if (channel && channel.isTextBased()) {
-					const nextPage = getNextPage(config.lastPage);
-					const notes = await getAllNotes();
-					const message = buildReminderMessage(config, nextPage, notes, true);
-
-					if (notes.length > 0) {
-						const noteIds = notes.map((n) => n.id);
-						await deleteNotes(noteIds);
-					}
-
-					await (channel as any).send(message);
-				}
-			},
-			{
-				timezone: config.timezone,
-			}
-		);
-	});
-}
-
-export function overrideNextReminder(client: Client, newTime: string) {
 	if (scheduledJob) {
 		scheduledJob.stop();
 		scheduledJob = null;
 	}
 
-	getConfig().then((config) => {
-		const cronTime = parseTimeToCron(newTime);
-		if (!cronTime) {
-			console.log('Invalid time format, skipping reminder.');
-			return;
-		}
+	const cronTime = parseTimeToCron(config.dailyTime);
+	if (!cronTime) {
+		console.log('Invalid time format, skipping reminder.');
+		return;
+	}
 
-		const tempJob = cron.schedule(
-			cronTime,
-			async () => {
-				const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
-				if (channel && channel.isTextBased()) {
-					const nextPage = getNextPage(config.lastPage);
-					const notes = await getAllNotes();
-					const message = buildReminderMessage(config, nextPage, notes, true);
+	scheduledJob = cron.schedule(
+		cronTime,
+		async () => {
+			const config = await getConfig();
+			const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
+			if (channel && channel.isTextBased()) {
+				const nextPage = getNextPage(config.lastPage);
+				const notes = await getAllNotes();
+				const message = buildReminderMessage(config, nextPage, notes, true);
 
-					if (notes.length > 0) {
-						const noteIds = notes.map((n) => n.id);
-						await deleteNotes(noteIds);
-					}
-
-					await (channel as any).send(message);
-					tempJob.stop();
-					scheduleReminder(client);
+				if (notes.length > 0) {
+					const noteIds = notes.map((n) => n.id);
+					await deleteNotes(noteIds);
 				}
-			},
-			{
-				timezone: config.timezone,
+
+				await (channel as any).send(message);
 			}
-		);
-	});
+		},
+		{
+			timezone: config.timezone,
+		}
+	);
+}
+
+export async function overrideNextReminder(client: Client, newTime: string) {
+	if (scheduledJob) {
+		scheduledJob.stop();
+		scheduledJob = null;
+	}
+
+	const config = await getConfig();
+	const cronTime = parseTimeToCron(newTime);
+	if (!cronTime) {
+		console.log('Invalid time format, skipping reminder.');
+		return;
+	}
+
+	const tempJob = cron.schedule(
+		cronTime,
+		async () => {
+			const config = await getConfig();
+			const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
+			if (channel && channel.isTextBased()) {
+				const nextPage = getNextPage(config.lastPage);
+				const notes = await getAllNotes();
+				const message = buildReminderMessage(config, nextPage, notes, true);
+
+				if (notes.length > 0) {
+					const noteIds = notes.map((n) => n.id);
+					await deleteNotes(noteIds);
+				}
+
+				await (channel as any).send(message);
+				tempJob.stop();
+				scheduleReminder(client);
+			}
+		},
+		{
+			timezone: config.timezone,
+		}
+	);
 }
 
 function parseTimeToCron(time: string): string | null {

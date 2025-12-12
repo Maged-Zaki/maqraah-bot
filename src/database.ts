@@ -31,10 +31,10 @@ db.serialize(() => {
 export interface Config {
 	lastPage: number;
 	lastHadith: number;
-	roleId?: string;
+	roleId: string;
 	dailyTime: string;
 	timezone: string;
-	voiceChannelId?: string;
+	voiceChannelId: string;
 }
 
 export interface Note {

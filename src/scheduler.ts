@@ -7,10 +7,6 @@ export let scheduledJob: cron.ScheduledTask | null = null;
 
 export async function scheduleReminder(client: Client) {
 	const config = await getConfig();
-	if (!config.roleId || !process.env.CHANNEL_ID) {
-		console.log('Role or channel not set, skipping reminder setup.');
-		return;
-	}
 
 	if (scheduledJob) {
 		scheduledJob.stop();
@@ -28,18 +24,17 @@ export async function scheduleReminder(client: Client) {
 		async () => {
 			const config = await getConfig();
 			const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
-			if (channel && channel.isTextBased()) {
-				const nextPage = getNextPage(config.lastPage);
-				const notes = await getAllNotes();
-				const message = buildReminderMessage(config, nextPage, notes, true);
 
-				if (notes.length > 0) {
-					const noteIds = notes.map((n) => n.id);
-					await deleteNotes(noteIds);
-				}
+			const nextPage = getNextPage(config.lastPage);
+			const notes = await getAllNotes();
+			const message = buildReminderMessage(config, nextPage, notes, true);
 
-				await (channel as any).send(message);
+			if (notes.length > 0) {
+				const noteIds = notes.map((n) => n.id);
+				await deleteNotes(noteIds);
 			}
+
+			await (channel as any).send(message);
 		},
 		{
 			timezone: config.timezone,
@@ -65,20 +60,18 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 		async () => {
 			const config = await getConfig();
 			const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
-			if (channel && channel.isTextBased()) {
-				const nextPage = getNextPage(config.lastPage);
-				const notes = await getAllNotes();
-				const message = buildReminderMessage(config, nextPage, notes, true);
+			const nextPage = getNextPage(config.lastPage);
+			const notes = await getAllNotes();
+			const message = buildReminderMessage(config, nextPage, notes, true);
 
-				if (notes.length > 0) {
-					const noteIds = notes.map((n) => n.id);
-					await deleteNotes(noteIds);
-				}
-
-				await (channel as any).send(message);
-				tempJob.stop();
-				scheduleReminder(client);
+			if (notes.length > 0) {
+				const noteIds = notes.map((n) => n.id);
+				await deleteNotes(noteIds);
 			}
+
+			await (channel as any).send(message);
+			tempJob.stop();
+			scheduleReminder(client);
 		},
 		{
 			timezone: config.timezone,

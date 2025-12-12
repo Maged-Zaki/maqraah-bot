@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
-import { configurationRepository, progressRepository } from '../database';
+import { progressRepository } from '../database';
 
 const subcommands = {
 	UPDATE: 'update',
@@ -52,7 +52,7 @@ export async function execute(interaction: any) {
 			}
 
 			if (Object.keys(updates).length > 0) {
-				await configurationRepository.updateConfiguration(updates);
+				await progressRepository.updateProgress(updates);
 				await interaction.reply(replyMessages.join('\n'));
 			} else {
 				await interaction.reply({ content: 'No options provided.', flags: MessageFlags.Ephemeral });

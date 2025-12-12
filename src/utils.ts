@@ -16,7 +16,7 @@ export function buildReminderMessage(configuration: Configuration, progress: Pro
 
 	message += `${mentionRole ? `<@&${configuration.roleId}>` : ''} السلام عليكم ورحمة الله وبركاته\n`;
 	message += `وقت المقراة اليومية! 📖\n\n`;
-	message += `الصفحة القادمة: [${nextPage}](https://quran.com/${nextPage})\n`;
+	message += `الصفحة القادمة: [${nextPage}](https://quran.com/page/${nextPage})\n`;
 	message += `الحديث القادم: **${nextHadith}**\n\n`;
 
 	if (notes.length > 0) {

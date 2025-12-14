@@ -30,7 +30,7 @@ export async function execute(interaction: any) {
 		case subcommands.CREATE: {
 			const text = interaction.options.getString('text');
 			await notesRepository.addNote(interaction.user.id, text);
-			await interaction.reply({ content: 'Note added! It will be reminded tomorrow.', flags: MessageFlags.Ephemeral });
+			await interaction.reply({ content: 'Note added! It will be reminded upcoming maqraah.', flags: MessageFlags.Ephemeral });
 			break;
 		}
 		case subcommands.SHOW_MINE: {

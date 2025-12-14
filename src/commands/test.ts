@@ -36,6 +36,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
 	if (mentionRole) {
 		await interaction.channel.send(message);
+		await interaction.reply({
+			content: 'Reminder sent!',
+			flags: MessageFlags.Ephemeral,
+		});
 	} else {
 		await interaction.reply({
 			content: message,

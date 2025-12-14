@@ -2,14 +2,16 @@ import { SlashCommandBuilder, MessageFlags, ChatInputCommandInteraction } from '
 import { configurationRepository, progressRepository, notesRepository } from '../database';
 import { buildReminderMessage } from '../utils';
 const subcommands = {
-	IGNORE_MENTION: 'ignore-mention',
+	PREVIEW_REMINDER: 'preview-reminder',
 	MENTION_EVERYONE: 'mention-everyone',
 } as const;
 
 export const data = new SlashCommandBuilder()
 	.setName('test')
 	.setDescription('Test reminder commands')
-	.addSubcommand((subcommand) => subcommand.setName(subcommands.IGNORE_MENTION).setDescription('Send test reminder privately to you for testing'))
+	.addSubcommand((subcommand) =>
+		subcommand.setName(subcommands.PREVIEW_REMINDER).setDescription('Sends a test reminder privately to you (No one sees it)')
+	)
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.MENTION_EVERYONE).setDescription('Send test reminder publicy and mention everyone'));
 
 export async function execute(interaction: ChatInputCommandInteraction) {

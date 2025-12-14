@@ -9,8 +9,8 @@ const subcommands = {
 export const data = new SlashCommandBuilder()
 	.setName('test')
 	.setDescription('Test reminder commands')
-	.addSubcommand((subcommand) => subcommand.setName(subcommands.IGNORE_MENTION).setDescription('Send test reminder without mentioning anyone'))
-	.addSubcommand((subcommand) => subcommand.setName(subcommands.MENTION_EVERYONE).setDescription('Send test reminder with role mention'));
+	.addSubcommand((subcommand) => subcommand.setName(subcommands.IGNORE_MENTION).setDescription('Send test reminder privately to you for testing'))
+	.addSubcommand((subcommand) => subcommand.setName(subcommands.MENTION_EVERYONE).setDescription('Send test reminder publicy and mention everyone'));
 
 export async function execute(interaction: ChatInputCommandInteraction) {
 	if (!interaction.inGuild() || !interaction.channel) {

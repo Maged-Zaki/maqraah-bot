@@ -9,12 +9,12 @@ export function getNextPage(lastPage: number): number {
 	return lastPage + 1;
 }
 
-export function buildReminderMessage(configuration: Configuration, progress: Progress, notes: Note[], mentionRole: boolean): string {
+export function buildReminderMessage(configuration: Configuration, progress: Progress, notes: Note[]): string {
 	let message = '';
 	const nextPage = getNextPage(progress.lastPage);
 	const nextHadith = progress.lastHadith + 1;
 
-	message += `${mentionRole ? `<@&${configuration.roleId}>` : ''} السلام عليكم ورحمة الله وبركاته\n`;
+	message += `<@&${configuration.roleId}>} السلام عليكم ورحمة الله وبركاته\n`;
 	message += `وقت المقراة اليومية! 📖\n\n`;
 	message += `الصفحة القادمة: [${nextPage}](https://quran.com/page/${nextPage})\n`;
 	message += `الحديث القادم: **${nextHadith}**\n\n`;

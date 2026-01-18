@@ -37,6 +37,7 @@ export async function execute(interaction: any) {
 		case subcommands.UPDATE: {
 			const updates: any = {};
 			let replyMessages: string[] = [];
+			const configuration = await configurationRepository.getConfiguration();
 
 			const role = interaction.options.getRole(options.ROLE);
 			if (role) {
@@ -61,7 +62,7 @@ export async function execute(interaction: any) {
 					return;
 				}
 				updates.dailyTime = time;
-				replyMessages.push(`Daily reminder time set to \`${time}\`.`);
+				replyMessages.push(`<@&${configuration.roleId}> Maqraah Reminder has been changed to \`${time}\`.`);
 			}
 
 			const timezone = interaction.options.getString(options.TIMEZONE);
@@ -80,7 +81,6 @@ export async function execute(interaction: any) {
 
 				// If time updated, update voice channel name
 				if (updates.dailyTime) {
-					const configuration = await configurationRepository.getConfiguration();
 					if (configuration.voiceChannelId) {
 						const vc = interaction.guild?.channels.cache.get(configuration.voiceChannelId);
 						if (vc && vc.isVoiceBased()) {

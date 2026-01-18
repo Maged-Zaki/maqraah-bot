@@ -25,7 +25,7 @@ export const data = new SlashCommandBuilder()
 			.addChannelOption((option) =>
 				option.setName(options.VOICE_CHANNEL).setDescription('Voice channel to update with time').addChannelTypes(ChannelType.GuildVoice)
 			)
-			.addStringOption((option) => option.setName(options.TIME).setDescription('Daily reminder time (HH:MM AM/PM)'))
+			.addStringOption((option) => option.setName(options.TIME).setDescription('Daily Maqraah reminder time (HH:MM AM/PM)'))
 			.addStringOption((option) => option.setName(options.TIMEZONE).setDescription('Timezone for reminders (e.g., Africa/Cairo)'))
 	)
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW).setDescription('Display current configuration'));

@@ -50,6 +50,7 @@ jobs:
             echo "GUILD_ID=${{ secrets.GUILD_ID }}" >> .env
             echo "CHANNEL_ID=${{ secrets.CHANNEL_ID }}" >> .env
             echo "DATABASE_PATH=${{ vars.DATABASE_PATH }}" >> .env
+            echo "NEW_RELIC_LICENSE_KEY=${{ secrets.NEW_RELIC_LICENSE_KEY }}" >> .env
           EOF
 
       - name: Deploy application

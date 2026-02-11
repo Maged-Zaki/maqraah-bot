@@ -2,16 +2,21 @@ import sqlite3 from 'sqlite3';
 import { ConfigurationRepository } from './repositories/ConfigurationRepository';
 import { ProgressRepository } from './repositories/ProgressRepository';
 import { NotesRepository } from './repositories/NotesRepository';
+import { logger } from './logger';
 
 if (!process.env.DATABASE_PATH) {
+	logger.fatal('DATABASE_PATH is not defined in environment variables');
 	throw new Error('DATABASE_PATH is not defined in environment variables.');
 }
 
 const db = new sqlite3.Database(process.env.DATABASE_PATH);
 
+logger.info('Initializing database', undefined, { additionalData: { databasePath: process.env.DATABASE_PATH } });
+
 db.serialize(() => {
 	// Create new tables
-	db.run(`
+	db.run(
+		`
 	   CREATE TABLE IF NOT EXISTS configuration (
 	     id INTEGER PRIMARY KEY DEFAULT 1,
 	     roleId TEXT DEFAULT 'Not set',
@@ -19,25 +24,74 @@ db.serialize(() => {
 	     timezone TEXT DEFAULT 'Africa/Cairo',
 	     voiceChannelId TEXT DEFAULT ''
 	   )
-	 `);
-	db.run(`INSERT OR IGNORE INTO configuration (id) VALUES (1)`);
-	db.run(`
+	 `,
+		(err) => {
+			if (err) {
+				logger.error('Failed to create configuration table', err);
+			} else {
+				logger.debug('Configuration table created or already exists');
+			}
+		}
+	);
+
+	db.run(`INSERT OR IGNORE INTO configuration (id) VALUES (1)`, (err) => {
+		if (err) {
+			logger.error('Failed to insert default configuration', err);
+		} else {
+			logger.debug('Default configuration inserted or already exists');
+		}
+	});
+
+	db.run(
+		`
 	   CREATE TABLE IF NOT EXISTS progress (
 	     id INTEGER PRIMARY KEY DEFAULT 1,
 	     lastPage INTEGER DEFAULT 0,
 	     lastHadith INTEGER DEFAULT 0
 	   )
-	 `);
-	db.run(`INSERT OR IGNORE INTO progress (id) VALUES (1)`);
-	db.run(`
+	 `,
+		(err) => {
+			if (err) {
+				logger.error('Failed to create progress table', err);
+			} else {
+				logger.debug('Progress table created or already exists');
+			}
+		}
+	);
+
+	db.run(`INSERT OR IGNORE INTO progress (id) VALUES (1)`, (err) => {
+		if (err) {
+			logger.error('Failed to insert default progress', err);
+		} else {
+			logger.debug('Default progress inserted or already exists');
+		}
+	});
+
+	db.run(
+		`
 	   CREATE TABLE IF NOT EXISTS notes (
 	     id INTEGER PRIMARY KEY AUTOINCREMENT,
 	     userId TEXT NOT NULL,
 	     note TEXT NOT NULL,
 	     dateAdded TEXT NOT NULL
 	   )
-	 `);
+	 `,
+		(err) => {
+			if (err) {
+				logger.error('Failed to create notes table', err);
+			} else {
+				logger.debug('Notes table created or already exists');
+			}
+		}
+	);
 });
+
+// Handle database errors
+db.on('error', (err) => {
+	logger.error('Database error occurred', err);
+});
+
+logger.info('Database initialization completed');
 
 // Create repository instances
 export const configurationRepository = new ConfigurationRepository(db);

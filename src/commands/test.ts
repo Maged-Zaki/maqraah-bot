@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, MessageFlags, ChatInputCommandInteraction } from 'discord.js';
 import { configurationRepository, progressRepository, notesRepository } from '../database';
 import { buildReminderMessage } from '../utils';
+import { logger, DiscordContext } from '../logger';
 const subcommands = {
 	PREVIEW_REMINDER: 'preview-reminder',
 	MENTION_EVERYONE: 'mention-everyone',
@@ -15,35 +16,59 @@ export const data = new SlashCommandBuilder()
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.MENTION_EVERYONE).setDescription('Send test reminder publicy and mention everyone'));
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-	if (!interaction.inGuild() || !interaction.channel) {
-		await interaction.reply({
-			content: 'This command can only be used in a server channel.',
-			flags: MessageFlags.Ephemeral,
-		});
-		return;
-	}
+	const discordContext: DiscordContext = {
+		userId: interaction.user.id,
+		username: interaction.user.username,
+		guildId: interaction.guildId?.toString(),
+		channelId: interaction.channelId?.toString(),
+		commandName: 'test',
+	};
 
-	const subcommand = interaction.options.getSubcommand();
-	const mentionRole = subcommand === subcommands.MENTION_EVERYONE;
+	logger.info('Executing test command', discordContext, { operationType: 'test_command' });
 
-	const [config, progress, notes] = await Promise.all([
-		configurationRepository.getConfiguration(),
-		progressRepository.getProgress(),
-		notesRepository.getAllNotes(),
-	]);
+	try {
+		if (!interaction.inGuild() || !interaction.channel) {
+			logger.warn('Test command used outside of guild channel', discordContext, { operationType: 'test_command', operationStatus: 'failure' });
+			await interaction.reply({
+				content: 'This command can only be used in a server channel.',
+				flags: MessageFlags.Ephemeral,
+			});
+			return;
+		}
 
-	const message = buildReminderMessage(config, progress, notes);
+		const subcommand = interaction.options.getSubcommand();
+		const mentionRole = subcommand === subcommands.MENTION_EVERYONE;
 
-	if (mentionRole) {
-		await interaction.channel.send(message);
-		await interaction.reply({
-			content: 'Reminder sent!',
-			flags: MessageFlags.Ephemeral,
-		});
-	} else {
-		await interaction.reply({
-			content: message,
-			flags: MessageFlags.Ephemeral,
-		});
+		logger.debug(`Test subcommand: ${subcommand}, mentionRole: ${mentionRole}`, discordContext);
+
+		const [config, progress, notes] = await Promise.all([
+			configurationRepository.getConfiguration(),
+			progressRepository.getProgress(),
+			notesRepository.getAllNotes(),
+		]);
+
+		logger.debug(`Retrieved test data: ${notes.length} notes`, discordContext, { additionalData: { noteCount: notes.length } });
+
+		const message = buildReminderMessage(config, progress, notes);
+
+		if (mentionRole) {
+			logger.info('Sending test reminder publicly with role mention', discordContext);
+			await interaction.channel.send(message);
+			await interaction.reply({
+				content: 'Reminder sent!',
+				flags: MessageFlags.Ephemeral,
+			});
+		} else {
+			logger.info('Sending test reminder privately', discordContext);
+			await interaction.reply({
+				content: message,
+				flags: MessageFlags.Ephemeral,
+			});
+		}
+
+		logger.info('Test command executed successfully', discordContext, { operationType: 'test_command', operationStatus: 'success' });
+	} catch (error) {
+		logger.error('Error executing test command', error as Error, discordContext, { operationType: 'test_command', operationStatus: 'failure' });
+		await interaction.reply({ content: 'There was an error executing this command!', flags: MessageFlags.Ephemeral });
 	}
 }

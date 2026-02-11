@@ -2,41 +2,92 @@ import { Client } from 'discord.js';
 import * as cron from 'node-cron';
 import { configurationRepository, progressRepository, notesRepository } from './database';
 import { buildReminderMessage } from './utils';
+import { logger } from './logger';
 
 export let scheduledJob: cron.ScheduledTask | null = null;
 
 export async function scheduleReminder(client: Client) {
+	logger.info('Scheduling daily reminder', undefined, { operationType: 'schedule_reminder' });
+
 	const configuration = await configurationRepository.getConfiguration();
 	if (scheduledJob) {
+		logger.info('Stopping existing scheduled job');
 		scheduledJob.stop();
 		scheduledJob = null;
 	}
 
 	const cronTime = parseTimeToCron(configuration.dailyTime);
 	if (!cronTime) {
+		logger.warn(`Invalid time format: ${configuration.dailyTime}, skipping reminder`, undefined, {
+			additionalData: { time: configuration.dailyTime },
+		});
 		console.log('Invalid time format, skipping reminder.');
 		return;
 	}
 
+	logger.info(`Scheduling reminder job with cron: ${cronTime}`, undefined, { additionalData: { cronTime, timezone: configuration.timezone } });
+
 	scheduledJob = cron.schedule(
 		cronTime,
 		async () => {
-			const configuration = await configurationRepository.getConfiguration();
-			const progress = await progressRepository.getProgress();
-			const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
-			const notes = await notesRepository.getAllNotes();
-			const message = buildReminderMessage(configuration, progress, notes, true);
-			await notesRepository.deleteAllNotes();
-			await (channel as any).send(message);
+			const startTime = Date.now();
+			logger.info('Executing scheduled reminder', undefined, { operationType: 'reminder_execution' });
+
+			try {
+				const configuration = await configurationRepository.getConfiguration();
+				const progress = await progressRepository.getProgress();
+				const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
+				const notes = await notesRepository.getAllNotes();
+
+				logger.debug(`Retrieved ${notes.length} notes for reminder`, undefined, { additionalData: { noteCount: notes.length } });
+
+				const message = buildReminderMessage(configuration, progress, notes);
+
+				if (notes.length > 0) {
+					logger.info(`Deleting ${notes.length} notes after including in reminder`, undefined, { additionalData: { noteCount: notes.length } });
+					await notesRepository.deleteAllNotes();
+					// Record note events for each note included in reminder
+					notes.forEach((note) => {
+						logger.recordNoteEvent({
+							userId: note.userId,
+							guildId: process.env.GUILD_ID,
+							channelId: process.env.CHANNEL_ID,
+							noteContent: note.note,
+							operation: 'included_in_reminder',
+						});
+					});
+				}
+
+				await (channel as any).send(message);
+				const duration = Date.now() - startTime;
+
+				logger.info('Reminder sent successfully', undefined, { additionalData: { duration, noteCount: notes.length } });
+				logger.recordReminderSentEvent(process.env.GUILD_ID!, process.env.CHANNEL_ID!, notes.length, true);
+				logger.recordSchedulerEvent('executed', { noteCount: notes.length, duration });
+			} catch (error) {
+				const duration = Date.now() - startTime;
+				logger.error('Failed to execute scheduled reminder', error as Error, undefined, {
+					operationType: 'reminder_execution',
+					operationStatus: 'failure',
+					duration,
+				});
+				logger.recordReminderSentEvent(process.env.GUILD_ID!, process.env.CHANNEL_ID!, 0, false);
+				logger.recordSchedulerEvent('failed', { error: (error as Error).message, duration });
+			}
 		},
 		{
 			timezone: configuration.timezone,
 		}
 	);
+
+	logger.recordSchedulerEvent('scheduled', { cronTime, timezone: configuration.timezone });
 }
 
 export async function overrideNextReminder(client: Client, newTime: string) {
+	logger.info('Overriding next reminder time', undefined, { additionalData: { newTime } });
+
 	if (scheduledJob) {
+		logger.info('Stopping existing scheduled job for override');
 		scheduledJob.stop();
 		scheduledJob = null;
 	}
@@ -44,30 +95,74 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 	const configuration = await configurationRepository.getConfiguration();
 	const cronTime = parseTimeToCron(newTime);
 	if (!cronTime) {
+		logger.warn(`Invalid time format for override: ${newTime}`, undefined, { additionalData: { newTime } });
 		console.log('Invalid time format, skipping reminder.');
 		return;
 	}
 
+	logger.info(`Scheduling one-time reminder with cron: ${cronTime}`, undefined, { additionalData: { cronTime, timezone: configuration.timezone } });
+
 	const tempJob = cron.schedule(
 		cronTime,
 		async () => {
-			const configuration = await configurationRepository.getConfiguration();
-			const progress = await progressRepository.getProgress();
-			const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
-			const notes = await notesRepository.getAllNotes();
-			const message = buildReminderMessage(configuration, progress, notes, true);
-			if (notes.length > 0) {
-				const noteIds = notes.map((n) => n.id);
-				await notesRepository.deleteNotes(noteIds);
+			const startTime = Date.now();
+			logger.info('Executing one-time reminder', undefined, { operationType: 'reminder_execution' });
+
+			try {
+				const configuration = await configurationRepository.getConfiguration();
+				const progress = await progressRepository.getProgress();
+				const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
+				const notes = await notesRepository.getAllNotes();
+
+				logger.debug(`Retrieved ${notes.length} notes for one-time reminder`, undefined, { additionalData: { noteCount: notes.length } });
+
+				const message = buildReminderMessage(configuration, progress, notes);
+
+				if (notes.length > 0) {
+					logger.info(`Deleting ${notes.length} notes after including in one-time reminder`, undefined, {
+						additionalData: { noteCount: notes.length },
+					});
+					const noteIds = notes.map((n) => n.id);
+					await notesRepository.deleteNotes(noteIds);
+					// Record note events for each note included in reminder
+					notes.forEach((note) => {
+						logger.recordNoteEvent({
+							userId: note.userId,
+							guildId: process.env.GUILD_ID,
+							channelId: process.env.CHANNEL_ID,
+							noteContent: note.note,
+							operation: 'included_in_reminder',
+						});
+					});
+				}
+
+				await (channel as any).send(message);
+				const duration = Date.now() - startTime;
+
+				logger.info('One-time reminder sent successfully', undefined, { additionalData: { duration, noteCount: notes.length } });
+				logger.recordReminderSentEvent(process.env.GUILD_ID!, process.env.CHANNEL_ID!, notes.length, true);
+				logger.recordSchedulerEvent('executed', { noteCount: notes.length, duration, isOverride: true });
+
+				tempJob.stop();
+				logger.info('One-time reminder job stopped, rescheduling regular reminder');
+				scheduleReminder(client);
+			} catch (error) {
+				const duration = Date.now() - startTime;
+				logger.error('Failed to execute one-time reminder', error as Error, undefined, {
+					operationType: 'reminder_execution',
+					operationStatus: 'failure',
+					duration,
+				});
+				logger.recordReminderSentEvent(process.env.GUILD_ID!, process.env.CHANNEL_ID!, 0, false);
+				logger.recordSchedulerEvent('failed', { error: (error as Error).message, duration, isOverride: true });
 			}
-			await (channel as any).send(message);
-			tempJob.stop();
-			scheduleReminder(client);
 		},
 		{
 			timezone: configuration.timezone,
 		}
 	);
+
+	logger.recordSchedulerEvent('scheduled', { cronTime, timezone: configuration.timezone, isOverride: true });
 }
 
 function parseTimeToCron(time: string): string | null {

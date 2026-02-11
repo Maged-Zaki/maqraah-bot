@@ -4,8 +4,8 @@
 	"description": "Discord bot for tracking daily Qur'an and Hadith reading progress",
 	"main": "dist/index.js",
 	"scripts": {
-		"build": "tsc",
-		"start": "node dist/index.js",
+    	"build": "tsc && cp newrelic.js dist/newrelic.js",
+		"start": "node -r newrelic dist/index.js",
 		"dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts"
 	},
 	"keywords": [

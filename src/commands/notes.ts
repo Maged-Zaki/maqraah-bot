@@ -24,7 +24,7 @@ export const data = new SlashCommandBuilder()
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW_ALL).setDescription('Show all notes from all users'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.DELETE_MINE).setDescription('Remove all your notes'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.DELETE_ALL).setDescription('Remove all notes for everyone'))
-	.addSubcommand((subcommand) => subcommand.setName(subcommands.CARRY_OVER_YESTERDAY).setDescription('Add yesterday notes to upcoming maqraah'));
+	.addSubcommand((subcommand) => subcommand.setName(subcommands.CARRY_OVER_YESTERDAY).setDescription('Add last maqraah notes to upcoming maqraah'));
 
 export async function execute(interaction: any) {
 	const subcommand = interaction.options.getSubcommand();

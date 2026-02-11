@@ -8,6 +8,7 @@ const subcommands = {
 	SHOW_ALL: 'show-all',
 	DELETE_MINE: 'delete-mine',
 	DELETE_ALL: 'delete-all',
+	CARRY_OVER_YESTERDAY: 'carry-over-yesterday',
 } as const;
 
 export const data = new SlashCommandBuilder()
@@ -22,7 +23,8 @@ export const data = new SlashCommandBuilder()
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW_MINE).setDescription('Show your personal notes'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW_ALL).setDescription('Show all notes from all users'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.DELETE_MINE).setDescription('Remove all your notes'))
-	.addSubcommand((subcommand) => subcommand.setName(subcommands.DELETE_ALL).setDescription('Remove all notes for everyone'));
+	.addSubcommand((subcommand) => subcommand.setName(subcommands.DELETE_ALL).setDescription('Remove all notes for everyone'))
+	.addSubcommand((subcommand) => subcommand.setName(subcommands.CARRY_OVER_YESTERDAY).setDescription('Add yesterday notes to upcoming maqraah'));
 
 export async function execute(interaction: any) {
 	const subcommand = interaction.options.getSubcommand();
@@ -66,9 +68,10 @@ export async function execute(interaction: any) {
 				logger.debug(`Fetching notes for user ${interaction.user.id}`, discordContext);
 
 				const notes = await notesRepository.getNotesByUserId(interaction.user.id);
+				const pendingNotes = notes.filter((n) => n.status === 'pending' || n.status === undefined);
 
-				if (notes.length === 0) {
-					logger.info(`User ${interaction.user.id} has no notes`, discordContext, { operationType: 'note_view', operationStatus: 'success' });
+				if (pendingNotes.length === 0) {
+					logger.info(`User ${interaction.user.id} has no pending notes`, discordContext, { operationType: 'note_view', operationStatus: 'success' });
 					logger.recordNoteEvent({
 						userId: interaction.user.id,
 						username: interaction.user.username,
@@ -81,7 +84,7 @@ export async function execute(interaction: any) {
 					return;
 				}
 
-				logger.info(`User ${interaction.user.id} has ${notes.length} notes`, discordContext, {
+				logger.info(`User ${interaction.user.id} has ${pendingNotes.length} pending notes`, discordContext, {
 					operationType: 'note_view',
 					operationStatus: 'success',
 				});
@@ -90,13 +93,13 @@ export async function execute(interaction: any) {
 					username: interaction.user.username,
 					guildId: interaction.guildId?.toString(),
 					channelId: interaction.channelId?.toString(),
-					noteCount: notes.length,
+					noteCount: pendingNotes.length,
 					operation: 'viewed',
 				});
 
 				const embed = new EmbedBuilder()
 					.setTitle('Your Notes')
-					.setDescription(notes.map((n) => `${n.note}`).join('\n'))
+					.setDescription(pendingNotes.map((n) => `${n.note}`).join('\n'))
 					.setColor(0x0099ff);
 				await interaction.reply({ embeds: [embed], ephemeral: true });
 				break;
@@ -104,7 +107,7 @@ export async function execute(interaction: any) {
 			case subcommands.SHOW_ALL: {
 				logger.debug(`Fetching all notes`, discordContext);
 
-				const notes = await notesRepository.getAllNotes();
+				const notes = await notesRepository.getNotesByStatus('pending');
 
 				if (notes.length === 0) {
 					logger.info(`No notes found in database`, discordContext, { operationType: 'note_view_all', operationStatus: 'success' });
@@ -125,9 +128,10 @@ export async function execute(interaction: any) {
 				logger.debug(`Fetching notes for deletion for user ${interaction.user.id}`, discordContext);
 
 				const notes = await notesRepository.getNotesByUserId(interaction.user.id);
+				const pendingNotes = notes.filter((n) => n.status === 'pending' || n.status === undefined);
 
-				if (notes.length === 0) {
-					logger.info(`User ${interaction.user.id} has no notes to delete`, discordContext, {
+				if (pendingNotes.length === 0) {
+					logger.info(`User ${interaction.user.id} has no pending notes to delete`, discordContext, {
 						operationType: 'note_delete',
 						operationStatus: 'success',
 					});
@@ -135,12 +139,12 @@ export async function execute(interaction: any) {
 					return;
 				}
 
-				const noteIds = notes.map((n) => n.id);
-				logger.debug(`Deleting ${notes.length} notes for user ${interaction.user.id}`, discordContext, { additionalData: { noteIds } });
+				const noteIds = pendingNotes.map((n) => n.id);
+				logger.debug(`Deleting ${pendingNotes.length} notes for user ${interaction.user.id}`, discordContext, { additionalData: { noteIds } });
 
 				await notesRepository.deleteNotes(noteIds);
 
-				logger.info(`Deleted ${notes.length} notes for user ${interaction.user.id}`, discordContext, {
+				logger.info(`Deleted ${pendingNotes.length} notes for user ${interaction.user.id}`, discordContext, {
 					operationType: 'note_delete',
 					operationStatus: 'success',
 				});
@@ -149,12 +153,12 @@ export async function execute(interaction: any) {
 					username: interaction.user.username,
 					guildId: interaction.guildId?.toString(),
 					channelId: interaction.channelId?.toString(),
-					noteCount: notes.length,
+					noteCount: pendingNotes.length,
 					noteIds,
 					operation: 'deleted',
 				});
 
-				await interaction.reply({ content: `Removed ${notes.length} note(s).`, flags: MessageFlags.Ephemeral });
+				await interaction.reply({ content: `Removed ${pendingNotes.length} note(s).`, flags: MessageFlags.Ephemeral });
 				break;
 			}
 			case subcommands.DELETE_ALL: {
@@ -175,6 +179,30 @@ export async function execute(interaction: any) {
 				logger.info(`Deleted all ${notes.length} notes`, discordContext, { operationType: 'note_delete_all', operationStatus: 'success' });
 
 				await interaction.reply({ content: `Removed \`${notes.length}\` notes for all users.` });
+				break;
+			}
+			case subcommands.CARRY_OVER_YESTERDAY: {
+				logger.debug(`Fetching included notes for carry over`, discordContext);
+
+				const includedNotes = await notesRepository.getIncludedNotes();
+
+				if (includedNotes.length === 0) {
+					logger.info(`No included notes to carry over`, discordContext, { operationType: 'note_carry_over', operationStatus: 'success' });
+					await interaction.reply({ content: 'There are no notes from the previous maqraah to carry over.', flags: MessageFlags.Ephemeral });
+					return;
+				}
+
+				logger.debug(`Carrying over ${includedNotes.length} notes`, discordContext);
+
+				const noteIds = includedNotes.map((n) => n.id);
+				await notesRepository.carryOverNotes(noteIds);
+
+				logger.info(`Carried over ${includedNotes.length} notes to pending status`, discordContext, {
+					operationType: 'note_carry_over',
+					operationStatus: 'success',
+				});
+
+				await interaction.reply({ content: `Carried over \`${includedNotes.length}\` note(s) from the previous maqraah to the upcoming one.` });
 				break;
 			}
 		}

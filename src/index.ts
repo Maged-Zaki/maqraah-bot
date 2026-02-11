@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import 'newrelic';
 import { Client, GatewayIntentBits, Collection, Events, TextChannel, PermissionsBitField, MessageFlags } from 'discord.js';
 import * as fs from 'fs';
 import * as path from 'path';

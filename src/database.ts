@@ -73,7 +73,9 @@ db.serialize(() => {
 	     id INTEGER PRIMARY KEY AUTOINCREMENT,
 	     userId TEXT NOT NULL,
 	     note TEXT NOT NULL,
-	     dateAdded TEXT NOT NULL
+	     dateAdded TEXT NOT NULL,
+	     status TEXT DEFAULT 'pending',
+	     lastIncludedDate TEXT
 	   )
 	 `,
 		(err) => {
@@ -84,6 +86,24 @@ db.serialize(() => {
 			}
 		}
 	);
+
+	// Add status column if it doesn't exist (for existing databases)
+	db.run(`ALTER TABLE notes ADD COLUMN status TEXT DEFAULT 'pending'`, (err) => {
+		if (err && !err.message.includes('duplicate column name')) {
+			logger.error('Failed to add status column to notes table', err);
+		} else {
+			logger.debug('Status column added or already exists in notes table');
+		}
+	});
+
+	// Add lastIncludedDate column if it doesn't exist (for existing databases)
+	db.run(`ALTER TABLE notes ADD COLUMN lastIncludedDate TEXT`, (err) => {
+		if (err && !err.message.includes('duplicate column name')) {
+			logger.error('Failed to add lastIncludedDate column to notes table', err);
+		} else {
+			logger.debug('lastIncludedDate column added or already exists in notes table');
+		}
+	});
 });
 
 // Handle database errors

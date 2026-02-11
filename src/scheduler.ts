@@ -37,15 +37,16 @@ export async function scheduleReminder(client: Client) {
 				const configuration = await configurationRepository.getConfiguration();
 				const progress = await progressRepository.getProgress();
 				const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
-				const notes = await notesRepository.getAllNotes();
+				const notes = await notesRepository.getNotesByStatus('pending');
 
 				logger.debug(`Retrieved ${notes.length} notes for reminder`, undefined, { additionalData: { noteCount: notes.length } });
 
 				const message = buildReminderMessage(configuration, progress, notes);
 
 				if (notes.length > 0) {
-					logger.info(`Deleting ${notes.length} notes after including in reminder`, undefined, { additionalData: { noteCount: notes.length } });
-					await notesRepository.deleteAllNotes();
+					logger.info(`Marking ${notes.length} notes as included`, undefined, { additionalData: { noteCount: notes.length } });
+					const noteIds = notes.map((n) => n.id);
+					await notesRepository.updateNotesStatusWithDate(noteIds, 'included', new Date().toISOString());
 					// Record note events for each note included in reminder
 					notes.forEach((note) => {
 						logger.recordNoteEvent({
@@ -112,18 +113,18 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 				const configuration = await configurationRepository.getConfiguration();
 				const progress = await progressRepository.getProgress();
 				const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
-				const notes = await notesRepository.getAllNotes();
+				const notes = await notesRepository.getNotesByStatus('pending');
 
 				logger.debug(`Retrieved ${notes.length} notes for one-time reminder`, undefined, { additionalData: { noteCount: notes.length } });
 
 				const message = buildReminderMessage(configuration, progress, notes);
 
 				if (notes.length > 0) {
-					logger.info(`Deleting ${notes.length} notes after including in one-time reminder`, undefined, {
+					logger.info(`Marking ${notes.length} notes as included in one-time reminder`, undefined, {
 						additionalData: { noteCount: notes.length },
 					});
 					const noteIds = notes.map((n) => n.id);
-					await notesRepository.deleteNotes(noteIds);
+					await notesRepository.updateNotesStatusWithDate(noteIds, 'included', new Date().toISOString());
 					// Record note events for each note included in reminder
 					notes.forEach((note) => {
 						logger.recordNoteEvent({

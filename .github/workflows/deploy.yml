@@ -64,8 +64,12 @@ jobs:
             # build the app
             npm run build
 
-            # start or restart with PM2
-            pm2 restart maqraah-bot || pm2 start dist/index.js --name maqraah-bot
+            # start or restart with PM2 using ecosystem config
+            # The ecosystem.config.js ensures New Relic is loaded via node_args
+            pm2 restart maqraah-bot || pm2 start ecosystem.config.js
+
+            # save PM2 configuration for auto-restart on server reboot
+            pm2 save
           EOF
 
       - name: Cleanup SSH key

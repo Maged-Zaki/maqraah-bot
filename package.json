@@ -6,7 +6,7 @@
 	"scripts": {
 		"build": "tsc && cp newrelic.js dist/newrelic.js",
 		"start": "node -r newrelic dist/index.js",
-		"dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts"
+		"dev": "nodemon --watch src --ext ts --exec ts-node -r newrelic src/index.ts"
 	},
 	"keywords": [
 		"discord",

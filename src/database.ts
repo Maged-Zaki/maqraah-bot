@@ -76,20 +76,6 @@ db.serialize(() => {
 			}
 		}
 	);
-
-	// Add status column if it doesn't exist (for existing databases)
-	db.run(`ALTER TABLE notes ADD COLUMN status TEXT DEFAULT 'pending'`, (err) => {
-		if (err && !err.message.includes('duplicate column name')) {
-			logger.error('Failed to add status column to notes table', err);
-		}
-	});
-
-	// Add lastIncludedDate column if it doesn't exist (for existing databases)
-	db.run(`ALTER TABLE notes ADD COLUMN lastIncludedDate TEXT`, (err) => {
-		if (err && !err.message.includes('duplicate column name')) {
-			logger.error('Failed to add lastIncludedDate column to notes table', err);
-		}
-	});
 });
 
 // Handle database errors

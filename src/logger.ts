@@ -2,9 +2,12 @@
  * Centralized Logger Module
  *
  * This module provides structured logging for the Maqraah bot.
- * It includes Discord-specific context attributes.
- * Console logs are automatically collected by New Relic agent.
+ * It uses Winston as the underlying logger with New Relic integration.
+ * New Relic automatically adds context to Winston logs.
  */
+
+import winston from 'winston';
+// New Relic agent automatically instruments Winston when application_logging is enabled
 
 /**
  * Log levels
@@ -55,41 +58,39 @@ export interface NoteEventData {
 	operation: 'created' | 'viewed' | 'deleted' | 'included_in_reminder';
 }
 
+// Create Winston logger with New Relic format enrichment
+const winstonLogger = winston.createLogger({
+	level: 'debug',
+	levels: {
+		fatal: 0,
+		error: 1,
+		warn: 2,
+		info: 3,
+		debug: 4,
+		trace: 5,
+	},
+	format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
+	transports: [
+		// Console transport for local development
+		new winston.transports.Console({
+			format: winston.format.combine(
+				winston.format.colorize(),
+				winston.format.printf(({ level, message, timestamp, ...metadata }) => {
+					let msg = `${timestamp} [${level}]: ${message}`;
+					if (Object.keys(metadata).length > 0) {
+						msg += ` ${JSON.stringify(metadata)}`;
+					}
+					return msg;
+				})
+			),
+		}),
+	],
+});
+
 /**
- * Logger class
+ * Logger class - wraps Winston while maintaining the existing interface
  */
 class Logger {
-	/**
-	 * Log a message with context
-	 */
-	private log(level: LogLevel, message: string, discordContext?: DiscordContext, operationContext?: OperationContext) {
-		const timestamp = new Date().toISOString();
-		const logEntry = {
-			timestamp,
-			level,
-			message,
-			...this.buildAttributes(discordContext, operationContext),
-		};
-
-		// Log to console (New Relic agent will automatically collect these)
-		switch (level) {
-			case LogLevel.TRACE:
-			case LogLevel.DEBUG:
-				console.debug(JSON.stringify(logEntry));
-				break;
-			case LogLevel.INFO:
-				console.info(JSON.stringify(logEntry));
-				break;
-			case LogLevel.WARN:
-				console.warn(JSON.stringify(logEntry));
-				break;
-			case LogLevel.ERROR:
-			case LogLevel.FATAL:
-				console.error(JSON.stringify(logEntry));
-				break;
-		}
-	}
-
 	/**
 	 * Build attributes for logging
 	 */
@@ -109,6 +110,10 @@ class Logger {
 			if (operationContext.operationType) attributes['operation.type'] = operationContext.operationType;
 			if (operationContext.operationStatus) attributes['operation.status'] = operationContext.operationStatus;
 			if (operationContext.duration) attributes['operation.duration'] = operationContext.duration;
+			if (operationContext.error) {
+				attributes['error.message'] = operationContext.error.message;
+				attributes['error.stack'] = operationContext.error.stack;
+			}
 			if (operationContext.additionalData) {
 				Object.entries(operationContext.additionalData).forEach(([key, value]) => {
 					attributes[`custom.${key}`] = value;
@@ -123,28 +128,32 @@ class Logger {
 	 * Log a trace message
 	 */
 	trace(message: string, discordContext?: DiscordContext, operationContext?: OperationContext) {
-		this.log(LogLevel.TRACE, message, discordContext, operationContext);
+		const attributes = this.buildAttributes(discordContext, operationContext);
+		winstonLogger.log('trace', message, attributes);
 	}
 
 	/**
 	 * Log a debug message
 	 */
 	debug(message: string, discordContext?: DiscordContext, operationContext?: OperationContext) {
-		this.log(LogLevel.DEBUG, message, discordContext, operationContext);
+		const attributes = this.buildAttributes(discordContext, operationContext);
+		winstonLogger.debug(message, attributes);
 	}
 
 	/**
 	 * Log an info message
 	 */
 	info(message: string, discordContext?: DiscordContext, operationContext?: OperationContext) {
-		this.log(LogLevel.INFO, message, discordContext, operationContext);
+		const attributes = this.buildAttributes(discordContext, operationContext);
+		winstonLogger.info(message, attributes);
 	}
 
 	/**
 	 * Log a warning message
 	 */
 	warn(message: string, discordContext?: DiscordContext, operationContext?: OperationContext) {
-		this.log(LogLevel.WARN, message, discordContext, operationContext);
+		const attributes = this.buildAttributes(discordContext, operationContext);
+		winstonLogger.warn(message, attributes);
 	}
 
 	/**
@@ -152,7 +161,8 @@ class Logger {
 	 */
 	error(message: string, error?: Error, discordContext?: DiscordContext, operationContext?: OperationContext) {
 		const opContext = { ...operationContext, error };
-		this.log(LogLevel.ERROR, message, discordContext, opContext);
+		const attributes = this.buildAttributes(discordContext, opContext);
+		winstonLogger.error(message, attributes);
 	}
 
 	/**
@@ -160,11 +170,12 @@ class Logger {
 	 */
 	fatal(message: string, error?: Error, discordContext?: DiscordContext, operationContext?: OperationContext) {
 		const opContext = { ...operationContext, error };
-		this.log(LogLevel.FATAL, message, discordContext, opContext);
+		const attributes = this.buildAttributes(discordContext, opContext);
+		winstonLogger.log('fatal', message, attributes);
 	}
 
 	/**
-	 * Record a note-related event (logs to console)
+	 * Record a note-related event
 	 */
 	recordNoteEvent(data: NoteEventData) {
 		const eventType = `Note${data.operation.charAt(0).toUpperCase() + data.operation.slice(1)}`;
@@ -186,7 +197,7 @@ class Logger {
 	}
 
 	/**
-	 * Record a command execution event (logs to console)
+	 * Record a command execution event
 	 */
 	recordCommandEvent(commandName: string, subcommand?: string, discordContext?: DiscordContext, duration?: number, success: boolean = true) {
 		this.info(`Command executed: ${commandName}`, discordContext, {
@@ -198,7 +209,7 @@ class Logger {
 	}
 
 	/**
-	 * Record a database operation event (logs to console)
+	 * Record a database operation event
 	 */
 	recordDatabaseEvent(operation: string, table: string, duration?: number, success: boolean = true, error?: string) {
 		this.info(`Database operation: ${operation} on ${table}`, undefined, {
@@ -210,7 +221,7 @@ class Logger {
 	}
 
 	/**
-	 * Record a scheduler event (logs to console)
+	 * Record a scheduler event
 	 */
 	recordSchedulerEvent(eventType: 'scheduled' | 'executed' | 'failed' | 'stopped', details?: Record<string, any>) {
 		this.info(`Scheduler event: ${eventType}`, undefined, {
@@ -220,7 +231,7 @@ class Logger {
 	}
 
 	/**
-	 * Record a reminder sent event (logs to console)
+	 * Record a reminder sent event
 	 */
 	recordReminderSentEvent(guildId: string, channelId: string, noteCount: number, success: boolean = true) {
 		this.info(`Reminder sent to guild ${guildId}`, undefined, {

@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import 'newrelic';
+import newrelic from 'newrelic';
 import { Client, GatewayIntentBits, Collection, Events, TextChannel, PermissionsBitField, MessageFlags } from 'discord.js';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -109,37 +109,85 @@ client.on('interactionCreate', async (interaction) => {
 		return;
 	}
 
+	// Get subcommand if present for transaction naming
+	let subcommand: string | undefined;
+	try {
+		subcommand = interaction.options.getSubcommand();
+	} catch {
+		// No subcommand available
+	}
+
+	// Build transaction name: Command/{commandName}/{subcommand} or Command/{commandName}
+	const transactionName = subcommand ? `Command/${interaction.commandName}/${subcommand}` : `Command/${interaction.commandName}`;
+
 	const discordContext: DiscordContext = {
 		userId: interaction.user.id,
 		username: interaction.user.username,
 		guildId: interaction.guildId?.toString(),
 		channelId: interaction.channelId?.toString(),
 		commandName: interaction.commandName,
+		subcommand,
 	};
 
 	const startTime = Date.now();
 
-	try {
-		logger.info(`Executing command: ${interaction.commandName}`, discordContext, { operationType: 'command_execution' });
-		await command.execute(interaction);
-		const duration = Date.now() - startTime;
-		logger.recordCommandEvent(interaction.commandName, undefined, discordContext, duration, true);
-		logger.debug(`Command ${interaction.commandName} executed successfully in ${duration}ms`, discordContext, {
-			operationType: 'command_execution',
-			operationStatus: 'success',
-			duration,
-		});
-	} catch (error) {
-		const duration = Date.now() - startTime;
-		logger.error(`Error executing command: ${interaction.commandName}`, error as Error, discordContext, {
-			operationType: 'command_execution',
-			operationStatus: 'failure',
-			duration,
-		});
-		logger.recordCommandEvent(interaction.commandName, undefined, discordContext, duration, false);
-		console.error(error);
-		await interaction.reply({ content: 'There was an error executing this command!', flags: MessageFlags.Ephemeral });
-	}
+	// Start a New Relic web transaction for this command
+	newrelic.startWebTransaction(transactionName, async () => {
+		const transaction = newrelic.getTransaction();
+
+		// Add Discord context as custom attributes
+		newrelic.addCustomAttribute('discord.userId', interaction.user.id);
+		newrelic.addCustomAttribute('discord.username', interaction.user.username);
+		if (interaction.guildId) {
+			newrelic.addCustomAttribute('discord.guildId', interaction.guildId.toString());
+		}
+		if (interaction.channelId) {
+			newrelic.addCustomAttribute('discord.channelId', interaction.channelId.toString());
+		}
+		newrelic.addCustomAttribute('discord.commandName', interaction.commandName);
+		if (subcommand) {
+			newrelic.addCustomAttribute('discord.subcommand', subcommand);
+		}
+
+		try {
+			logger.info(`Executing command: ${interaction.commandName}`, discordContext, { operationType: 'command_execution' });
+			await command.execute(interaction);
+			const duration = Date.now() - startTime;
+
+			// Mark transaction as successful
+			newrelic.addCustomAttribute('command.success', true);
+			newrelic.addCustomAttribute('command.duration', duration);
+
+			logger.recordCommandEvent(interaction.commandName, subcommand, discordContext, duration, true);
+			logger.debug(`Command ${interaction.commandName} executed successfully in ${duration}ms`, discordContext, {
+				operationType: 'command_execution',
+				operationStatus: 'success',
+				duration,
+			});
+		} catch (error) {
+			const duration = Date.now() - startTime;
+
+			// Mark transaction as failed and add error details
+			newrelic.addCustomAttribute('command.success', false);
+			newrelic.addCustomAttribute('command.duration', duration);
+			newrelic.addCustomAttribute('error.message', (error as Error).message);
+
+			// Notice the error in New Relic
+			newrelic.noticeError(error as Error);
+
+			logger.error(`Error executing command: ${interaction.commandName}`, error as Error, discordContext, {
+				operationType: 'command_execution',
+				operationStatus: 'failure',
+				duration,
+			});
+			logger.recordCommandEvent(interaction.commandName, subcommand, discordContext, duration, false);
+			console.error(error);
+			await interaction.reply({ content: 'There was an error executing this command!', flags: MessageFlags.Ephemeral });
+		} finally {
+			// End the transaction
+			transaction.end();
+		}
+	});
 });
 
 client.on(Events.GuildCreate, async (guild) => {

@@ -88,6 +88,7 @@ export function buildReminderMessage(configuration: Configuration, progress: Pro
  * Builds reminder messages with chunking for Discord's message limits.
  * Returns an array of messages to send if notes exceed the limit.
  * Notes are numbered continuously across chunks.
+ * First message includes header, continuation messages only have notes.
  */
 export function buildReminderMessages(configuration: Configuration, progress: Progress, notes: Note[]): string[] {
 	const messages: string[] = [];
@@ -95,20 +96,24 @@ export function buildReminderMessages(configuration: Configuration, progress: Pr
 	const nextPage = getNextPage(progress.lastPage);
 	const nextHadith = progress.lastHadith + 1;
 
-	let header = `<@&${configuration.roleId}> السلام عليكم ورحمة الله وبركاته\n`;
-	header += `وقت المقراة اليومية! 📖\n\n`;
-	header += `الصفحة القادمة: [${nextPage}](https://quran.com/page/${nextPage})\n`;
-	header += `الحديث القادم: **${nextHadith}**\n\n`;
+	const header = `<@&${configuration.roleId}> السلام عليكم ورحمة الله وبركاته\n`;
+	const headerWithNotes = header + `وقت المقراة اليومية! 📖\n\n`;
+	const pageLink = `الصفحة القادمة: [${nextPage}](https://quran.com/page/${nextPage})\n`;
+	const hadithText = `الحديث القادم: **${nextHadith}**\n\n`;
+	const notesHeader = `ملاحظات اليوم:\n`;
+	const continuationHeader = `ملاحظات اليوم (تتمة):\n`;
 
 	if (notes.length === 0) {
-		messages.push(header);
+		messages.push(header + pageLink + hadithText);
 		return messages;
 	}
 
 	logger.debug(`Processing ${notes.length} notes for reminder messages`, undefined, { additionalData: { noteCount: notes.length } });
 
-	// Build notes content with continuous numbering
-	let currentMessage = header + `ملاحظات اليوم:\n`;
+	// Build the first message with header
+	let firstMessage = headerWithNotes + pageLink + hadithText + notesHeader;
+	// Continuation messages only have continuation header
+	let currentMessage = firstMessage;
 	let noteNumber = 1;
 
 	for (const note of notes) {
@@ -121,23 +126,22 @@ export function buildReminderMessages(configuration: Configuration, progress: Pr
 		// If single note line exceeds 1900 chars, split it
 		if (noteLine.length > 1900) {
 			// Save current message first if not empty
-			if (currentMessage.length > header.length + 20) {
+			if (currentMessage.length > firstMessage.length) {
 				messages.push(currentMessage);
 			}
-			// Split the long note into chunks
-			const noteChunks = chunkContent(note.note, 1800); // Leave room for number prefix
-			for (let i = 0; i < noteChunks.length; i++) {
-				const chunkLine = `${noteNumber}. ${noteChunks[i]}\n`;
-				messages.push(header + chunkLine);
+			// Split the long note into chunks (each with just the note number)
+			const noteChunks = chunkContent(note.note, 1800);
+			for (const chunk of noteChunks) {
+				messages.push(header + continuationHeader + `${noteNumber}. ${chunk}\n`);
 			}
-			currentMessage = header + `ملاحظات اليوم (${noteNumber}/${notes.length}):\n`;
+			currentMessage = firstMessage; // Reset to start fresh
 		} else if (currentMessage.length + noteLine.length > 1900) {
 			// Save current message and start a new one
 			logger.debug(`Splitting at note ${noteNumber}, currentMessage.length=${currentMessage.length}`, undefined, {
 				additionalData: { splitNoteNumber: noteNumber, messageLength: currentMessage.length },
 			});
 			messages.push(currentMessage);
-			currentMessage = header + `ملاحظات اليوم (${noteNumber}/${notes.length}):\n` + noteLine;
+			currentMessage = header + continuationHeader + noteLine;
 		} else {
 			currentMessage += noteLine;
 		}

@@ -86,37 +86,45 @@ export function buildReminderMessage(configuration: Configuration, progress: Pro
 /**
  * Builds reminder messages with chunking for Discord's message limits.
  * Returns an array of messages to send if notes exceed the limit.
+ * Notes are numbered continuously across chunks.
  */
 export function buildReminderMessages(configuration: Configuration, progress: Progress, notes: Note[]): string[] {
 	const messages: string[] = [];
 
-	// Build the base message (without notes)
-	let message = '';
 	const nextPage = getNextPage(progress.lastPage);
 	const nextHadith = progress.lastHadith + 1;
 
-	message += `<@&${configuration.roleId}> السلام عليكم ورحمة الله وبركاته\n`;
-	message += `وقت المقراة اليومية! 📖\n\n`;
-	message += `الصفحة القادمة: [${nextPage}](https://quran.com/page/${nextPage})\n`;
-	message += `الحديث القادم: **${nextHadith}**\n\n`;
+	let header = `<@&${configuration.roleId}> السلام عليكم ورحمة الله وبركاته\n`;
+	header += `وقت المقراة اليومية! 📖\n\n`;
+	header += `الصفحة القادمة: [${nextPage}](https://quran.com/page/${nextPage})\n`;
+	header += `الحديث القادم: **${nextHadith}**\n\n`;
 
-	if (notes.length > 0) {
-		const notesContent = notes.map((note, index) => `${index + 1}. ${note.note}`).join('\n');
-		const noteBlock = `ملاحظات اليوم:\n${notesContent}\n`;
-
-		// Chunk the notes if needed
-		const noteChunks = chunkContent(noteBlock, 1900); // 1900 for regular message safety
-
-		for (let i = 0; i < noteChunks.length; i++) {
-			if (i === 0) {
-				messages.push(message + noteChunks[i]);
-			} else {
-				messages.push(`ملاحظات اليوم (تتمة ${i + 1}/${noteChunks.length}):\n${noteChunks[i]}`);
-			}
-		}
-	} else {
-		messages.push(message);
+	if (notes.length === 0) {
+		messages.push(header);
+		return messages;
 	}
 
+	// Build notes content with continuous numbering
+	const maxHeaderLength = header.length + 20; // Header + "ملاحظات اليوم:" + buffer
+	const maxNoteLength = 1900 - maxHeaderLength;
+
+	let currentMessage = header + `ملاحظات اليوم:\n`;
+	let noteNumber = 1;
+
+	for (const note of notes) {
+		const noteLine = `${noteNumber}. ${note.note}\n`;
+
+		if (currentMessage.length + noteLine.length > 1900) {
+			// Save current message and start a new one
+			messages.push(currentMessage);
+			currentMessage = header + `ملاحظات اليوم (${noteNumber}/${notes.length}):\n` + noteLine;
+		} else {
+			currentMessage += noteLine;
+		}
+
+		noteNumber++;
+	}
+
+	messages.push(currentMessage);
 	return messages;
 }

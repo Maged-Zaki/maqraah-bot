@@ -1,7 +1,8 @@
 import { SlashCommandBuilder, MessageFlags, ChatInputCommandInteraction } from 'discord.js';
 import { configurationRepository, progressRepository, notesRepository } from '../database';
-import { buildReminderMessage } from '../utils';
+import { buildReminderMessages } from '../utils';
 import { logger, DiscordContext } from '../logger';
+
 const subcommands = {
 	PREVIEW_REMINDER: 'preview-reminder',
 	MENTION_EVERYONE: 'mention-everyone',
@@ -49,21 +50,33 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
 		logger.debug(`Retrieved test data: ${notes.length} notes`, discordContext, { additionalData: { noteCount: notes.length } });
 
-		const message = buildReminderMessage(config, progress, notes);
+		const messages = buildReminderMessages(config, progress, notes);
 
 		if (mentionRole) {
 			logger.info('Sending test reminder publicly with role mention', discordContext);
-			await interaction.channel.send(message);
+			for (const msg of messages) {
+				await interaction.channel.send(msg);
+			}
 			await interaction.reply({
 				content: 'Reminder sent!',
 				flags: MessageFlags.Ephemeral,
 			});
 		} else {
 			logger.info('Sending test reminder privately', discordContext);
-			await interaction.reply({
-				content: message,
-				flags: MessageFlags.Ephemeral,
-			});
+			// Send as many ephemeral messages as needed
+			for (let i = 0; i < messages.length; i++) {
+				if (i === 0) {
+					await interaction.reply({
+						content: messages[i],
+						flags: MessageFlags.Ephemeral,
+					});
+				} else {
+					await interaction.followUp({
+						content: messages[i],
+						flags: MessageFlags.Ephemeral,
+					});
+				}
+			}
 		}
 
 		logger.info('Test command executed successfully', discordContext, { operationType: 'test_command', operationStatus: 'success' });

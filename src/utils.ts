@@ -104,18 +104,20 @@ export function buildReminderMessages(configuration: Configuration, progress: Pr
 		return messages;
 	}
 
-	// Build notes content with continuous numbering
-	const maxHeaderLength = header.length + 20; // Header + "ملاحظات اليوم:" + buffer
-	const maxNoteLength = 1900 - maxHeaderLength;
+	console.log(`[DEBUG] Processing ${notes.length} notes for reminder messages`);
 
+	// Build notes content with continuous numbering
 	let currentMessage = header + `ملاحظات اليوم:\n`;
 	let noteNumber = 1;
 
 	for (const note of notes) {
 		const noteLine = `${noteNumber}. ${note.note}\n`;
 
+		console.log(`[DEBUG] Note ${noteNumber}: length=${noteLine.length}, currentMessage.length=${currentMessage.length}`);
+
 		if (currentMessage.length + noteLine.length > 1900) {
 			// Save current message and start a new one
+			console.log(`[DEBUG] Splitting at note ${noteNumber}, currentMessage.length=${currentMessage.length}`);
 			messages.push(currentMessage);
 			currentMessage = header + `ملاحظات اليوم (${noteNumber}/${notes.length}):\n` + noteLine;
 		} else {
@@ -126,5 +128,6 @@ export function buildReminderMessages(configuration: Configuration, progress: Pr
 	}
 
 	messages.push(currentMessage);
+	console.log(`[DEBUG] Generated ${messages.length} messages for ${notes.length} notes`);
 	return messages;
 }

@@ -10,6 +10,7 @@ const subcommands = {
 	DELETE_MINE: 'delete-mine',
 	DELETE_ALL: 'delete-all',
 	CARRY_OVER_LAST_NOTES: 'carry-over-last-notes',
+	SHOW_HISTORY: 'show-history',
 } as const;
 
 export const data = new SlashCommandBuilder()
@@ -25,7 +26,15 @@ export const data = new SlashCommandBuilder()
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW_ALL).setDescription('Show all notes from all users'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.DELETE_MINE).setDescription('Remove all your notes'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.DELETE_ALL).setDescription('Remove all notes for everyone'))
-	.addSubcommand((subcommand) => subcommand.setName(subcommands.CARRY_OVER_LAST_NOTES).setDescription('Add last maqraah notes to upcoming maqraah'));
+	.addSubcommand((subcommand) => subcommand.setName(subcommands.CARRY_OVER_LAST_NOTES).setDescription('Add last maqraah notes to upcoming maqraah'))
+	.addSubcommand((subcommand) =>
+		subcommand
+			.setName(subcommands.SHOW_HISTORY)
+			.setDescription('Show notes from a specific date')
+			.addIntegerOption((option) => option.setName('day').setDescription('Day (1-31)').setRequired(true).setMinValue(1).setMaxValue(31))
+			.addIntegerOption((option) => option.setName('month').setDescription('Month (1-12)').setRequired(true).setMinValue(1).setMaxValue(12))
+			.addIntegerOption((option) => option.setName('year').setDescription('Year (e.g., 2024)').setRequired(true).setMinValue(2000).setMaxValue(2100))
+	);
 
 export async function execute(interaction: any) {
 	const subcommand = interaction.options.getSubcommand();
@@ -207,6 +216,56 @@ export async function execute(interaction: any) {
 				});
 
 				await interaction.reply({ content: `Carried over \`${includedNotes.length}\` note(s) from the previous maqraah to the upcoming one.` });
+				break;
+			}
+			case subcommands.SHOW_HISTORY: {
+				const day = interaction.options.getInteger('day');
+				const month = interaction.options.getInteger('month');
+				const year = interaction.options.getInteger('year');
+
+				// Validate the date
+				const date = new Date(year, month - 1, day);
+				if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+					logger.info(`Invalid date provided: ${day}/${month}/${year}`, discordContext, {
+						operationType: 'note_history',
+						operationStatus: 'failure',
+					});
+					await interaction.reply({ content: 'Invalid date. Please provide a valid date.', flags: MessageFlags.Ephemeral });
+					return;
+				}
+
+				// Format date as YYYY-MM-DD for database query
+				const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+				const notes = await notesRepository.getNotesByDate(dateString);
+
+				if (notes.length === 0) {
+					logger.info(`No notes found for date: ${dateString}`, discordContext, { operationType: 'note_history', operationStatus: 'success' });
+					await interaction.reply({ content: `No notes found for ${dateString}.`, flags: MessageFlags.Ephemeral });
+					return;
+				}
+
+				logger.info(`Found ${notes.length} notes for date: ${dateString}`, discordContext, {
+					operationType: 'note_history',
+					operationStatus: 'success',
+				});
+
+				// Format the date for display
+				const formattedDate = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+				const notesContent = notes.map((n) => `<@${n.userId}>: ${n.note}`).join('\n');
+				const chunks = chunkContent(notesContent, 4000);
+
+				for (let i = 0; i < chunks.length; i++) {
+					const embed = new EmbedBuilder()
+						.setTitle(i === 0 ? `Notes from ${formattedDate}` : `Notes from ${formattedDate} (${i + 1}/${chunks.length})`)
+						.setDescription(chunks[i])
+						.setColor(0x0099ff);
+
+					if (i === 0) {
+						await interaction.reply({ embeds: [embed], ephemeral: true });
+					} else {
+						await interaction.followUp({ embeds: [embed], ephemeral: true });
+					}
+				}
 				break;
 			}
 		}

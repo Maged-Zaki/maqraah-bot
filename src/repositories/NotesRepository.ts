@@ -211,4 +211,25 @@ export class NotesRepository {
 			});
 		});
 	}
+
+	async getNotesByDate(dateString: string): Promise<Note[]> {
+		const startTime = Date.now();
+		return new Promise((resolve, reject) => {
+			this.db.all(
+				`SELECT * FROM notes WHERE date(dateAdded) = ? OR date(lastIncludedDate) = ? ORDER BY dateAdded DESC`,
+				[dateString, dateString],
+				(err, rows: Note[]) => {
+					const duration = Date.now() - startTime;
+					if (err) {
+						logger.error('Failed to get notes by date', err, undefined, { operationType: 'database_read', operationStatus: 'failure', duration });
+						logger.recordDatabaseEvent('read', 'notes', duration, false, err.message);
+						reject(err);
+					} else {
+						logger.recordDatabaseEvent('read', 'notes', duration, true);
+						resolve(rows);
+					}
+				}
+			);
+		});
+	}
 }

@@ -42,46 +42,56 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
 		logger.debug(`Test subcommand: ${subcommand}, mentionRole: ${mentionRole}`, discordContext);
 
-		const [config, progress, notes] = await Promise.all([
-			configurationRepository.getConfiguration(),
-			progressRepository.getProgress(),
-			notesRepository.getAllNotes(),
-		]);
+		// Reply immediately to acknowledge the interaction
+		await interaction.reply({
+			content: 'Processing reminder...',
+			flags: MessageFlags.Ephemeral,
+		});
 
-		logger.debug(`Retrieved test data: ${notes.length} notes`, discordContext, { additionalData: { noteCount: notes.length } });
+		// Process and send messages asynchronously
+		setTimeout(async () => {
+			try {
+				const [config, progress, notes] = await Promise.all([
+					configurationRepository.getConfiguration(),
+					progressRepository.getProgress(),
+					notesRepository.getAllNotes(),
+				]);
 
-		const messages = buildReminderMessages(config, progress, notes);
+				logger.debug(`Retrieved test data: ${notes.length} notes`, discordContext, { additionalData: { noteCount: notes.length } });
 
-		if (mentionRole) {
-			logger.info('Sending test reminder publicly with role mention', discordContext);
-			for (const msg of messages) {
-				await interaction.channel.send(msg);
-			}
-			await interaction.reply({
-				content: 'Reminder sent!',
-				flags: MessageFlags.Ephemeral,
-			});
-		} else {
-			logger.info('Sending test reminder privately', discordContext);
-			// Send as many ephemeral messages as needed
-			for (let i = 0; i < messages.length; i++) {
-				if (i === 0) {
-					await interaction.reply({
-						content: messages[i],
+				const messages = buildReminderMessages(config, progress, notes);
+
+				if (mentionRole) {
+					logger.info('Sending test reminder publicly with role mention', discordContext);
+					for (const msg of messages) {
+						await (interaction.channel! as any).send(msg);
+					}
+					await interaction.followUp({
+						content: 'Reminder sent!',
 						flags: MessageFlags.Ephemeral,
 					});
 				} else {
-					await interaction.followUp({
-						content: messages[i],
-						flags: MessageFlags.Ephemeral,
-					});
+					logger.info('Sending test reminder privately', discordContext);
+					// Send as many ephemeral messages as needed
+					for (let i = 0; i < messages.length; i++) {
+						await interaction.followUp({
+							content: messages[i],
+							flags: MessageFlags.Ephemeral,
+						});
+					}
+				}
+
+				logger.info('Test command executed successfully', discordContext, { operationType: 'test_command', operationStatus: 'success' });
+			} catch (error) {
+				logger.error('Error executing test command', error as Error, discordContext, { operationType: 'test_command', operationStatus: 'failure' });
+				try {
+					await interaction.followUp({ content: 'There was an error executing this command!', flags: MessageFlags.Ephemeral });
+				} catch {
+					// Ignore if followUp also fails
 				}
 			}
-		}
-
-		logger.info('Test command executed successfully', discordContext, { operationType: 'test_command', operationStatus: 'success' });
+		}, 0);
 	} catch (error) {
-		logger.error('Error executing test command', error as Error, discordContext, { operationType: 'test_command', operationStatus: 'failure' });
-		await interaction.reply({ content: 'There was an error executing this command!', flags: MessageFlags.Ephemeral });
+		logger.error('Error in test command execution', error as Error, discordContext, { operationType: 'test_command', operationStatus: 'failure' });
 	}
 }

@@ -1,6 +1,7 @@
 import { Configuration } from './repositories/ConfigurationRepository';
 import { Note } from './repositories/NotesRepository';
 import { Progress } from './repositories/ProgressRepository';
+import { logger } from './logger';
 
 export function getNextPage(lastPage: number): number {
 	if (lastPage >= 604) {
@@ -104,7 +105,7 @@ export function buildReminderMessages(configuration: Configuration, progress: Pr
 		return messages;
 	}
 
-	console.log(`[DEBUG] Processing ${notes.length} notes for reminder messages`);
+	logger.debug(`Processing ${notes.length} notes for reminder messages`, undefined, { additionalData: { noteCount: notes.length } });
 
 	// Build notes content with continuous numbering
 	let currentMessage = header + `ملاحظات اليوم:\n`;
@@ -113,11 +114,28 @@ export function buildReminderMessages(configuration: Configuration, progress: Pr
 	for (const note of notes) {
 		const noteLine = `${noteNumber}. ${note.note}\n`;
 
-		console.log(`[DEBUG] Note ${noteNumber}: length=${noteLine.length}, currentMessage.length=${currentMessage.length}`);
+		logger.debug(`Note ${noteNumber}: length=${noteLine.length}, currentMessage.length=${currentMessage.length}`, undefined, {
+			additionalData: { noteNumber, noteLength: noteLine.length, currentMessageLength: currentMessage.length },
+		});
 
-		if (currentMessage.length + noteLine.length > 1900) {
+		// If single note line exceeds 1900 chars, split it
+		if (noteLine.length > 1900) {
+			// Save current message first if not empty
+			if (currentMessage.length > header.length + 20) {
+				messages.push(currentMessage);
+			}
+			// Split the long note into chunks
+			const noteChunks = chunkContent(note.note, 1800); // Leave room for number prefix
+			for (let i = 0; i < noteChunks.length; i++) {
+				const chunkLine = `${noteNumber}. ${noteChunks[i]}\n`;
+				messages.push(header + chunkLine);
+			}
+			currentMessage = header + `ملاحظات اليوم (${noteNumber}/${notes.length}):\n`;
+		} else if (currentMessage.length + noteLine.length > 1900) {
 			// Save current message and start a new one
-			console.log(`[DEBUG] Splitting at note ${noteNumber}, currentMessage.length=${currentMessage.length}`);
+			logger.debug(`Splitting at note ${noteNumber}, currentMessage.length=${currentMessage.length}`, undefined, {
+				additionalData: { splitNoteNumber: noteNumber, messageLength: currentMessage.length },
+			});
 			messages.push(currentMessage);
 			currentMessage = header + `ملاحظات اليوم (${noteNumber}/${notes.length}):\n` + noteLine;
 		} else {
@@ -128,6 +146,8 @@ export function buildReminderMessages(configuration: Configuration, progress: Pr
 	}
 
 	messages.push(currentMessage);
-	console.log(`[DEBUG] Generated ${messages.length} messages for ${notes.length} notes`);
+	logger.debug(`Generated ${messages.length} messages for ${notes.length} notes`, undefined, {
+		additionalData: { messageCount: messages.length, noteCount: notes.length },
+	});
 	return messages;
 }

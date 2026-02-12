@@ -28,8 +28,6 @@ db.serialize(() => {
 		(err) => {
 			if (err) {
 				logger.error('Failed to create configuration table', err);
-			} else {
-				logger.debug('Configuration table created or already exists');
 			}
 		}
 	);
@@ -37,8 +35,6 @@ db.serialize(() => {
 	db.run(`INSERT OR IGNORE INTO configuration (id) VALUES (1)`, (err) => {
 		if (err) {
 			logger.error('Failed to insert default configuration', err);
-		} else {
-			logger.debug('Default configuration inserted or already exists');
 		}
 	});
 
@@ -53,8 +49,6 @@ db.serialize(() => {
 		(err) => {
 			if (err) {
 				logger.error('Failed to create progress table', err);
-			} else {
-				logger.debug('Progress table created or already exists');
 			}
 		}
 	);
@@ -62,8 +56,6 @@ db.serialize(() => {
 	db.run(`INSERT OR IGNORE INTO progress (id) VALUES (1)`, (err) => {
 		if (err) {
 			logger.error('Failed to insert default progress', err);
-		} else {
-			logger.debug('Default progress inserted or already exists');
 		}
 	});
 
@@ -81,8 +73,6 @@ db.serialize(() => {
 		(err) => {
 			if (err) {
 				logger.error('Failed to create notes table', err);
-			} else {
-				logger.debug('Notes table created or already exists');
 			}
 		}
 	);
@@ -91,8 +81,6 @@ db.serialize(() => {
 	db.run(`ALTER TABLE notes ADD COLUMN status TEXT DEFAULT 'pending'`, (err) => {
 		if (err && !err.message.includes('duplicate column name')) {
 			logger.error('Failed to add status column to notes table', err);
-		} else {
-			logger.debug('Status column added or already exists in notes table');
 		}
 	});
 
@@ -100,8 +88,6 @@ db.serialize(() => {
 	db.run(`ALTER TABLE notes ADD COLUMN lastIncludedDate TEXT`, (err) => {
 		if (err && !err.message.includes('duplicate column name')) {
 			logger.error('Failed to add lastIncludedDate column to notes table', err);
-		} else {
-			logger.debug('lastIncludedDate column added or already exists in notes table');
 		}
 	});
 });

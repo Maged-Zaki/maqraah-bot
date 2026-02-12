@@ -21,7 +21,6 @@ export async function scheduleReminder(client: Client) {
 		logger.warn(`Invalid time format: ${configuration.dailyTime}, skipping reminder`, undefined, {
 			additionalData: { time: configuration.dailyTime },
 		});
-		console.log('Invalid time format, skipping reminder.');
 		return;
 	}
 
@@ -38,8 +37,6 @@ export async function scheduleReminder(client: Client) {
 				const progress = await progressRepository.getProgress();
 				const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
 				const notes = await notesRepository.getNotesByStatus('pending');
-
-				logger.debug(`Retrieved ${notes.length} notes for reminder`, undefined, { additionalData: { noteCount: notes.length } });
 
 				const { mainMessage, notesMessages } = buildReminderMessages(configuration, progress, notes);
 
@@ -77,6 +74,10 @@ export async function scheduleReminder(client: Client) {
 					operationType: 'reminder_execution',
 					operationStatus: 'failure',
 					duration,
+					additionalData: {
+						guildId: process.env.GUILD_ID,
+						channelId: process.env.CHANNEL_ID,
+					},
 				});
 				logger.recordReminderSentEvent(process.env.GUILD_ID!, process.env.CHANNEL_ID!, 0, false);
 				logger.recordSchedulerEvent('failed', { error: (error as Error).message, duration });
@@ -103,7 +104,6 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 	const cronTime = parseTimeToCron(newTime);
 	if (!cronTime) {
 		logger.warn(`Invalid time format for override: ${newTime}`, undefined, { additionalData: { newTime } });
-		console.log('Invalid time format, skipping reminder.');
 		return;
 	}
 
@@ -120,8 +120,6 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 				const progress = await progressRepository.getProgress();
 				const channel = client.channels.cache.get(process.env.CHANNEL_ID!);
 				const notes = await notesRepository.getNotesByStatus('pending');
-
-				logger.debug(`Retrieved ${notes.length} notes for one-time reminder`, undefined, { additionalData: { noteCount: notes.length } });
 
 				const { mainMessage, notesMessages } = buildReminderMessages(configuration, progress, notes);
 
@@ -165,6 +163,11 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 					operationType: 'reminder_execution',
 					operationStatus: 'failure',
 					duration,
+					additionalData: {
+						guildId: process.env.GUILD_ID,
+						channelId: process.env.CHANNEL_ID,
+						isOverride: true,
+					},
 				});
 				logger.recordReminderSentEvent(process.env.GUILD_ID!, process.env.CHANNEL_ID!, 0, false);
 				logger.recordSchedulerEvent('failed', { error: (error as Error).message, duration, isOverride: true });

@@ -27,14 +27,11 @@ async function registerCommands(client: Client) {
 	const commandsPath = path.join(__dirname, 'commands');
 	const commandFiles = fs.readdirSync(commandsPath).filter((file: string) => file.endsWith('.js'));
 
-	logger.debug(`Found ${commandFiles.length} command files`, undefined, { additionalData: { commandFiles } });
-
 	for (const file of commandFiles) {
 		const filePath = path.join(commandsPath, file);
 		const command = require(filePath);
 		if ('data' in command && 'execute' in command) {
 			(client as any).commands.set(command.data.name, command);
-			logger.debug(`Registered command: ${command.data.name}`);
 		} else {
 			logger.warn(`Command file ${file} is missing required 'data' or 'execute' properties`);
 		}
@@ -56,7 +53,6 @@ async function registerCommands(client: Client) {
 
 client.once('clientReady', async () => {
 	logger.info(`Bot logged in successfully`, undefined, { additionalData: { botTag: client.user?.tag } });
-	console.log(`Logged in as ${client.user?.tag}!`);
 
 	await registerCommands(client);
 
@@ -67,7 +63,6 @@ client.once('clientReady', async () => {
 
 	if (!channelId) {
 		logger.error('CHANNEL_ID is not set in environment variables');
-		console.error('CHANNEL_ID is not set in environment variables.');
 		return;
 	}
 
@@ -87,11 +82,9 @@ For more information, use \`/help\` to see all available commands.
 			logger.info('Welcome message sent successfully', undefined, { additionalData: { channelId } });
 		} else {
 			logger.error(`Missing permissions to send messages in channel ${channelId}`);
-			console.error(`Missing permissions to send messages in channel ${channelId}`);
 		}
 	} else {
 		logger.warn(`Channel ${channelId} not found in cache, skipping welcome message`);
-		console.log(`Channel ${channelId} not found in cache, skipping welcome message.`);
 	}
 });
 
@@ -159,11 +152,6 @@ client.on('interactionCreate', async (interaction) => {
 			newrelic.addCustomAttribute('command.duration', duration);
 
 			logger.recordCommandEvent(interaction.commandName, subcommand, discordContext, duration, true);
-			logger.debug(`Command ${interaction.commandName} executed successfully in ${duration}ms`, discordContext, {
-				operationType: 'command_execution',
-				operationStatus: 'success',
-				duration,
-			});
 		} catch (error) {
 			const duration = Date.now() - startTime;
 
@@ -181,7 +169,6 @@ client.on('interactionCreate', async (interaction) => {
 				duration,
 			});
 			logger.recordCommandEvent(interaction.commandName, subcommand, discordContext, duration, false);
-			console.error(error);
 			await interaction.reply({ content: 'There was an error executing this command!', flags: MessageFlags.Ephemeral });
 		} finally {
 			// End the transaction
@@ -197,7 +184,6 @@ client.on(Events.GuildCreate, async (guild) => {
 		logger.info(`Configuration updated for new guild`, undefined, {
 			additionalData: { guildId: guild.id, guildName: guild.name, roleId: guild.roles.everyone.id },
 		});
-		console.log(`Joined guild ${guild.name}, set role to @everyone`);
 	} catch (error) {
 		logger.error(`Failed to update configuration for new guild: ${guild.name}`, error as Error, undefined, {
 			additionalData: { guildId: guild.id, guildName: guild.name },

@@ -52,20 +52,16 @@ export async function execute(interaction: any) {
 				let replyMessages: string[] = [];
 				const configuration = await configurationRepository.getConfiguration();
 
-				logger.debug(`Current configuration retrieved`, discordContext, { additionalData: { configuration } });
-
 				const role = interaction.options.getRole(options.ROLE);
 				if (role) {
 					updates.roleId = role.id;
 					replyMessages.push(`Role set to ${role}.`);
-					logger.debug(`Updating role to ${role.id}`, discordContext);
 				}
 
 				const voicechannel = interaction.options.getChannel(options.VOICE_CHANNEL);
 				if (voicechannel) {
 					updates.voiceChannelId = voicechannel.id;
 					replyMessages.push(`Voice channel set to ${voicechannel}.`);
-					logger.debug(`Updating voice channel to ${voicechannel.id}`, discordContext);
 				}
 
 				const time = interaction.options.getString(options.TIME);
@@ -84,14 +80,12 @@ export async function execute(interaction: any) {
 					}
 					updates.dailyTime = time;
 					replyMessages.push(`<@&${configuration.roleId}> Maqraah Reminder has been changed to \`${time}\`.`);
-					logger.debug(`Updating daily time to ${time}`, discordContext);
 				}
 
 				const timezone = interaction.options.getString(options.TIMEZONE);
 				if (timezone) {
 					updates.timezone = timezone;
 					replyMessages.push(`Timezone set to \`${timezone}\`.`);
-					logger.debug(`Updating timezone to ${timezone}`, discordContext);
 				}
 
 				if (Object.keys(updates).length > 0) {
@@ -117,11 +111,9 @@ export async function execute(interaction: any) {
 										logger.info(`Updated voice channel name to ${timeWithoutAmpm}`, discordContext);
 									} catch (error) {
 										logger.error('Failed to update voice channel name', error as Error, discordContext);
-										console.error('Failed to update voice channel name:', error);
 									}
 								} else {
 									logger.warn('Bot lacks ManageChannels permission for the voice channel', discordContext);
-									console.error('Bot lacks ManageChannels permission for the voice channel.');
 								}
 							}
 						}
@@ -136,7 +128,6 @@ export async function execute(interaction: any) {
 				break;
 			}
 			case subcommands.SHOW: {
-				logger.debug(`Fetching current configuration`, discordContext);
 				const configuration = await configurationRepository.getConfiguration();
 
 				logger.info(`Displaying current configuration`, discordContext, { operationType: 'configuration_show', operationStatus: 'success' });
@@ -162,6 +153,12 @@ export async function execute(interaction: any) {
 		logger.error(`Error executing configuration subcommand: ${subcommand}`, error as Error, discordContext, {
 			operationType: 'configuration_command',
 			operationStatus: 'failure',
+			additionalData: {
+				subcommand,
+				userId: interaction.user.id,
+				guildId: interaction.guildId?.toString(),
+				channelId: interaction.channelId?.toString(),
+			},
 		});
 		await interaction.reply({ content: 'There was an error executing this command!', flags: MessageFlags.Ephemeral });
 	}

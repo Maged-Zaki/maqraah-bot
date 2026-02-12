@@ -23,7 +23,6 @@ export class NotesRepository {
 					logger.recordDatabaseEvent('create', 'notes', duration, false, err.message);
 					reject(err);
 				} else {
-					logger.debug('Note added successfully', undefined, { operationType: 'database_create', operationStatus: 'success', duration });
 					logger.recordDatabaseEvent('create', 'notes', duration, true);
 					resolve();
 				}
@@ -41,7 +40,6 @@ export class NotesRepository {
 					logger.recordDatabaseEvent('read', 'notes', duration, false, err.message);
 					reject(err);
 				} else {
-					logger.debug(`Retrieved ${rows.length} notes`, undefined, { operationType: 'database_read', operationStatus: 'success', duration });
 					logger.recordDatabaseEvent('read', 'notes', duration, true);
 					resolve(rows);
 				}
@@ -59,11 +57,6 @@ export class NotesRepository {
 					logger.recordDatabaseEvent('read', 'notes', duration, false, err.message);
 					reject(err);
 				} else {
-					logger.debug(`Retrieved ${rows.length} notes for user ${userId}`, undefined, {
-						operationType: 'database_read',
-						operationStatus: 'success',
-						duration,
-					});
 					logger.recordDatabaseEvent('read', 'notes', duration, true);
 					resolve(rows);
 				}
@@ -82,7 +75,6 @@ export class NotesRepository {
 					logger.recordDatabaseEvent('delete', 'notes', duration, false, err.message);
 					reject(err);
 				} else {
-					logger.debug(`Deleted ${ids.length} notes`, undefined, { operationType: 'database_delete', operationStatus: 'success', duration });
 					logger.recordDatabaseEvent('delete', 'notes', duration, true);
 					resolve();
 				}
@@ -100,7 +92,6 @@ export class NotesRepository {
 					logger.recordDatabaseEvent('delete', 'notes', duration, false, err.message);
 					reject(err);
 				} else {
-					logger.debug('Deleted all notes', undefined, { operationType: 'database_delete', operationStatus: 'success', duration });
 					logger.recordDatabaseEvent('delete', 'notes', duration, true);
 					resolve();
 				}
@@ -118,11 +109,6 @@ export class NotesRepository {
 					logger.recordDatabaseEvent('read', 'notes', duration, false, err.message);
 					reject(err);
 				} else {
-					logger.debug(`Retrieved ${rows.length} notes with status ${status}`, undefined, {
-						operationType: 'database_read',
-						operationStatus: 'success',
-						duration,
-					});
 					logger.recordDatabaseEvent('read', 'notes', duration, true);
 					resolve(rows);
 				}
@@ -140,11 +126,6 @@ export class NotesRepository {
 					logger.recordDatabaseEvent('update', 'notes', duration, false, err.message);
 					reject(err);
 				} else {
-					logger.debug(`Updated note ${noteId} status to ${status}`, undefined, {
-						operationType: 'database_update',
-						operationStatus: 'success',
-						duration,
-					});
 					logger.recordDatabaseEvent('update', 'notes', duration, true);
 					resolve();
 				}
@@ -163,11 +144,6 @@ export class NotesRepository {
 					logger.recordDatabaseEvent('update', 'notes', duration, false, err.message);
 					reject(err);
 				} else {
-					logger.debug(`Updated ${noteIds.length} notes status to ${status}`, undefined, {
-						operationType: 'database_update',
-						operationStatus: 'success',
-						duration,
-					});
 					logger.recordDatabaseEvent('update', 'notes', duration, true);
 					resolve();
 				}
@@ -193,11 +169,6 @@ export class NotesRepository {
 						logger.recordDatabaseEvent('update', 'notes', duration, false, err.message);
 						reject(err);
 					} else {
-						logger.debug(`Updated ${noteIds.length} notes status to ${status} with date ${lastIncludedDate}`, undefined, {
-							operationType: 'database_update',
-							operationStatus: 'success',
-							duration,
-						});
 						logger.recordDatabaseEvent('update', 'notes', duration, true);
 						resolve();
 					}
@@ -216,11 +187,6 @@ export class NotesRepository {
 					logger.recordDatabaseEvent('read', 'notes', duration, false, err.message);
 					reject(err);
 				} else {
-					logger.debug(`Retrieved ${rows.length} included notes`, undefined, {
-						operationType: 'database_read',
-						operationStatus: 'success',
-						duration,
-					});
 					logger.recordDatabaseEvent('read', 'notes', duration, true);
 					resolve(rows);
 				}
@@ -239,11 +205,6 @@ export class NotesRepository {
 					logger.recordDatabaseEvent('update', 'notes', duration, false, err.message);
 					reject(err);
 				} else {
-					logger.debug(`Carried over ${noteIds.length} notes to pending status`, undefined, {
-						operationType: 'database_update',
-						operationStatus: 'success',
-						duration,
-					});
 					logger.recordDatabaseEvent('update', 'notes', duration, true);
 					resolve();
 				}

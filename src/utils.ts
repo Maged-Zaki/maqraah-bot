@@ -1,7 +1,6 @@
 import { Configuration } from './repositories/ConfigurationRepository';
 import { Note } from './repositories/NotesRepository';
 import { Progress } from './repositories/ProgressRepository';
-import { logger } from './logger';
 
 export function getNextPage(lastPage: number): number {
 	if (lastPage >= 604) {
@@ -89,8 +88,6 @@ export function buildNotesMessages(notes: Note[]): string[] {
 		return [];
 	}
 
-	logger.debug(`Processing ${notes.length} notes for notes messages`, undefined, { additionalData: { noteCount: notes.length } });
-
 	const messages: string[] = [];
 	const notesHeader = `ملاحظات اليوم:\n`;
 
@@ -99,10 +96,6 @@ export function buildNotesMessages(notes: Note[]): string[] {
 
 	for (const note of notes) {
 		const noteLine = `${noteNumber}. ${note.note}\n`;
-
-		logger.debug(`Note ${noteNumber}: length=${noteLine.length}, currentMessage.length=${currentMessage.length}`, undefined, {
-			additionalData: { noteNumber, noteLength: noteLine.length, currentMessageLength: currentMessage.length },
-		});
 
 		// If single note line exceeds 1900 chars, split it
 		if (noteLine.length > 1900) {
@@ -118,9 +111,6 @@ export function buildNotesMessages(notes: Note[]): string[] {
 			currentMessage = notesHeader; // Reset to start fresh
 		} else if (currentMessage.length + noteLine.length > 1900) {
 			// Save current message and start a new one
-			logger.debug(`Splitting at note ${noteNumber}, currentMessage.length=${currentMessage.length}`, undefined, {
-				additionalData: { splitNoteNumber: noteNumber, messageLength: currentMessage.length },
-			});
 			messages.push(currentMessage);
 			currentMessage = noteLine;
 		} else {
@@ -134,10 +124,6 @@ export function buildNotesMessages(notes: Note[]): string[] {
 	if (currentMessage.length > notesHeader.length) {
 		messages.push(currentMessage);
 	}
-
-	logger.debug(`Generated ${messages.length} notes messages for ${notes.length} notes`, undefined, {
-		additionalData: { messageCount: messages.length, noteCount: notes.length },
-	});
 
 	return messages;
 }

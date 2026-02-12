@@ -19,7 +19,6 @@ export class ProgressRepository {
 					logger.recordDatabaseEvent('read', 'progress', duration, false, err.message);
 					reject(err);
 				} else {
-					logger.debug('Progress retrieved successfully', undefined, { operationType: 'database_read', operationStatus: 'success', duration });
 					logger.recordDatabaseEvent('read', 'progress', duration, true);
 					resolve(row as Progress);
 				}
@@ -40,7 +39,6 @@ export class ProgressRepository {
 					logger.recordDatabaseEvent('update', 'progress', duration, false, err.message);
 					reject(err);
 				} else {
-					logger.debug('Progress updated successfully', undefined, { operationType: 'database_update', operationStatus: 'success', duration });
 					logger.recordDatabaseEvent('update', 'progress', duration, true);
 					resolve();
 				}

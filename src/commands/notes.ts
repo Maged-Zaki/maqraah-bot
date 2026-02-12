@@ -9,7 +9,7 @@ const subcommands = {
 	SHOW_ALL: 'show-all',
 	DELETE_MINE: 'delete-mine',
 	DELETE_ALL: 'delete-all',
-	CARRY_OVER_YESTERDAY: 'carry-over-yesterday',
+	CARRY_OVER_LAST_NOTES: 'carry-over-last-notes',
 } as const;
 
 export const data = new SlashCommandBuilder()
@@ -25,7 +25,7 @@ export const data = new SlashCommandBuilder()
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW_ALL).setDescription('Show all notes from all users'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.DELETE_MINE).setDescription('Remove all your notes'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.DELETE_ALL).setDescription('Remove all notes for everyone'))
-	.addSubcommand((subcommand) => subcommand.setName(subcommands.CARRY_OVER_YESTERDAY).setDescription('Add last maqraah notes to upcoming maqraah'));
+	.addSubcommand((subcommand) => subcommand.setName(subcommands.CARRY_OVER_LAST_NOTES).setDescription('Add last maqraah notes to upcoming maqraah'));
 
 export async function execute(interaction: any) {
 	const subcommand = interaction.options.getSubcommand();
@@ -45,7 +45,6 @@ export async function execute(interaction: any) {
 		switch (subcommand) {
 			case subcommands.CREATE: {
 				const text = interaction.options.getString('text');
-				logger.debug(`Creating note for user ${interaction.user.id}`, discordContext, { additionalData: { noteLength: text?.length } });
 
 				await notesRepository.addNote(interaction.user.id, text);
 
@@ -66,8 +65,6 @@ export async function execute(interaction: any) {
 				break;
 			}
 			case subcommands.SHOW_MINE: {
-				logger.debug(`Fetching notes for user ${interaction.user.id}`, discordContext);
-
 				const notes = await notesRepository.getNotesByUserId(interaction.user.id);
 				const pendingNotes = notes.filter((n) => n.status === 'pending' || n.status === undefined);
 
@@ -116,8 +113,6 @@ export async function execute(interaction: any) {
 				break;
 			}
 			case subcommands.SHOW_ALL: {
-				logger.debug(`Fetching all notes`, discordContext);
-
 				const notes = await notesRepository.getNotesByStatus('pending');
 
 				if (notes.length === 0) {
@@ -146,8 +141,6 @@ export async function execute(interaction: any) {
 				break;
 			}
 			case subcommands.DELETE_MINE: {
-				logger.debug(`Fetching notes for deletion for user ${interaction.user.id}`, discordContext);
-
 				const notes = await notesRepository.getNotesByUserId(interaction.user.id);
 				const pendingNotes = notes.filter((n) => n.status === 'pending' || n.status === undefined);
 
@@ -161,8 +154,6 @@ export async function execute(interaction: any) {
 				}
 
 				const noteIds = pendingNotes.map((n) => n.id);
-				logger.debug(`Deleting ${pendingNotes.length} notes for user ${interaction.user.id}`, discordContext, { additionalData: { noteIds } });
-
 				await notesRepository.deleteNotes(noteIds);
 
 				logger.info(`Deleted ${pendingNotes.length} notes for user ${interaction.user.id}`, discordContext, {
@@ -183,8 +174,6 @@ export async function execute(interaction: any) {
 				break;
 			}
 			case subcommands.DELETE_ALL: {
-				logger.debug(`Fetching all notes for deletion`, discordContext);
-
 				const notes = await notesRepository.getAllNotes();
 
 				if (notes.length === 0) {
@@ -193,8 +182,6 @@ export async function execute(interaction: any) {
 					return;
 				}
 
-				logger.debug(`Deleting all ${notes.length} notes`, discordContext);
-
 				await notesRepository.deleteAllNotes();
 
 				logger.info(`Deleted all ${notes.length} notes`, discordContext, { operationType: 'note_delete_all', operationStatus: 'success' });
@@ -202,9 +189,7 @@ export async function execute(interaction: any) {
 				await interaction.reply({ content: `Removed \`${notes.length}\` notes for all users.` });
 				break;
 			}
-			case subcommands.CARRY_OVER_YESTERDAY: {
-				logger.debug(`Fetching included notes for carry over`, discordContext);
-
+			case subcommands.CARRY_OVER_LAST_NOTES: {
 				const includedNotes = await notesRepository.getIncludedNotes();
 
 				if (includedNotes.length === 0) {
@@ -212,8 +197,6 @@ export async function execute(interaction: any) {
 					await interaction.reply({ content: 'There are no notes from the previous maqraah to carry over.', flags: MessageFlags.Ephemeral });
 					return;
 				}
-
-				logger.debug(`Carrying over ${includedNotes.length} notes`, discordContext);
 
 				const noteIds = includedNotes.map((n) => n.id);
 				await notesRepository.carryOverNotes(noteIds);
@@ -231,6 +214,12 @@ export async function execute(interaction: any) {
 		logger.error(`Error executing notes subcommand: ${subcommand}`, error as Error, discordContext, {
 			operationType: 'notes_command',
 			operationStatus: 'failure',
+			additionalData: {
+				subcommand,
+				userId: interaction.user.id,
+				guildId: interaction.guildId?.toString(),
+				channelId: interaction.channelId?.toString(),
+			},
 		});
 		await interaction.reply({ content: 'There was an error executing this command!', flags: MessageFlags.Ephemeral });
 	}

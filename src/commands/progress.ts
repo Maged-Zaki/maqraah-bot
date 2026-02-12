@@ -56,7 +56,6 @@ export async function execute(interaction: any) {
 					}
 					updates.lastPage = lastpage;
 					replyMessages.push(`Last Qur'an page set to \`${lastpage}\`.`);
-					logger.debug(`Updating last Quran page to ${lastpage}`, discordContext);
 				}
 
 				const lasthadith = interaction.options.getInteger(options.LAST_HADITH);
@@ -71,7 +70,6 @@ export async function execute(interaction: any) {
 					}
 					updates.lastHadith = lasthadith;
 					replyMessages.push(`Last Hadith set to \`${lasthadith}\`.`);
-					logger.debug(`Updating last Hadith to ${lasthadith}`, discordContext);
 				}
 
 				if (Object.keys(updates).length > 0) {
@@ -86,7 +84,6 @@ export async function execute(interaction: any) {
 				break;
 			}
 			case subcommands.SHOW: {
-				logger.debug(`Fetching current progress`, discordContext);
 				const progress = await progressRepository.getProgress();
 
 				logger.info(`Displaying current progress`, discordContext, {
@@ -111,6 +108,12 @@ export async function execute(interaction: any) {
 		logger.error(`Error executing progress subcommand: ${subcommand}`, error as Error, discordContext, {
 			operationType: 'progress_command',
 			operationStatus: 'failure',
+			additionalData: {
+				subcommand,
+				userId: interaction.user.id,
+				guildId: interaction.guildId?.toString(),
+				channelId: interaction.channelId?.toString(),
+			},
 		});
 		await interaction.reply({ content: 'There was an error executing this command!', flags: MessageFlags.Ephemeral });
 	}

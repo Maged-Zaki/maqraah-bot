@@ -21,7 +21,6 @@ export class ConfigurationRepository {
 					logger.recordDatabaseEvent('read', 'configuration', duration, false, err.message);
 					reject(err);
 				} else {
-					logger.debug('Configuration retrieved successfully', undefined, { operationType: 'database_read', operationStatus: 'success', duration });
 					logger.recordDatabaseEvent('read', 'configuration', duration, true);
 					resolve(row as Configuration);
 				}
@@ -42,7 +41,6 @@ export class ConfigurationRepository {
 					logger.recordDatabaseEvent('update', 'configuration', duration, false, err.message);
 					reject(err);
 				} else {
-					logger.debug('Configuration updated successfully', undefined, { operationType: 'database_update', operationStatus: 'success', duration });
 					logger.recordDatabaseEvent('update', 'configuration', duration, true);
 					resolve();
 				}

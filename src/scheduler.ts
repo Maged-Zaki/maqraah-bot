@@ -41,7 +41,7 @@ export async function scheduleReminder(client: Client) {
 
 				logger.debug(`Retrieved ${notes.length} notes for reminder`, undefined, { additionalData: { noteCount: notes.length } });
 
-				const messages = buildReminderMessages(configuration, progress, notes);
+				const { mainMessage, notesMessages } = buildReminderMessages(configuration, progress, notes);
 
 				if (notes.length > 0) {
 					logger.info(`Marking ${notes.length} notes as included`, undefined, { additionalData: { noteCount: notes.length } });
@@ -59,7 +59,11 @@ export async function scheduleReminder(client: Client) {
 					});
 				}
 
-				for (const msg of messages) {
+				// Send main message first (with role mention)
+				await (channel as any).send(mainMessage);
+
+				// Send notes messages immediately after (no delay, no mentions)
+				for (const msg of notesMessages) {
 					await (channel as any).send(msg);
 				}
 				const duration = Date.now() - startTime;
@@ -119,7 +123,7 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 
 				logger.debug(`Retrieved ${notes.length} notes for one-time reminder`, undefined, { additionalData: { noteCount: notes.length } });
 
-				const messages = buildReminderMessages(configuration, progress, notes);
+				const { mainMessage, notesMessages } = buildReminderMessages(configuration, progress, notes);
 
 				if (notes.length > 0) {
 					logger.info(`Marking ${notes.length} notes as included in one-time reminder`, undefined, {
@@ -139,7 +143,11 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 					});
 				}
 
-				for (const msg of messages) {
+				// Send main message first (with role mention)
+				await (channel as any).send(mainMessage);
+
+				// Send notes messages immediately after (no delay, no mentions)
+				for (const msg of notesMessages) {
 					await (channel as any).send(msg);
 				}
 				const duration = Date.now() - startTime;

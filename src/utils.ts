@@ -63,57 +63,38 @@ function splitLongLine(line: string, maxLength: number): string[] {
 	return chunks;
 }
 
-export function buildReminderMessage(configuration: Configuration, progress: Progress, notes: Note[]): string {
-	let message = '';
+/**
+ * Builds the main reminder message with role mention and core info.
+ * This message is sent first and contains the ping.
+ */
+export function buildMainReminderMessage(configuration: Configuration, progress: Progress): string {
 	const nextPage = getNextPage(progress.lastPage);
 	const nextHadith = progress.lastHadith + 1;
 
-	message += `<@&${configuration.roleId}> السلام عليكم ورحمة الله وبركاته\n`;
+	let message = `<@&${configuration.roleId}> السلام عليكم ورحمة الله وبركاته\n`;
 	message += `وقت المقراة اليومية! 📖\n\n`;
 	message += `الصفحة القادمة: [${nextPage}](https://quran.com/page/${nextPage})\n`;
-	message += `الحديث القادم: **${nextHadith}**\n\n`;
-
-	if (notes.length > 0) {
-		message += `ملاحظات اليوم:\n`;
-		notes.forEach((note, index) => {
-			message += `${index + 1}. ${note.note}\n`;
-		});
-		message += `\n`;
-	}
+	message += `الحديث القادم: **${nextHadith}**\n`;
 
 	return message;
 }
 
 /**
- * Builds reminder messages with chunking for Discord's message limits.
- * Returns an array of messages to send if notes exceed the limit.
- * Notes are numbered continuously across chunks.
- * First message includes header, continuation messages only have notes.
+ * Builds notes messages without any role mentions.
+ * Returns an array of messages that can be sent after the main reminder.
+ * First message has "ملاحظات اليوم:" header, continuations have "تكملة:" header.
  */
-export function buildReminderMessages(configuration: Configuration, progress: Progress, notes: Note[]): string[] {
-	const messages: string[] = [];
-
-	const nextPage = getNextPage(progress.lastPage);
-	const nextHadith = progress.lastHadith + 1;
-
-	const header = `<@&${configuration.roleId}> السلام عليكم ورحمة الله وبركاته\n`;
-	const headerWithNotes = header + `وقت المقراة اليومية! 📖\n\n`;
-	const pageLink = `الصفحة القادمة: [${nextPage}](https://quran.com/page/${nextPage})\n`;
-	const hadithText = `الحديث القادم: **${nextHadith}**\n\n`;
-	const notesHeader = `ملاحظات اليوم:\n`;
-	const continuationHeader = `ملاحظات اليوم (تتمة):\n`;
-
+export function buildNotesMessages(notes: Note[]): string[] {
 	if (notes.length === 0) {
-		messages.push(header + pageLink + hadithText);
-		return messages;
+		return [];
 	}
 
-	logger.debug(`Processing ${notes.length} notes for reminder messages`, undefined, { additionalData: { noteCount: notes.length } });
+	logger.debug(`Processing ${notes.length} notes for notes messages`, undefined, { additionalData: { noteCount: notes.length } });
 
-	// Build the first message with header
-	let firstMessage = headerWithNotes + pageLink + hadithText + notesHeader;
-	// Continuation messages only have continuation header
-	let currentMessage = firstMessage;
+	const messages: string[] = [];
+	const notesHeader = `ملاحظات اليوم:\n`;
+
+	let currentMessage = notesHeader;
 	let noteNumber = 1;
 
 	for (const note of notes) {
@@ -125,23 +106,23 @@ export function buildReminderMessages(configuration: Configuration, progress: Pr
 
 		// If single note line exceeds 1900 chars, split it
 		if (noteLine.length > 1900) {
-			// Save current message first if not empty
-			if (currentMessage.length > firstMessage.length) {
+			// Save current message first if it has content beyond the header
+			if (currentMessage.length > notesHeader.length) {
 				messages.push(currentMessage);
 			}
-			// Split the long note into chunks (each with just the note number)
+			// Split the long note into chunks
 			const noteChunks = chunkContent(note.note, 1800);
 			for (const chunk of noteChunks) {
-				messages.push(header + continuationHeader + `${noteNumber}. ${chunk}\n`);
+				messages.push(`${noteNumber}. ${chunk}\n`);
 			}
-			currentMessage = firstMessage; // Reset to start fresh
+			currentMessage = notesHeader; // Reset to start fresh
 		} else if (currentMessage.length + noteLine.length > 1900) {
 			// Save current message and start a new one
 			logger.debug(`Splitting at note ${noteNumber}, currentMessage.length=${currentMessage.length}`, undefined, {
 				additionalData: { splitNoteNumber: noteNumber, messageLength: currentMessage.length },
 			});
 			messages.push(currentMessage);
-			currentMessage = header + continuationHeader + noteLine;
+			currentMessage = noteLine;
 		} else {
 			currentMessage += noteLine;
 		}
@@ -149,9 +130,41 @@ export function buildReminderMessages(configuration: Configuration, progress: Pr
 		noteNumber++;
 	}
 
-	messages.push(currentMessage);
-	logger.debug(`Generated ${messages.length} messages for ${notes.length} notes`, undefined, {
+	// Don't push empty message (just header with no notes)
+	if (currentMessage.length > notesHeader.length) {
+		messages.push(currentMessage);
+	}
+
+	logger.debug(`Generated ${messages.length} notes messages for ${notes.length} notes`, undefined, {
 		additionalData: { messageCount: messages.length, noteCount: notes.length },
 	});
+
 	return messages;
+}
+
+/**
+ * Result of building reminder messages.
+ * mainMessage: The primary reminder with role mention (always sent first)
+ * notesMessages: Array of notes messages (can be empty if no notes)
+ */
+export interface ReminderMessages {
+	mainMessage: string;
+	notesMessages: string[];
+}
+
+/**
+ * Builds reminder messages separated into main message and notes messages.
+ * The main message contains the role mention and core info.
+ * Notes messages are separate and contain no mentions.
+ *
+ * @param configuration The configuration containing role ID
+ * @param progress The progress containing last page and hadith
+ * @param notes Array of notes to include
+ * @returns Object with mainMessage and notesMessages array
+ */
+export function buildReminderMessages(configuration: Configuration, progress: Progress, notes: Note[]): ReminderMessages {
+	return {
+		mainMessage: buildMainReminderMessage(configuration, progress),
+		notesMessages: buildNotesMessages(notes),
+	};
 }

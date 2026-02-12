@@ -1,7 +1,7 @@
 import { Client } from 'discord.js';
 import * as cron from 'node-cron';
 import { configurationRepository, progressRepository, notesRepository } from './database';
-import { buildReminderMessage } from './utils';
+import { buildReminderMessages } from './utils';
 import { logger } from './logger';
 
 export let scheduledJob: cron.ScheduledTask | null = null;
@@ -41,7 +41,7 @@ export async function scheduleReminder(client: Client) {
 
 				logger.debug(`Retrieved ${notes.length} notes for reminder`, undefined, { additionalData: { noteCount: notes.length } });
 
-				const message = buildReminderMessage(configuration, progress, notes);
+				const messages = buildReminderMessages(configuration, progress, notes);
 
 				if (notes.length > 0) {
 					logger.info(`Marking ${notes.length} notes as included`, undefined, { additionalData: { noteCount: notes.length } });
@@ -59,7 +59,9 @@ export async function scheduleReminder(client: Client) {
 					});
 				}
 
-				await (channel as any).send(message);
+				for (const msg of messages) {
+					await (channel as any).send(msg);
+				}
 				const duration = Date.now() - startTime;
 
 				logger.info('Reminder sent successfully', undefined, { additionalData: { duration, noteCount: notes.length } });
@@ -117,7 +119,7 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 
 				logger.debug(`Retrieved ${notes.length} notes for one-time reminder`, undefined, { additionalData: { noteCount: notes.length } });
 
-				const message = buildReminderMessage(configuration, progress, notes);
+				const messages = buildReminderMessages(configuration, progress, notes);
 
 				if (notes.length > 0) {
 					logger.info(`Marking ${notes.length} notes as included in one-time reminder`, undefined, {
@@ -137,7 +139,9 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 					});
 				}
 
-				await (channel as any).send(message);
+				for (const msg of messages) {
+					await (channel as any).send(msg);
+				}
 				const duration = Date.now() - startTime;
 
 				logger.info('One-time reminder sent successfully', undefined, { additionalData: { duration, noteCount: notes.length } });

@@ -9,6 +9,59 @@ export function getNextPage(lastPage: number): number {
 	return lastPage + 1;
 }
 
+/**
+ * Splits content into chunks that fit within Discord's message limits.
+ * Discord limits:
+ * - Embed description: 4096 characters
+ * - Regular message: 2000 characters
+ *
+ * @param content The content to split
+ * @param maxLength Maximum length per chunk (default 1900 for safety margin)
+ * @param separator Line separator to use between chunks
+ * @returns Array of content chunks
+ */
+export function chunkContent(content: string, maxLength: number = 1900, separator: string = '\n'): string[] {
+	if (content.length <= maxLength) {
+		return [content];
+	}
+
+	const chunks: string[] = [];
+	const lines = content.split(separator);
+	let currentChunk = '';
+
+	for (const line of lines) {
+		if (currentChunk.length + line.length + separator.length <= maxLength) {
+			currentChunk += (currentChunk ? separator : '') + line;
+		} else {
+			if (currentChunk) {
+				chunks.push(currentChunk);
+			}
+			// If single line exceeds maxLength, split it
+			if (line.length > maxLength) {
+				const lineChunks = splitLongLine(line, maxLength);
+				chunks.push(...lineChunks);
+				currentChunk = '';
+			} else {
+				currentChunk = line;
+			}
+		}
+	}
+
+	if (currentChunk) {
+		chunks.push(currentChunk);
+	}
+
+	return chunks;
+}
+
+function splitLongLine(line: string, maxLength: number): string[] {
+	const chunks: string[] = [];
+	for (let i = 0; i < line.length; i += maxLength) {
+		chunks.push(line.substring(i, i + maxLength));
+	}
+	return chunks;
+}
+
 export function buildReminderMessage(configuration: Configuration, progress: Progress, notes: Note[]): string {
 	let message = '';
 	const nextPage = getNextPage(progress.lastPage);
@@ -28,4 +81,42 @@ export function buildReminderMessage(configuration: Configuration, progress: Pro
 	}
 
 	return message;
+}
+
+/**
+ * Builds reminder messages with chunking for Discord's message limits.
+ * Returns an array of messages to send if notes exceed the limit.
+ */
+export function buildReminderMessages(configuration: Configuration, progress: Progress, notes: Note[]): string[] {
+	const messages: string[] = [];
+
+	// Build the base message (without notes)
+	let message = '';
+	const nextPage = getNextPage(progress.lastPage);
+	const nextHadith = progress.lastHadith + 1;
+
+	message += `<@&${configuration.roleId}> السلام عليكم ورحمة الله وبركاته\n`;
+	message += `وقت المقراة اليومية! 📖\n\n`;
+	message += `الصفحة القادمة: [${nextPage}](https://quran.com/page/${nextPage})\n`;
+	message += `الحديث القادم: **${nextHadith}**\n\n`;
+
+	if (notes.length > 0) {
+		const notesContent = notes.map((note, index) => `${index + 1}. ${note.note}`).join('\n');
+		const noteBlock = `ملاحظات اليوم:\n${notesContent}\n`;
+
+		// Chunk the notes if needed
+		const noteChunks = chunkContent(noteBlock, 1900); // 1900 for regular message safety
+
+		for (let i = 0; i < noteChunks.length; i++) {
+			if (i === 0) {
+				messages.push(message + noteChunks[i]);
+			} else {
+				messages.push(`ملاحظات اليوم (تتمة ${i + 1}/${noteChunks.length}):\n${noteChunks[i]}`);
+			}
+		}
+	} else {
+		messages.push(message);
+	}
+
+	return messages;
 }

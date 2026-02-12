@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { notesRepository } from '../database';
 import { logger, DiscordContext } from '../logger';
+import { chunkContent } from '../utils';
 
 const subcommands = {
 	CREATE: 'create',
@@ -97,11 +98,21 @@ export async function execute(interaction: any) {
 					operation: 'viewed',
 				});
 
-				const embed = new EmbedBuilder()
-					.setTitle('Your Notes')
-					.setDescription(pendingNotes.map((n) => `${n.note}`).join('\n'))
-					.setColor(0x0099ff);
-				await interaction.reply({ embeds: [embed], ephemeral: true });
+				const notesContent = pendingNotes.map((n) => `${n.note}`).join('\n');
+				const chunks = chunkContent(notesContent, 4000); // 4000 for embed safety margin
+
+				for (let i = 0; i < chunks.length; i++) {
+					const embed = new EmbedBuilder()
+						.setTitle(i === 0 ? 'Your Notes' : `Your Notes (${i + 1}/${chunks.length})`)
+						.setDescription(chunks[i])
+						.setColor(0x0099ff);
+
+					if (i === 0) {
+						await interaction.reply({ embeds: [embed], ephemeral: true });
+					} else {
+						await interaction.followUp({ embeds: [embed], ephemeral: true });
+					}
+				}
 				break;
 			}
 			case subcommands.SHOW_ALL: {
@@ -117,11 +128,21 @@ export async function execute(interaction: any) {
 
 				logger.info(`Found ${notes.length} notes in database`, discordContext, { operationType: 'note_view_all', operationStatus: 'success' });
 
-				const embed = new EmbedBuilder()
-					.setTitle('All Notes')
-					.setDescription(notes.map((n) => `<@${n.userId}>: ${n.note}`).join('\n'))
-					.setColor(0x0099ff);
-				await interaction.reply({ embeds: [embed], ephemeral: true });
+				const notesContent = notes.map((n) => `<@${n.userId}>: ${n.note}`).join('\n');
+				const chunks = chunkContent(notesContent, 4000);
+
+				for (let i = 0; i < chunks.length; i++) {
+					const embed = new EmbedBuilder()
+						.setTitle(i === 0 ? 'All Notes' : `All Notes (${i + 1}/${chunks.length})`)
+						.setDescription(chunks[i])
+						.setColor(0x0099ff);
+
+					if (i === 0) {
+						await interaction.reply({ embeds: [embed], ephemeral: true });
+					} else {
+						await interaction.followUp({ embeds: [embed], ephemeral: true });
+					}
+				}
 				break;
 			}
 			case subcommands.DELETE_MINE: {

@@ -7,6 +7,7 @@ const subcommands = {
 	CREATE: 'create',
 	SHOW_MINE: 'show-mine',
 	SHOW_ALL: 'show-all',
+	DELETE: 'delete',
 	DELETE_MINE: 'delete-mine',
 	DELETE_ALL: 'delete-all',
 	CARRY_OVER_LAST_NOTES: 'carry-over-last-notes',
@@ -24,6 +25,14 @@ export const data = new SlashCommandBuilder()
 	)
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW_MINE).setDescription('Show your personal notes'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW_ALL).setDescription('Show all notes from all users'))
+	.addSubcommand((subcommand) =>
+		subcommand
+			.setName(subcommands.DELETE)
+			.setDescription('Delete specific notes by their position number')
+			.addStringOption((option) =>
+				option.setName('numbers').setDescription('Note numbers to delete, comma-separated (e.g., "1,2,3")').setRequired(true)
+			)
+	)
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.DELETE_MINE).setDescription('Remove all your notes'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.DELETE_ALL).setDescription('Remove all notes for everyone'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.CARRY_OVER_LAST_NOTES).setDescription('Add last maqraah notes to upcoming maqraah'))
@@ -147,6 +156,96 @@ export async function execute(interaction: any) {
 						await interaction.followUp({ embeds: [embed], ephemeral: true });
 					}
 				}
+				break;
+			}
+			case subcommands.DELETE: {
+				const numbersInput = interaction.options.getString('numbers');
+
+				// Parse the input into an array of numbers
+				const positionStrings = numbersInput.split(',').map((s: string) => s.trim());
+				const positions: number[] = [];
+
+				for (const posStr of positionStrings) {
+					const num = parseInt(posStr, 10);
+					if (isNaN(num) || num < 1) {
+						logger.info(`Invalid position provided: ${posStr}`, discordContext, {
+							operationType: 'note_delete',
+							operationStatus: 'failure',
+						});
+						await interaction.reply({
+							content: `Invalid note number: "${posStr}". Please provide positive numbers only (e.g., 1,2,3).`,
+							flags: MessageFlags.Ephemeral,
+						});
+						return;
+					}
+					positions.push(num);
+				}
+
+				// Remove duplicates and sort
+				const uniquePositions = [...new Set(positions)].sort((a, b) => a - b);
+
+				// Fetch all pending notes
+				const allNotes = await notesRepository.getNotesByStatus('pending');
+
+				if (allNotes.length === 0) {
+					logger.info(`No pending notes to delete`, discordContext, { operationType: 'note_delete', operationStatus: 'success' });
+					await interaction.reply({ content: 'There are no notes to delete.', flags: MessageFlags.Ephemeral });
+					return;
+				}
+
+				// Sort notes by dateAdded (oldest first)
+				allNotes.sort((a, b) => new Date(a.dateAdded).getTime() - new Date(b.dateAdded).getTime());
+
+				// Validate positions are within range
+				const maxPosition = allNotes.length;
+				const invalidPositions = uniquePositions.filter((p) => p > maxPosition);
+
+				if (invalidPositions.length > 0) {
+					logger.info(`Positions out of range: ${invalidPositions.join(', ')}`, discordContext, {
+						operationType: 'note_delete',
+						operationStatus: 'failure',
+					});
+					await interaction.reply({
+						content: `Invalid position(s): ${invalidPositions.join(', ')}. There are only ${maxPosition} note(s).`,
+						flags: MessageFlags.Ephemeral,
+					});
+					return;
+				}
+
+				// Map positions to notes (position 1 = index 0) and collect info for display
+				const notesToDelete = uniquePositions.map((pos) => ({
+					position: pos,
+					id: allNotes[pos - 1].id,
+					note: allNotes[pos - 1].note,
+					userId: allNotes[pos - 1].userId,
+				}));
+				const noteIdsToDelete = notesToDelete.map((n) => n.id);
+
+				// Delete the notes
+				await notesRepository.deleteNotes(noteIdsToDelete);
+
+				logger.info(`Deleted ${noteIdsToDelete.length} notes at positions: ${uniquePositions.join(', ')}`, discordContext, {
+					operationType: 'note_delete',
+					operationStatus: 'success',
+				});
+				logger.recordNoteEvent({
+					userId: interaction.user.id,
+					username: interaction.user.username,
+					guildId: interaction.guildId?.toString(),
+					channelId: interaction.channelId?.toString(),
+					noteCount: noteIdsToDelete.length,
+					noteIds: noteIdsToDelete,
+					operation: 'deleted',
+				});
+
+				// Format deleted notes for display
+				const deletedNotesList = notesToDelete.map((n) => `**#${n.position}**: ${n.note}`).join('\n');
+				const replyContent = `Deleted ${noteIdsToDelete.length} note(s):\n\n${deletedNotesList}`;
+
+				await interaction.reply({
+					content: replyContent,
+					flags: MessageFlags.Ephemeral,
+				});
 				break;
 			}
 			case subcommands.DELETE_MINE: {

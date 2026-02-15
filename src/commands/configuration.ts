@@ -79,7 +79,7 @@ export async function execute(interaction: any) {
 						return;
 					}
 					updates.dailyTime = time;
-					replyMessages.push(`<@&${configuration.roleId}> Maqraah Reminder has been changed to \`${time}\`.`);
+					replyMessages.push(`<@&${configuration.roleId}> Maqraah Time has been changed to \`${time}\`.`);
 				}
 
 				const timezone = interaction.options.getString(options.TIMEZONE);

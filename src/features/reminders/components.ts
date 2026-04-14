@@ -1,11 +1,10 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
 export const REMINDER_CUSTOM_ID_PREFIX = 'reminder';
-export const JOINING_SHORTLY_MODAL_ACTION = 'joining-shortly-minutes';
-export const JOINING_SHORTLY_MINUTES_INPUT_ID = 'minutes';
 
 export const reminderActions = {
 	JOINING_SHORTLY: 'joining-shortly',
+	CANNOT_MAKE_IT: 'cannot-make-it',
 } as const;
 
 export type ReminderAction = (typeof reminderActions)[keyof typeof reminderActions];
@@ -41,18 +40,6 @@ export function buildReminderActionCustomId(action: ReminderAction, sessionId: s
 	return `${REMINDER_CUSTOM_ID_PREFIX}:${action}:${sessionId}`;
 }
 
-export function buildJoiningShortlyModalCustomId(sessionId: string): string {
-	return `${REMINDER_CUSTOM_ID_PREFIX}:${JOINING_SHORTLY_MODAL_ACTION}:${sessionId}`;
-}
-
-export function buildDiscordChannelUrl(guildId: string | undefined, channelId: string | undefined): string | null {
-	if (!guildId || !channelId) {
-		return null;
-	}
-
-	return `https://discord.com/channels/${guildId}/${channelId}`;
-}
-
 export function parseReminderActionCustomId(customId: string): ReminderActionCustomId | null {
 	const [prefix, action, sessionId] = customId.split(':');
 
@@ -63,32 +50,21 @@ export function parseReminderActionCustomId(customId: string): ReminderActionCus
 	return { action, sessionId };
 }
 
-export function parseJoiningShortlyModalCustomId(customId: string): string | null {
-	const [prefix, action, sessionId] = customId.split(':');
-
-	if (prefix !== REMINDER_CUSTOM_ID_PREFIX || action !== JOINING_SHORTLY_MODAL_ACTION || !sessionId) {
-		return null;
-	}
-
-	return sessionId;
-}
-
-export function buildReminderActionRows(
-	sessionId: string = getReminderSessionId(),
-	voiceChannelUrl: string | null = null,
-	disabled: boolean = false
-): ActionRowBuilder<ButtonBuilder>[] {
-	const joinVoiceButton = voiceChannelUrl
-		? new ButtonBuilder().setLabel('Join Maqraah').setStyle(ButtonStyle.Link).setURL(voiceChannelUrl).setDisabled(disabled)
-		: new ButtonBuilder().setCustomId(`${REMINDER_CUSTOM_ID_PREFIX}:join-unconfigured:${sessionId}`).setLabel('Join Maqraah').setStyle(ButtonStyle.Secondary).setDisabled(true);
-
+export function buildReminderActionRows(sessionId: string = getReminderSessionId(), disabled: boolean = false): ActionRowBuilder<ButtonBuilder>[] {
 	const joiningShortlyButton = new ButtonBuilder()
 		.setCustomId(buildReminderActionCustomId(reminderActions.JOINING_SHORTLY, sessionId))
-		.setLabel("I'll join shortly")
+		.setLabel('هتاخر شوية')
+		.setEmoji('⚠️')
+		.setStyle(ButtonStyle.Secondary)
+		.setDisabled(disabled);
+
+	const cannotMakeItButton = new ButtonBuilder()
+		.setCustomId(buildReminderActionCustomId(reminderActions.CANNOT_MAKE_IT, sessionId))
+		.setLabel('مش هقدر أحضر')
 		.setStyle(ButtonStyle.Danger)
 		.setDisabled(disabled);
 
-	return [new ActionRowBuilder<ButtonBuilder>().addComponents(joinVoiceButton, joiningShortlyButton)];
+	return [new ActionRowBuilder<ButtonBuilder>().addComponents(joiningShortlyButton, cannotMakeItButton)];
 }
 
 function isReminderAction(action: string | undefined): action is ReminderAction {

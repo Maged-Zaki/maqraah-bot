@@ -47,7 +47,8 @@ temp/
 # Agents
 GEMINI.md
 AGENTS.md
-
+.codex
+plans
 
 # Secerts
 maqraah-bot.key

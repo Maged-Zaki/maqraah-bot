@@ -1,6 +1,6 @@
 import newrelic from 'newrelic';
 import { Interaction, MessageFlags } from 'discord.js';
-import { handleReminderButtonInteraction, handleReminderModalSubmit } from '../features/reminders/interactions';
+import { handleReminderButtonInteraction } from '../features/reminders/interactions';
 import { DiscordContext, logger } from '../infrastructure/logging/logger';
 
 export async function routeInteraction(interaction: Interaction): Promise<void> {
@@ -8,14 +8,6 @@ export async function routeInteraction(interaction: Interaction): Promise<void> 
 		const handled = await handleReminderButtonInteraction(interaction);
 		if (!handled) {
 			logger.warn(`Unhandled button interaction: ${interaction.customId}`);
-		}
-		return;
-	}
-
-	if (interaction.isModalSubmit()) {
-		const handled = await handleReminderModalSubmit(interaction);
-		if (!handled) {
-			logger.warn(`Unhandled modal interaction: ${interaction.customId}`);
 		}
 		return;
 	}

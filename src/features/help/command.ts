@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { logger, DiscordContext } from '../logger';
+import { logger, DiscordContext } from '../../infrastructure/logging/logger';
 
 export const data = new SlashCommandBuilder().setName('help').setDescription('List all available commands');
 

@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
-import { notesRepository } from '../database';
-import { logger, DiscordContext } from '../logger';
-import { chunkContent } from '../utils';
+import { notesRepository } from '../../infrastructure/database';
+import { logger, DiscordContext } from '../../infrastructure/logging/logger';
+import { chunkContent } from '../../shared/content/chunkContent';
 
 const subcommands = {
 	CREATE: 'create',

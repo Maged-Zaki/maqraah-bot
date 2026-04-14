@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
-import { progressRepository } from '../database';
-import { logger, DiscordContext } from '../logger';
+import { progressRepository } from '../../infrastructure/database';
+import { logger, DiscordContext } from '../../infrastructure/logging/logger';
 
 const subcommands = {
 	UPDATE: 'update',

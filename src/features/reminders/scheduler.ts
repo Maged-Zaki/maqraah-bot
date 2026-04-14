@@ -1,8 +1,9 @@
 import { Client } from 'discord.js';
 import * as cron from 'node-cron';
-import { configurationRepository, progressRepository, notesRepository } from './database';
-import { buildReminderMessages } from './utils';
-import { logger } from './logger';
+import { configurationRepository, progressRepository, notesRepository } from '../../infrastructure/database';
+import { logger } from '../../infrastructure/logging/logger';
+import { buildDiscordChannelUrl, buildReminderActionRows, getReminderSessionId } from './components';
+import { buildReminderMessages } from './messages';
 
 export let scheduledJob: cron.ScheduledTask | null = null;
 
@@ -39,6 +40,8 @@ export async function scheduleReminder(client: Client) {
 				const notes = await notesRepository.getNotesByStatus('pending');
 
 				const { mainMessage, notesMessages } = buildReminderMessages(configuration, progress, notes);
+				const sessionId = getReminderSessionId(new Date(), configuration.timezone);
+				const voiceChannelUrl = buildDiscordChannelUrl(process.env.GUILD_ID, configuration.voiceChannelId);
 
 				if (notes.length > 0) {
 					logger.info(`Marking ${notes.length} notes as included`, undefined, { additionalData: { noteCount: notes.length } });
@@ -57,7 +60,7 @@ export async function scheduleReminder(client: Client) {
 				}
 
 				// Send main message first (with role mention)
-				await (channel as any).send(mainMessage);
+				await (channel as any).send({ content: mainMessage, components: buildReminderActionRows(sessionId, voiceChannelUrl) });
 
 				// Send notes messages immediately after (no delay, no mentions)
 				for (const msg of notesMessages) {
@@ -122,6 +125,8 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 				const notes = await notesRepository.getNotesByStatus('pending');
 
 				const { mainMessage, notesMessages } = buildReminderMessages(configuration, progress, notes);
+				const sessionId = getReminderSessionId(new Date(), configuration.timezone);
+				const voiceChannelUrl = buildDiscordChannelUrl(process.env.GUILD_ID, configuration.voiceChannelId);
 
 				if (notes.length > 0) {
 					logger.info(`Marking ${notes.length} notes as included in one-time reminder`, undefined, {
@@ -142,7 +147,7 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 				}
 
 				// Send main message first (with role mention)
-				await (channel as any).send(mainMessage);
+				await (channel as any).send({ content: mainMessage, components: buildReminderActionRows(sessionId, voiceChannelUrl) });
 
 				// Send notes messages immediately after (no delay, no mentions)
 				for (const msg of notesMessages) {

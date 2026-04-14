@@ -1,6 +1,5 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { configurationRepository } from '../database';
-import { scheduleReminder, overrideNextReminder } from '../scheduler';
+import { overrideNextReminder } from './scheduler';
 
 const options = {
 	TIME: 'time',

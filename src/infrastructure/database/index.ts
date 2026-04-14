@@ -2,7 +2,8 @@ import sqlite3 from 'sqlite3';
 import { ConfigurationRepository } from './repositories/ConfigurationRepository';
 import { ProgressRepository } from './repositories/ProgressRepository';
 import { NotesRepository } from './repositories/NotesRepository';
-import { logger } from './logger';
+import { AttendanceRepository } from './repositories/AttendanceRepository';
+import { logger } from '../logging/logger';
 
 if (!process.env.DATABASE_PATH) {
 	logger.fatal('DATABASE_PATH is not defined in environment variables');
@@ -76,6 +77,24 @@ db.serialize(() => {
 			}
 		}
 	);
+
+	db.run(
+		`
+	   CREATE TABLE IF NOT EXISTS attendance (
+	     id INTEGER PRIMARY KEY AUTOINCREMENT,
+	     sessionId TEXT NOT NULL,
+	     userId TEXT NOT NULL,
+	     status TEXT NOT NULL,
+	     updatedAt TEXT NOT NULL,
+	     UNIQUE(sessionId, userId)
+	   )
+	 `,
+		(err) => {
+			if (err) {
+				logger.error('Failed to create attendance table', err);
+			}
+		}
+	);
 });
 
 // Handle database errors
@@ -89,3 +108,4 @@ logger.info('Database initialization completed');
 export const configurationRepository = new ConfigurationRepository(db);
 export const progressRepository = new ProgressRepository(db);
 export const notesRepository = new NotesRepository(db);
+export const attendanceRepository = new AttendanceRepository(db);

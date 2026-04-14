@@ -1,5 +1,5 @@
 import sqlite3 from 'sqlite3';
-import { logger } from '../logger';
+import { logger } from '../../logging/logger';
 
 export interface Note {
 	id: number;

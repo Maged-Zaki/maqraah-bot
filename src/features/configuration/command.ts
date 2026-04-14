@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, ChannelType, MessageFlags, EmbedBuilder } from 'discord.js';
-import { configurationRepository } from '../database';
-import { scheduleReminder } from '../scheduler';
-import { logger, DiscordContext } from '../logger';
+import { configurationRepository } from '../../infrastructure/database';
+import { logger, DiscordContext } from '../../infrastructure/logging/logger';
+import { scheduleReminder } from '../reminders/scheduler';
 
 const subcommands = {
 	UPDATE: 'update',

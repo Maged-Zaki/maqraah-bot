@@ -28,11 +28,11 @@ db.serialize(() => {
 	     preReminderEnabled INTEGER DEFAULT 1,
 	     preReminderOffsetMinutes INTEGER DEFAULT 5,
 	     mainReminderEnabled INTEGER DEFAULT 1,
-	     maghribReminderEnabled INTEGER DEFAULT 0,
-	     maghribReminderOffsetMinutes INTEGER DEFAULT 30,
-	     maghribReminderLatitude REAL DEFAULT 30.0444,
-	     maghribReminderLongitude REAL DEFAULT 31.2357,
-	     maghribReminderCalculationMethod INTEGER DEFAULT 5
+	     maqraahTimeSyncEnabled INTEGER DEFAULT 0,
+	     maqraahTimeSyncOffsetMinutes INTEGER DEFAULT 40,
+	     maqraahTimeSyncLatitude REAL DEFAULT 30.0444,
+	     maqraahTimeSyncLongitude REAL DEFAULT 31.2357,
+	     maqraahTimeSyncCalculationMethod INTEGER DEFAULT 5
 	   )
 	 `,
 		(err) => {
@@ -51,11 +51,16 @@ db.serialize(() => {
 	addColumnIfMissing('configuration', 'preReminderEnabled INTEGER DEFAULT 1');
 	addColumnIfMissing('configuration', 'preReminderOffsetMinutes INTEGER DEFAULT 5');
 	addColumnIfMissing('configuration', 'mainReminderEnabled INTEGER DEFAULT 1');
-	addColumnIfMissing('configuration', 'maghribReminderEnabled INTEGER DEFAULT 0');
-	addColumnIfMissing('configuration', 'maghribReminderOffsetMinutes INTEGER DEFAULT 30');
-	addColumnIfMissing('configuration', 'maghribReminderLatitude REAL DEFAULT 30.0444');
-	addColumnIfMissing('configuration', 'maghribReminderLongitude REAL DEFAULT 31.2357');
-	addColumnIfMissing('configuration', 'maghribReminderCalculationMethod INTEGER DEFAULT 5');
+	addColumnIfMissing('configuration', 'maqraahTimeSyncEnabled INTEGER DEFAULT 0');
+	addColumnIfMissing('configuration', 'maqraahTimeSyncOffsetMinutes INTEGER DEFAULT 30');
+	addColumnIfMissing('configuration', 'maqraahTimeSyncLatitude REAL DEFAULT 30.0444');
+	addColumnIfMissing('configuration', 'maqraahTimeSyncLongitude REAL DEFAULT 31.2357');
+	addColumnIfMissing('configuration', 'maqraahTimeSyncCalculationMethod INTEGER DEFAULT 5');
+	copyColumnIfPresent('configuration', 'maghribReminderEnabled', 'maqraahTimeSyncEnabled');
+	copyColumnIfPresent('configuration', 'maghribReminderOffsetMinutes', 'maqraahTimeSyncOffsetMinutes');
+	copyColumnIfPresent('configuration', 'maghribReminderLatitude', 'maqraahTimeSyncLatitude');
+	copyColumnIfPresent('configuration', 'maghribReminderLongitude', 'maqraahTimeSyncLongitude');
+	copyColumnIfPresent('configuration', 'maghribReminderCalculationMethod', 'maqraahTimeSyncCalculationMethod');
 
 	db.run(
 		`
@@ -151,6 +156,14 @@ function addColumnIfMissing(tableName: string, columnDefinition: string): void {
 	db.run(`ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`, (err) => {
 		if (err && !err.message.includes('duplicate column name')) {
 			logger.error(`Failed to add ${columnDefinition} to ${tableName}`, err);
+		}
+	});
+}
+
+function copyColumnIfPresent(tableName: string, sourceColumn: string, targetColumn: string): void {
+	db.run(`UPDATE ${tableName} SET ${targetColumn} = ${sourceColumn} WHERE ${sourceColumn} IS NOT NULL`, (err) => {
+		if (err && !err.message.includes('no such column')) {
+			logger.error(`Failed to copy ${sourceColumn} to ${targetColumn} on ${tableName}`, err);
 		}
 	});
 }

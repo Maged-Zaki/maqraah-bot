@@ -4,7 +4,7 @@ import sqlite3 from 'sqlite3';
 import { ReminderEventsRepository } from '../../infrastructure/database/repositories/ReminderEventsRepository';
 import { Configuration } from '../../infrastructure/database/repositories/ConfigurationRepository';
 import { buildReminderStageSchedules, isValidTimeZone, reminderStages } from './cadence';
-import { buildAlAdhanTimingsUrl, buildMaghribReminderTiming, formatDateForAlAdhan, parsePrayerTimeToMinutes } from './prayerTimes';
+import { buildAlAdhanTimingsUrl, buildMaqraahTimeSyncTiming, formatDateForAlAdhan, parsePrayerTimeToMinutes } from './prayerTimes';
 
 test('pre-reminder schedules at the correct local time', () => {
 	const schedules = buildReminderStageSchedules(buildConfiguration({
@@ -93,16 +93,16 @@ test('timezone validation rejects clock times', () => {
 	assert.equal(isValidTimeZone('7:26 PM'), false);
 });
 
-test('Maghrib reminder only moves after a full five-minute prayer-time bucket', () => {
-	assert.equal(buildMaghribReminderTiming('15-04-2026', '18:30', 30).reminderTime, '7:00 PM');
-	assert.equal(buildMaghribReminderTiming('15-04-2026', '18:31', 30).reminderTime, '7:00 PM');
-	assert.equal(buildMaghribReminderTiming('15-04-2026', '18:34', 30).reminderTime, '7:00 PM');
-	assert.equal(buildMaghribReminderTiming('15-04-2026', '18:35', 30).reminderTime, '7:05 PM');
+test('Maqraah time sync only moves after a full five-minute prayer-time bucket', () => {
+	assert.equal(buildMaqraahTimeSyncTiming('15-04-2026', '18:30', 30).reminderTime, '7:00 PM');
+	assert.equal(buildMaqraahTimeSyncTiming('15-04-2026', '18:31', 30).reminderTime, '7:00 PM');
+	assert.equal(buildMaqraahTimeSyncTiming('15-04-2026', '18:34', 30).reminderTime, '7:00 PM');
+	assert.equal(buildMaqraahTimeSyncTiming('15-04-2026', '18:35', 30).reminderTime, '7:05 PM');
 });
 
-test('Maghrib reminder handles API timezone suffixes and day rollover', () => {
+test('Maqraah time sync handles API timezone suffixes and day rollover', () => {
 	assert.equal(parsePrayerTimeToMinutes('18:35 (EET)'), 1115);
-	assert.equal(buildMaghribReminderTiming('15-04-2026', '23:58', 10).reminderTime, '12:05 AM');
+	assert.equal(buildMaqraahTimeSyncTiming('15-04-2026', '23:58', 10).reminderTime, '12:05 AM');
 });
 
 test('AlAdhan dates use the configured prayer timezone', () => {
@@ -115,9 +115,9 @@ test('AlAdhan request includes configured timezone and prayer location', () => {
 		buildAlAdhanTimingsUrl(
 			buildConfiguration({
 				timezone: 'America/New_York',
-				maghribReminderLatitude: 40.7128,
-				maghribReminderLongitude: -74.006,
-				maghribReminderCalculationMethod: 2,
+				maqraahTimeSyncLatitude: 40.7128,
+				maqraahTimeSyncLongitude: -74.006,
+				maqraahTimeSyncCalculationMethod: 2,
 			}),
 			'15-04-2026'
 		)
@@ -162,11 +162,11 @@ function buildConfiguration(configuration: Partial<Configuration>): Configuratio
 		preReminderEnabled: 1,
 		preReminderOffsetMinutes: 5,
 		mainReminderEnabled: 1,
-		maghribReminderEnabled: 0,
-		maghribReminderOffsetMinutes: 30,
-		maghribReminderLatitude: 30.0444,
-		maghribReminderLongitude: 31.2357,
-		maghribReminderCalculationMethod: 5,
+		maqraahTimeSyncEnabled: 0,
+		maqraahTimeSyncOffsetMinutes: 30,
+		maqraahTimeSyncLatitude: 30.0444,
+		maqraahTimeSyncLongitude: 31.2357,
+		maqraahTimeSyncCalculationMethod: 5,
 		...configuration,
 	};
 }

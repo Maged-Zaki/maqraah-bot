@@ -6,7 +6,7 @@ A Discord bot for running a daily maqraah reminder. It tracks Qur'an and Hadith 
 
 - Daily maqraah reminders in a configured channel
 - Optional pre-reminder stage before the main reminder
-- Optional automatic reminder time updates from Maghrib prayer time via AlAdhan
+- Optional automatic Maqraah time updates from Maghrib prayer time via AlAdhan
 - Qur'an page and Hadith progress tracking
 - Pending notes, notes history, delete-by-number, and carry-over support
 - Reminder attendance buttons for "joining shortly" and "cannot make it"
@@ -58,7 +58,7 @@ The bot needs:
 - View Channels
 - Send Messages
 - Use Slash Commands
-- Manage Channels, only if you want `/configuration update time:...` to rename the configured voice channel
+- Manage Channels, only if you want the bot to rename the configured voice channel when the Maqraah time changes
 
 ## Command Reference
 
@@ -66,11 +66,11 @@ Slash commands are discovered from `src/features/**/command.ts` and `src/feature
 
 ### `/configuration`
 
-- `/configuration update [role] [voicechannel] [time] [timezone] [pre-reminder-enabled] [pre-reminder-minutes] [maqraah-reminder-enabled] [maghrib-reminder-enabled] [maghrib-reminder-minutes-after] [maghrib-latitude] [maghrib-longitude] [maghrib-calculation-method]`
-  Updates bot configuration. `time` must use `HH:MM AM/PM`, for example `8:00 PM`. `timezone` must be an IANA timezone such as `Africa/Cairo`.
-  When `maghrib-reminder-enabled` is true, the bot checks AlAdhan prayer timings with the configured timezone and location, then sets `dailyTime` to the configured number of minutes after Maghrib. Maghrib is rounded down to the current 5-minute bucket, so `6:31 PM` through `6:34 PM` keeps the same reminder as `6:30 PM`, while `6:35 PM` moves it.
+- `/configuration update [role] [voicechannel] [timezone] [pre-reminder-enabled] [pre-reminder-minutes] [maqraah-reminder-enabled] [maqraah-time-sync-enabled] [maqraah-minutes-after-maghrib] [prayer-time-latitude] [prayer-time-longitude]`
+  Updates bot configuration. `timezone` must be an IANA timezone such as `Africa/Cairo`.
+  When `maqraah-time-sync-enabled` is true, the bot checks AlAdhan prayer timings with the configured timezone and location, then sets `dailyTime` to the configured number of minutes after Maghrib. Maghrib is rounded down to the current 5-minute bucket, so `6:31 PM` through `6:34 PM` keeps the same Maqraah time as `6:30 PM`, while `6:35 PM` moves it.
 - `/configuration show`
-  Shows reminder time, timezone, role, voice channel, enabled reminder stages, and automatic Maghrib reminder settings.
+  Shows reminder time, timezone, role, voice channel, enabled reminder stages, and Maqraah time sync settings.
 
 There is no `/configuration set` command in the current bot.
 
@@ -108,6 +108,8 @@ There is no `/notes add`, `/add-note`, `/notes remove-my`, or `/notes remove-all
 
 - `/change-upcoming-maqraah-time time:<HH:MM AM/PM>`
   Overrides the next main maqraah reminder time once, then returns to the configured daily schedule.
+- `/sync-maqraah-time`
+  Runs the Maghrib-based sync immediately, updates the configured maqraah time if needed, and reschedules reminders.
 
 ### Help
 
@@ -127,7 +129,7 @@ The scheduler uses `dailyTime` and `timezone` from the database. By default, it 
 - A pre-reminder 5 minutes before the maqraah time, if enabled
 - The main maqraah reminder at the configured time, if enabled
 
-If automatic Maghrib reminders are enabled, the bot checks once an hour at minute 7 in the configured timezone. On startup and after relevant configuration changes, it also checks immediately. API failures are logged and retried by the regular checker.
+If Maqraah time sync is enabled, the bot checks once an hour at minute 7 in the configured timezone. On startup and after relevant configuration changes, it also checks immediately. When the sync changes the configured Maqraah time, it announces the change in the reminder channel with the configured role mention. API failures are logged and retried by the regular checker.
 
 The main reminder includes the next Qur'an page, next Hadith number, and reminder action buttons. Pending notes are sent as separate numbered note messages when present. After a main reminder includes pending notes, those notes are marked `included` and stamped with `lastIncludedDate`; they are not deleted automatically. Use `/notes carry-over-last-notes` to reuse included notes.
 
@@ -154,11 +156,11 @@ Single-row table with `id = 1`.
 | `preReminderEnabled` | `INTEGER` | `1` | Enables pre-reminder stage |
 | `preReminderOffsetMinutes` | `INTEGER` | `5` | Minutes before main reminder |
 | `mainReminderEnabled` | `INTEGER` | `1` | Enables main reminder stage |
-| `maghribReminderEnabled` | `INTEGER` | `0` | Enables automatic Maghrib-based time updates |
-| `maghribReminderOffsetMinutes` | `INTEGER` | `30` | Minutes after Maghrib for the main reminder |
-| `maghribReminderLatitude` | `REAL` | `30.0444` | Latitude passed to AlAdhan |
-| `maghribReminderLongitude` | `REAL` | `31.2357` | Longitude passed to AlAdhan |
-| `maghribReminderCalculationMethod` | `INTEGER` | `5` | AlAdhan calculation method id |
+| `maqraahTimeSyncEnabled` | `INTEGER` | `0` | Enables automatic Maqraah time updates from Maghrib |
+| `maqraahTimeSyncOffsetMinutes` | `INTEGER` | `30` | Minutes after Maghrib for the Maqraah time |
+| `maqraahTimeSyncLatitude` | `REAL` | `30.0444` | Latitude passed to AlAdhan |
+| `maqraahTimeSyncLongitude` | `REAL` | `31.2357` | Longitude passed to AlAdhan |
+| `maqraahTimeSyncCalculationMethod` | `INTEGER` | `5` | AlAdhan calculation method id |
 
 ### `progress`
 

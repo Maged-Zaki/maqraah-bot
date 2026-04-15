@@ -9,11 +9,11 @@ export interface Configuration {
 	preReminderEnabled: boolean | number;
 	preReminderOffsetMinutes: number;
 	mainReminderEnabled: boolean | number;
-	maghribReminderEnabled: boolean | number;
-	maghribReminderOffsetMinutes: number;
-	maghribReminderLatitude: number;
-	maghribReminderLongitude: number;
-	maghribReminderCalculationMethod: number;
+	maqraahTimeSyncEnabled: boolean | number;
+	maqraahTimeSyncOffsetMinutes: number;
+	maqraahTimeSyncLatitude: number;
+	maqraahTimeSyncLongitude: number;
+	maqraahTimeSyncCalculationMethod: number;
 }
 
 export class ConfigurationRepository {

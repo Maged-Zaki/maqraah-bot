@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, ChannelType, MessageFlags, EmbedBuilder } from 'discord.js';
 import { configurationRepository } from '../../infrastructure/database';
 import { logger, DiscordContext } from '../../infrastructure/logging/logger';
-import { defaultReminderCadence, isReminderStageEnabled, isValidTimeZone, parseTimeToCron } from '../reminders/cadence';
+import { defaultReminderCadence, getReminderOffset, isReminderStageEnabled, isValidTimeZone, parseTimeToCron } from '../reminders/cadence';
 import { scheduleReminder } from '../reminders/scheduler';
 
 const subcommands = {
@@ -15,6 +15,7 @@ const options = {
 	TIME: 'time',
 	TIMEZONE: 'timezone',
 	PRE_REMINDER_ENABLED: 'pre-reminder-enabled',
+	PRE_REMINDER_MINUTES: 'pre-reminder-minutes',
 	MAQRAAH_REMINDER_ENABLED: 'maqraah-reminder-enabled',
 } as const;
 
@@ -32,6 +33,9 @@ export const data = new SlashCommandBuilder()
 			.addStringOption((option) => option.setName(options.TIME).setDescription('Daily Maqraah reminder time (HH:MM AM/PM)'))
 			.addStringOption((option) => option.setName(options.TIMEZONE).setDescription('Timezone for reminders (e.g., Africa/Cairo)'))
 			.addBooleanOption((option) => option.setName(options.PRE_REMINDER_ENABLED).setDescription('Enable the pre-reminder stage'))
+			.addIntegerOption((option) =>
+				option.setName(options.PRE_REMINDER_MINUTES).setDescription('Minutes before the maqraah to send the pre-reminder').setMinValue(0)
+			)
 			.addBooleanOption((option) => option.setName(options.MAQRAAH_REMINDER_ENABLED).setDescription('Enable the maqraah reminder stage'))
 	)
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW).setDescription('Display current configuration'));
@@ -109,6 +113,12 @@ export async function execute(interaction: any) {
 					replyMessages.push(`Pre-reminder stage ${preReminderEnabled ? 'enabled' : 'disabled'}.`);
 				}
 
+				const preReminderMinutes = interaction.options.getInteger(options.PRE_REMINDER_MINUTES);
+				if (preReminderMinutes !== null) {
+					updates.preReminderOffsetMinutes = preReminderMinutes;
+					replyMessages.push(`Pre-reminder set to \`${preReminderMinutes}\` minute(s) before maqraah.`);
+				}
+
 				const maqraahReminderEnabled = interaction.options.getBoolean(options.MAQRAAH_REMINDER_ENABLED);
 				if (maqraahReminderEnabled !== null) {
 					updates.mainReminderEnabled = maqraahReminderEnabled ? 1 : 0;
@@ -167,7 +177,7 @@ export async function execute(interaction: any) {
 						{ name: 'Voice Channel', value: configuration.voiceChannelId ? `<#${configuration.voiceChannelId}>` : 'Not set', inline: true },
 						{
 							name: 'Pre-reminder',
-							value: formatStageConfig(configuration.preReminderEnabled, defaultReminderCadence.preReminderEnabled),
+							value: formatPreReminderConfig(configuration.preReminderEnabled, configuration.preReminderOffsetMinutes),
 							inline: true,
 						},
 						{
@@ -206,8 +216,15 @@ function shouldRescheduleReminder(updates: Record<string, unknown>): boolean {
 			updates.timezone ||
 			updates.roleId ||
 			updates.preReminderEnabled !== undefined ||
+			updates.preReminderOffsetMinutes !== undefined ||
 			updates.mainReminderEnabled !== undefined
 	);
+}
+
+function formatPreReminderConfig(enabledValue: boolean | number, offsetMinutes: number): string {
+	const status = formatStageConfig(enabledValue, defaultReminderCadence.preReminderEnabled);
+	const minutes = getReminderOffset(offsetMinutes, defaultReminderCadence.preReminderOffsetMinutes);
+	return `${status}, ${minutes} minute(s) before`;
 }
 
 function formatStageConfig(enabledValue: boolean | number, defaultEnabled: boolean): string {

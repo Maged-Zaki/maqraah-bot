@@ -6,6 +6,9 @@ export interface Configuration {
 	dailyTime: string;
 	timezone: string;
 	voiceChannelId: string;
+	preReminderEnabled: boolean | number;
+	preReminderOffsetMinutes: number;
+	mainReminderEnabled: boolean | number;
 }
 
 export class ConfigurationRepository {

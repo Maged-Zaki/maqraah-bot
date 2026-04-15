@@ -3,6 +3,7 @@ import { ConfigurationRepository } from './repositories/ConfigurationRepository'
 import { ProgressRepository } from './repositories/ProgressRepository';
 import { NotesRepository } from './repositories/NotesRepository';
 import { AttendanceRepository } from './repositories/AttendanceRepository';
+import { ReminderEventsRepository } from './repositories/ReminderEventsRepository';
 import { logger } from '../logging/logger';
 
 if (!process.env.DATABASE_PATH) {
@@ -23,7 +24,10 @@ db.serialize(() => {
 	     roleId TEXT DEFAULT 'Not set',
 	     dailyTime TEXT DEFAULT '12:00 PM',
 	     timezone TEXT DEFAULT 'Africa/Cairo',
-	     voiceChannelId TEXT DEFAULT ''
+	     voiceChannelId TEXT DEFAULT '',
+	     preReminderEnabled INTEGER DEFAULT 1,
+	     preReminderOffsetMinutes INTEGER DEFAULT 5,
+	     mainReminderEnabled INTEGER DEFAULT 1
 	   )
 	 `,
 		(err) => {
@@ -38,6 +42,10 @@ db.serialize(() => {
 			logger.error('Failed to insert default configuration', err);
 		}
 	});
+
+	addColumnIfMissing('configuration', 'preReminderEnabled INTEGER DEFAULT 1');
+	addColumnIfMissing('configuration', 'preReminderOffsetMinutes INTEGER DEFAULT 5');
+	addColumnIfMissing('configuration', 'mainReminderEnabled INTEGER DEFAULT 1');
 
 	db.run(
 		`
@@ -95,6 +103,24 @@ db.serialize(() => {
 			}
 		}
 	);
+
+	db.run(
+		`
+	   CREATE TABLE IF NOT EXISTS reminder_events (
+	     id INTEGER PRIMARY KEY AUTOINCREMENT,
+	     sessionId TEXT NOT NULL,
+	     stage TEXT NOT NULL,
+	     scheduledFor TEXT NOT NULL,
+	     sentAt TEXT NOT NULL,
+	     UNIQUE(sessionId, stage)
+	   )
+	 `,
+		(err) => {
+			if (err) {
+				logger.error('Failed to create reminder_events table', err);
+			}
+		}
+	);
 });
 
 // Handle database errors
@@ -109,3 +135,12 @@ export const configurationRepository = new ConfigurationRepository(db);
 export const progressRepository = new ProgressRepository(db);
 export const notesRepository = new NotesRepository(db);
 export const attendanceRepository = new AttendanceRepository(db);
+export const reminderEventsRepository = new ReminderEventsRepository(db);
+
+function addColumnIfMissing(tableName: string, columnDefinition: string): void {
+	db.run(`ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`, (err) => {
+		if (err && !err.message.includes('duplicate column name')) {
+			logger.error(`Failed to add ${columnDefinition} to ${tableName}`, err);
+		}
+	});
+}

@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChannelType, MessageFlags, EmbedBuilder } from 'discord.js';
 import { configurationRepository } from '../../infrastructure/database';
 import { logger, DiscordContext } from '../../infrastructure/logging/logger';
+import { defaultReminderCadence, isReminderStageEnabled, isValidTimeZone, parseTimeToCron } from '../reminders/cadence';
 import { scheduleReminder } from '../reminders/scheduler';
 
 const subcommands = {
@@ -13,6 +14,8 @@ const options = {
 	VOICE_CHANNEL: 'voicechannel',
 	TIME: 'time',
 	TIMEZONE: 'timezone',
+	PRE_REMINDER_ENABLED: 'pre-reminder-enabled',
+	MAQRAAH_REMINDER_ENABLED: 'maqraah-reminder-enabled',
 } as const;
 
 export const data = new SlashCommandBuilder()
@@ -28,6 +31,8 @@ export const data = new SlashCommandBuilder()
 			)
 			.addStringOption((option) => option.setName(options.TIME).setDescription('Daily Maqraah reminder time (HH:MM AM/PM)'))
 			.addStringOption((option) => option.setName(options.TIMEZONE).setDescription('Timezone for reminders (e.g., Africa/Cairo)'))
+			.addBooleanOption((option) => option.setName(options.PRE_REMINDER_ENABLED).setDescription('Enable the pre-reminder stage'))
+			.addBooleanOption((option) => option.setName(options.MAQRAAH_REMINDER_ENABLED).setDescription('Enable the maqraah reminder stage'))
 	)
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW).setDescription('Display current configuration'));
 
@@ -66,8 +71,7 @@ export async function execute(interaction: any) {
 
 				const time = interaction.options.getString(options.TIME);
 				if (time) {
-					const timeRegex = /^\d{1,2}:\d{2} (AM|PM)$/i;
-					if (!timeRegex.test(time)) {
+					if (!parseTimeToCron(time)) {
 						logger.warn(`Invalid time format provided: ${time}`, discordContext, {
 							operationType: 'configuration_update',
 							operationStatus: 'failure',
@@ -84,16 +88,38 @@ export async function execute(interaction: any) {
 
 				const timezone = interaction.options.getString(options.TIMEZONE);
 				if (timezone) {
+					if (!isValidTimeZone(timezone)) {
+						logger.warn(`Invalid timezone provided: ${timezone}`, discordContext, {
+							operationType: 'configuration_update',
+							operationStatus: 'failure',
+						});
+						await interaction.reply({
+							content: 'Invalid timezone. Please use an IANA timezone like `Africa/Cairo`, `America/New_York`, or `Europe/London`.',
+							flags: MessageFlags.Ephemeral,
+						});
+						return;
+					}
 					updates.timezone = timezone;
 					replyMessages.push(`Timezone set to \`${timezone}\`.`);
+				}
+
+				const preReminderEnabled = interaction.options.getBoolean(options.PRE_REMINDER_ENABLED);
+				if (preReminderEnabled !== null) {
+					updates.preReminderEnabled = preReminderEnabled ? 1 : 0;
+					replyMessages.push(`Pre-reminder stage ${preReminderEnabled ? 'enabled' : 'disabled'}.`);
+				}
+
+				const maqraahReminderEnabled = interaction.options.getBoolean(options.MAQRAAH_REMINDER_ENABLED);
+				if (maqraahReminderEnabled !== null) {
+					updates.mainReminderEnabled = maqraahReminderEnabled ? 1 : 0;
+					replyMessages.push(`Maqraah reminder stage ${maqraahReminderEnabled ? 'enabled' : 'disabled'}.`);
 				}
 
 				if (Object.keys(updates).length > 0) {
 					logger.info(`Updating configuration with changes`, discordContext, { additionalData: { updates } });
 					await configurationRepository.updateConfiguration(updates);
 
-					// If time or timezone or role updated, reschedule
-					if (updates.dailyTime || updates.timezone || updates.roleId) {
+					if (shouldRescheduleReminder(updates)) {
 						logger.info(`Rescheduling reminder due to configuration changes`, discordContext);
 						scheduleReminder(interaction.client);
 					}
@@ -138,7 +164,17 @@ export async function execute(interaction: any) {
 						{ name: 'Reminder Time', value: configuration.dailyTime, inline: true },
 						{ name: 'Timezone', value: configuration.timezone, inline: true },
 						{ name: 'Role', value: configuration.roleId ? `<@&${configuration.roleId}>` : 'Not set', inline: true },
-						{ name: 'Voice Channel', value: configuration.voiceChannelId ? `<#${configuration.voiceChannelId}>` : 'Not set', inline: true }
+						{ name: 'Voice Channel', value: configuration.voiceChannelId ? `<#${configuration.voiceChannelId}>` : 'Not set', inline: true },
+						{
+							name: 'Pre-reminder',
+							value: formatStageConfig(configuration.preReminderEnabled, defaultReminderCadence.preReminderEnabled),
+							inline: true,
+						},
+						{
+							name: 'Maqraah reminder',
+							value: isReminderStageEnabled(configuration.mainReminderEnabled, defaultReminderCadence.mainReminderEnabled) ? 'Enabled' : 'Disabled',
+							inline: true,
+						}
 					)
 					.setColor(0x0099ff);
 
@@ -162,4 +198,18 @@ export async function execute(interaction: any) {
 		});
 		await interaction.reply({ content: 'There was an error executing this command!', flags: MessageFlags.Ephemeral });
 	}
+}
+
+function shouldRescheduleReminder(updates: Record<string, unknown>): boolean {
+	return Boolean(
+		updates.dailyTime ||
+			updates.timezone ||
+			updates.roleId ||
+			updates.preReminderEnabled !== undefined ||
+			updates.mainReminderEnabled !== undefined
+	);
+}
+
+function formatStageConfig(enabledValue: boolean | number, defaultEnabled: boolean): string {
+	return isReminderStageEnabled(enabledValue, defaultEnabled) ? 'Enabled' : 'Disabled';
 }

@@ -3,6 +3,7 @@ import { Note } from '../../infrastructure/database/repositories/NotesRepository
 import { Progress } from '../../infrastructure/database/repositories/ProgressRepository';
 import { chunkContent } from '../../shared/content/chunkContent';
 import { getNextPage } from '../../shared/quran/pages';
+import { defaultReminderCadence, getReminderOffset } from './cadence';
 
 export interface ReminderMessages {
 	mainMessage: string;
@@ -14,6 +15,11 @@ export function buildReminderMessages(configuration: Configuration, progress: Pr
 		mainMessage: buildMainReminderMessage(configuration, progress),
 		notesMessages: buildNotesMessages(notes),
 	};
+}
+
+export function buildPreReminderMessage(configuration: Configuration): string {
+	const offset = getReminderOffset(configuration.preReminderOffsetMinutes, defaultReminderCadence.preReminderOffsetMinutes);
+	return `<@&${configuration.roleId}> السلام عليكم ورحمة الله وبركاته\nالمقراة اليومية بعد ${offset} دقائق إن شاء الله.`;
 }
 
 function buildMainReminderMessage(configuration: Configuration, progress: Progress): string {

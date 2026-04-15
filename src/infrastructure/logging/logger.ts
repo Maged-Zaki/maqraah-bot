@@ -21,6 +21,26 @@ export enum LogLevel {
 	FATAL = 'fatal',
 }
 
+const logLevels = {
+	fatal: 0,
+	error: 1,
+	warn: 2,
+	info: 3,
+	debug: 4,
+	trace: 5,
+};
+
+const logColors = {
+	fatal: 'red',
+	error: 'red',
+	warn: 'yellow',
+	info: 'green',
+	debug: 'blue',
+	trace: 'cyan',
+};
+
+winston.addColors(logColors);
+
 /**
  * Discord context interface
  */
@@ -61,14 +81,7 @@ export interface NoteEventData {
 // Create Winston logger with New Relic format enrichment
 const winstonLogger = winston.createLogger({
 	level: 'debug',
-	levels: {
-		fatal: 0,
-		error: 1,
-		warn: 2,
-		info: 3,
-		debug: 4,
-		trace: 5,
-	},
+	levels: logLevels,
 	format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
 	transports: [
 		// Console transport for local development

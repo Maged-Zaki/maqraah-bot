@@ -47,21 +47,7 @@ db.serialize(() => {
 			logger.error('Failed to insert default configuration', err);
 		}
 	});
-
-	addColumnIfMissing('configuration', 'preReminderEnabled INTEGER DEFAULT 1');
-	addColumnIfMissing('configuration', 'preReminderOffsetMinutes INTEGER DEFAULT 5');
-	addColumnIfMissing('configuration', 'mainReminderEnabled INTEGER DEFAULT 1');
-	addColumnIfMissing('configuration', 'maqraahTimeSyncEnabled INTEGER DEFAULT 0');
-	addColumnIfMissing('configuration', 'maqraahTimeSyncOffsetMinutes INTEGER DEFAULT 30');
-	addColumnIfMissing('configuration', 'maqraahTimeSyncLatitude REAL DEFAULT 30.0444');
-	addColumnIfMissing('configuration', 'maqraahTimeSyncLongitude REAL DEFAULT 31.2357');
-	addColumnIfMissing('configuration', 'maqraahTimeSyncCalculationMethod INTEGER DEFAULT 5');
-	copyColumnIfPresent('configuration', 'maghribReminderEnabled', 'maqraahTimeSyncEnabled');
-	copyColumnIfPresent('configuration', 'maghribReminderOffsetMinutes', 'maqraahTimeSyncOffsetMinutes');
-	copyColumnIfPresent('configuration', 'maghribReminderLatitude', 'maqraahTimeSyncLatitude');
-	copyColumnIfPresent('configuration', 'maghribReminderLongitude', 'maqraahTimeSyncLongitude');
-	copyColumnIfPresent('configuration', 'maghribReminderCalculationMethod', 'maqraahTimeSyncCalculationMethod');
-
+	
 	db.run(
 		`
 	   CREATE TABLE IF NOT EXISTS progress (

@@ -27,7 +27,12 @@ db.serialize(() => {
 	     voiceChannelId TEXT DEFAULT '',
 	     preReminderEnabled INTEGER DEFAULT 1,
 	     preReminderOffsetMinutes INTEGER DEFAULT 5,
-	     mainReminderEnabled INTEGER DEFAULT 1
+	     mainReminderEnabled INTEGER DEFAULT 1,
+	     maghribReminderEnabled INTEGER DEFAULT 0,
+	     maghribReminderOffsetMinutes INTEGER DEFAULT 30,
+	     maghribReminderLatitude REAL DEFAULT 30.0444,
+	     maghribReminderLongitude REAL DEFAULT 31.2357,
+	     maghribReminderCalculationMethod INTEGER DEFAULT 5
 	   )
 	 `,
 		(err) => {
@@ -46,6 +51,11 @@ db.serialize(() => {
 	addColumnIfMissing('configuration', 'preReminderEnabled INTEGER DEFAULT 1');
 	addColumnIfMissing('configuration', 'preReminderOffsetMinutes INTEGER DEFAULT 5');
 	addColumnIfMissing('configuration', 'mainReminderEnabled INTEGER DEFAULT 1');
+	addColumnIfMissing('configuration', 'maghribReminderEnabled INTEGER DEFAULT 0');
+	addColumnIfMissing('configuration', 'maghribReminderOffsetMinutes INTEGER DEFAULT 30');
+	addColumnIfMissing('configuration', 'maghribReminderLatitude REAL DEFAULT 30.0444');
+	addColumnIfMissing('configuration', 'maghribReminderLongitude REAL DEFAULT 31.2357');
+	addColumnIfMissing('configuration', 'maghribReminderCalculationMethod INTEGER DEFAULT 5');
 
 	db.run(
 		`

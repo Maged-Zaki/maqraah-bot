@@ -2,7 +2,16 @@ import { SlashCommandBuilder, ChannelType, MessageFlags, EmbedBuilder } from 'di
 import { configurationRepository } from '../../infrastructure/database';
 import { logger, DiscordContext } from '../../infrastructure/logging/logger';
 import { defaultReminderCadence, getReminderOffset, isReminderStageEnabled, isValidTimeZone, parseTimeToCron } from '../reminders/cadence';
+import { scheduleMaghribReminderUpdater, syncMaghribReminderTime } from '../reminders/maghribReminderUpdater';
+import {
+	getMaghribReminderOffsetMinutes,
+	isMaghribReminderEnabled,
+	isValidCalculationMethod,
+	isValidLatitude,
+	isValidLongitude,
+} from '../reminders/prayerTimes';
 import { scheduleReminder } from '../reminders/scheduler';
+import { updateReminderVoiceChannelName } from '../reminders/voiceChannel';
 
 const subcommands = {
 	UPDATE: 'update',
@@ -17,6 +26,11 @@ const options = {
 	PRE_REMINDER_ENABLED: 'pre-reminder-enabled',
 	PRE_REMINDER_MINUTES: 'pre-reminder-minutes',
 	MAQRAAH_REMINDER_ENABLED: 'maqraah-reminder-enabled',
+	MAGHRIB_REMINDER_ENABLED: 'maghrib-reminder-enabled',
+	MAGHRIB_REMINDER_MINUTES_AFTER: 'maghrib-reminder-minutes-after',
+	MAGHRIB_LATITUDE: 'maghrib-latitude',
+	MAGHRIB_LONGITUDE: 'maghrib-longitude',
+	MAGHRIB_CALCULATION_METHOD: 'maghrib-calculation-method',
 } as const;
 
 export const data = new SlashCommandBuilder()
@@ -37,6 +51,28 @@ export const data = new SlashCommandBuilder()
 				option.setName(options.PRE_REMINDER_MINUTES).setDescription('Minutes before the maqraah to send the pre-reminder').setMinValue(0)
 			)
 			.addBooleanOption((option) => option.setName(options.MAQRAAH_REMINDER_ENABLED).setDescription('Enable the maqraah reminder stage'))
+			.addBooleanOption((option) =>
+				option.setName(options.MAGHRIB_REMINDER_ENABLED).setDescription('Automatically set the maqraah reminder from Maghrib time')
+			)
+			.addIntegerOption((option) =>
+				option
+					.setName(options.MAGHRIB_REMINDER_MINUTES_AFTER)
+					.setDescription('Minutes after Maghrib to send the maqraah reminder')
+					.setMinValue(0)
+			)
+			.addNumberOption((option) =>
+				option.setName(options.MAGHRIB_LATITUDE).setDescription('Latitude for Maghrib prayer time, e.g. 30.0444').setMinValue(-90).setMaxValue(90)
+			)
+			.addNumberOption((option) =>
+				option
+					.setName(options.MAGHRIB_LONGITUDE)
+					.setDescription('Longitude for Maghrib prayer time, e.g. 31.2357')
+					.setMinValue(-180)
+					.setMaxValue(180)
+			)
+			.addIntegerOption((option) =>
+				option.setName(options.MAGHRIB_CALCULATION_METHOD).setDescription('AlAdhan calculation method id').setMinValue(0)
+			)
 	)
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW).setDescription('Display current configuration'));
 
@@ -125,34 +161,95 @@ export async function execute(interaction: any) {
 					replyMessages.push(`Maqraah reminder stage ${maqraahReminderEnabled ? 'enabled' : 'disabled'}.`);
 				}
 
+				const maghribReminderEnabled = interaction.options.getBoolean(options.MAGHRIB_REMINDER_ENABLED);
+				if (maghribReminderEnabled !== null) {
+					updates.maghribReminderEnabled = maghribReminderEnabled ? 1 : 0;
+					replyMessages.push(`Automatic Maghrib reminder ${maghribReminderEnabled ? 'enabled' : 'disabled'}.`);
+				}
+
+				const maghribReminderMinutesAfter = interaction.options.getInteger(options.MAGHRIB_REMINDER_MINUTES_AFTER);
+				if (maghribReminderMinutesAfter !== null) {
+					updates.maghribReminderOffsetMinutes = maghribReminderMinutesAfter;
+					replyMessages.push(`Automatic Maghrib reminder set to \`${maghribReminderMinutesAfter}\` minute(s) after Maghrib.`);
+				}
+
+				const maghribLatitude = interaction.options.getNumber(options.MAGHRIB_LATITUDE);
+				if (maghribLatitude !== null) {
+					if (!isValidLatitude(maghribLatitude)) {
+						await interaction.reply({
+							content: 'Invalid latitude. Please provide a number from -90 to 90.',
+							flags: MessageFlags.Ephemeral,
+						});
+						return;
+					}
+					updates.maghribReminderLatitude = maghribLatitude;
+					replyMessages.push(`Maghrib latitude set to \`${maghribLatitude}\`.`);
+				}
+
+				const maghribLongitude = interaction.options.getNumber(options.MAGHRIB_LONGITUDE);
+				if (maghribLongitude !== null) {
+					if (!isValidLongitude(maghribLongitude)) {
+						await interaction.reply({
+							content: 'Invalid longitude. Please provide a number from -180 to 180.',
+							flags: MessageFlags.Ephemeral,
+						});
+						return;
+					}
+					updates.maghribReminderLongitude = maghribLongitude;
+					replyMessages.push(`Maghrib longitude set to \`${maghribLongitude}\`.`);
+				}
+
+				const maghribCalculationMethod = interaction.options.getInteger(options.MAGHRIB_CALCULATION_METHOD);
+				if (maghribCalculationMethod !== null) {
+					if (!isValidCalculationMethod(maghribCalculationMethod)) {
+						await interaction.reply({
+							content: 'Invalid calculation method. Please provide an AlAdhan method id of 0 or greater.',
+							flags: MessageFlags.Ephemeral,
+						});
+						return;
+					}
+					updates.maghribReminderCalculationMethod = maghribCalculationMethod;
+					replyMessages.push(`Maghrib calculation method set to \`${maghribCalculationMethod}\`.`);
+				}
+
 				if (Object.keys(updates).length > 0) {
 					logger.info(`Updating configuration with changes`, discordContext, { additionalData: { updates } });
 					await configurationRepository.updateConfiguration(updates);
 
-					if (shouldRescheduleReminder(updates)) {
-						logger.info(`Rescheduling reminder due to configuration changes`, discordContext);
-						scheduleReminder(interaction.client);
+					let voiceChannelTime = updates.dailyTime as string | undefined;
+					if (shouldRescheduleMaghribReminderUpdater(updates)) {
+						await scheduleMaghribReminderUpdater(interaction.client, false);
 					}
 
-					// If time updated, update voice channel name
-					if (updates.dailyTime) {
-						if (configuration.voiceChannelId) {
-							const vc = interaction.guild?.channels.cache.get(configuration.voiceChannelId);
-							if (vc && vc.isVoiceBased()) {
-								const permissions = vc.permissionsFor(interaction.client.user!);
-								if (permissions?.has('ManageChannels')) {
-									try {
-										const timeWithoutAmpm = time.replace(/\s*(AM|PM)$/i, '');
-										await vc.setName(`مقراة الساعة ${timeWithoutAmpm}`);
-										logger.info(`Updated voice channel name to ${timeWithoutAmpm}`, discordContext);
-									} catch (error) {
-										logger.error('Failed to update voice channel name', error as Error, discordContext);
-									}
-								} else {
-									logger.warn('Bot lacks ManageChannels permission for the voice channel', discordContext);
-								}
+					if (shouldSyncMaghribReminder(updates, configuration)) {
+						try {
+							const syncResult = await syncMaghribReminderTime(interaction.client, {
+								reschedule: false,
+								updateVoiceChannel: false,
+							});
+							if (syncResult.changed && syncResult.timing) {
+								updates.dailyTime = syncResult.timing.reminderTime;
+								voiceChannelTime = syncResult.timing.reminderTime;
+								replyMessages.push(
+									`Maqraah reminder synced to \`${syncResult.timing.reminderTime}\` from Maghrib \`${syncResult.timing.maghribTime}\` on ${syncResult.timing.date}.`
+								);
 							}
+						} catch (error) {
+							logger.error('Failed to sync Maghrib reminder during configuration update', error as Error, discordContext, {
+								operationType: 'maghrib_reminder_sync',
+								operationStatus: 'failure',
+							});
+							replyMessages.push('Automatic Maghrib reminder sync failed. The regular checker will retry it.');
 						}
+					}
+
+					if (shouldRescheduleReminder(updates)) {
+						logger.info(`Rescheduling reminder due to configuration changes`, discordContext);
+						await scheduleReminder(interaction.client);
+					}
+
+					if (voiceChannelTime) {
+						await updateReminderVoiceChannelName(interaction.client, voiceChannelTime);
 					}
 
 					logger.info(`Configuration updated successfully`, discordContext, { operationType: 'configuration_update', operationStatus: 'success' });
@@ -184,6 +281,11 @@ export async function execute(interaction: any) {
 							name: 'Maqraah reminder',
 							value: isReminderStageEnabled(configuration.mainReminderEnabled, defaultReminderCadence.mainReminderEnabled) ? 'Enabled' : 'Disabled',
 							inline: true,
+						},
+						{
+							name: 'Automatic Maghrib reminder',
+							value: formatMaghribReminderConfig(configuration),
+							inline: false,
 						}
 					)
 					.setColor(0x0099ff);
@@ -221,10 +323,43 @@ function shouldRescheduleReminder(updates: Record<string, unknown>): boolean {
 	);
 }
 
+function shouldRescheduleMaghribReminderUpdater(updates: Record<string, unknown>): boolean {
+	return Boolean(updates.maghribReminderEnabled !== undefined || updates.timezone);
+}
+
+function shouldSyncMaghribReminder(updates: Record<string, unknown>, configuration: Awaited<ReturnType<typeof configurationRepository.getConfiguration>>): boolean {
+	const nextEnabled =
+		updates.maghribReminderEnabled !== undefined
+			? isMaghribReminderEnabled(updates.maghribReminderEnabled as boolean | number)
+			: isMaghribReminderEnabled(configuration.maghribReminderEnabled);
+
+	if (!nextEnabled) {
+		return false;
+	}
+
+	return Boolean(
+		updates.maghribReminderEnabled !== undefined ||
+			updates.maghribReminderOffsetMinutes !== undefined ||
+			updates.maghribReminderLatitude !== undefined ||
+			updates.maghribReminderLongitude !== undefined ||
+			updates.maghribReminderCalculationMethod !== undefined ||
+			updates.timezone
+	);
+}
+
 function formatPreReminderConfig(enabledValue: boolean | number, offsetMinutes: number): string {
 	const status = formatStageConfig(enabledValue, defaultReminderCadence.preReminderEnabled);
 	const minutes = getReminderOffset(offsetMinutes, defaultReminderCadence.preReminderOffsetMinutes);
 	return `${status}, ${minutes} minute(s) before`;
+}
+
+function formatMaghribReminderConfig(configuration: Awaited<ReturnType<typeof configurationRepository.getConfiguration>>): string {
+	if (!isMaghribReminderEnabled(configuration.maghribReminderEnabled)) {
+		return 'Disabled';
+	}
+
+	const minutes = getMaghribReminderOffsetMinutes(configuration.maghribReminderOffsetMinutes);
+	return `Enabled, ${minutes} minute(s) after Maghrib. Location: ${configuration.maghribReminderLatitude}, ${configuration.maghribReminderLongitude}. Method: ${configuration.maghribReminderCalculationMethod}.`;
 }
 
 function formatStageConfig(enabledValue: boolean | number, defaultEnabled: boolean): string {

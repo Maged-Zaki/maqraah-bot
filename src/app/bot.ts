@@ -1,4 +1,5 @@
 import { Client, Collection, Events, GatewayIntentBits } from 'discord.js';
+import { scheduleMaghribReminderUpdater } from '../features/reminders/maghribReminderUpdater';
 import { scheduleReminder } from '../features/reminders/scheduler';
 import { configurationRepository } from '../infrastructure/database';
 import { logger } from '../infrastructure/logging/logger';
@@ -35,7 +36,8 @@ function registerLifecycleHandlers(client: Client): void {
 		logger.info(`Bot logged in successfully`, undefined, { additionalData: { botTag: client.user?.tag } });
 
 		await registerCommands(client);
-		scheduleReminder(client);
+		await scheduleMaghribReminderUpdater(client);
+		await scheduleReminder(client);
 		await sendWelcomeMessage(client);
 	});
 

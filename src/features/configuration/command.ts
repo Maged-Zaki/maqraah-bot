@@ -1,7 +1,8 @@
 import { SlashCommandBuilder, ChannelType, MessageFlags, EmbedBuilder } from 'discord.js';
 import { configurationRepository } from '../../storage/sqlite';
 import { logger, DiscordContext } from '../../observability/logging/logger';
-import { defaultReminderCadence, getReminderOffset, isReminderStageEnabled, isValidTimeZone } from '../reminders/cadence';
+import { normalizeTimeZone, parseReminderTime } from '../../shared/time';
+import { defaultReminderCadence, getReminderOffset, isReminderStageEnabled } from '../reminders/cadence';
 import { scheduleMaqraahTimeSync, syncMaqraahTimeFromMaghrib } from '../reminders/maqraahTimeSync';
 import { getMaqraahTimeSyncOffsetMinutes, isMaqraahTimeSyncEnabled, isValidLatitude, isValidLongitude } from '../reminders/prayerTimes';
 import { scheduleReminder } from '../reminders/scheduler';
@@ -15,6 +16,7 @@ const subcommands = {
 const options = {
 	ROLE: 'role',
 	VOICE_CHANNEL: 'voicechannel',
+	MAQRAAH_TIME: 'maqraah-time',
 	TIMEZONE: 'timezone',
 	PRE_REMINDER_ENABLED: 'pre-reminder-enabled',
 	PRE_REMINDER_MINUTES: 'pre-reminder-minutes',
@@ -36,6 +38,7 @@ export const data = new SlashCommandBuilder()
 			.addChannelOption((option) =>
 				option.setName(options.VOICE_CHANNEL).setDescription('Voice channel to update with time').addChannelTypes(ChannelType.GuildVoice)
 			)
+			.addStringOption((option) => option.setName(options.MAQRAAH_TIME).setDescription('Maqraah reminder time (e.g., 9:05 PM)'))
 			.addStringOption((option) => option.setName(options.TIMEZONE).setDescription('Timezone for reminders (e.g., Africa/Cairo)'))
 			.addBooleanOption((option) => option.setName(options.PRE_REMINDER_ENABLED).setDescription('Enable the pre-reminder stage'))
 			.addIntegerOption((option) =>
@@ -97,9 +100,28 @@ export async function execute(interaction: any) {
 					replyMessages.push(`Voice channel set to ${voicechannel}.`);
 				}
 
+				const maqraahTime = interaction.options.getString(options.MAQRAAH_TIME);
+				if (maqraahTime) {
+					const parsedTime = parseReminderTime(maqraahTime);
+					if (!parsedTime) {
+						logger.warn(`Invalid maqraah time provided: ${maqraahTime}`, discordContext, {
+							operationType: 'configuration_update',
+							operationStatus: 'failure',
+						});
+						await interaction.reply({
+							content: 'Invalid maqraah time. Please use `H:MM AM/PM`, such as `9:05 PM` or `12:00 AM`.',
+							flags: MessageFlags.Ephemeral,
+						});
+						return;
+					}
+					updates.dailyTime = parsedTime.displayTime;
+					replyMessages.push(`Maqraah time set to \`${parsedTime.displayTime}\`.`);
+				}
+
 				const timezone = interaction.options.getString(options.TIMEZONE);
 				if (timezone) {
-					if (!isValidTimeZone(timezone)) {
+					const normalizedTimezone = normalizeTimeZone(timezone);
+					if (!normalizedTimezone) {
 						logger.warn(`Invalid timezone provided: ${timezone}`, discordContext, {
 							operationType: 'configuration_update',
 							operationStatus: 'failure',
@@ -110,8 +132,8 @@ export async function execute(interaction: any) {
 						});
 						return;
 					}
-					updates.timezone = timezone;
-					replyMessages.push(`Timezone set to \`${timezone}\`.`);
+					updates.timezone = normalizedTimezone;
+					replyMessages.push(`Timezone set to \`${normalizedTimezone}\`.`);
 				}
 
 				const preReminderEnabled = interaction.options.getBoolean(options.PRE_REMINDER_ENABLED);

@@ -1,5 +1,5 @@
 import type { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
-import { isValidTimeZone } from './cadence';
+import { normalizeTimeZone } from '../../shared/time';
 
 export const maqraahTimeSyncDefaults = {
 	enabled: false,
@@ -34,13 +34,13 @@ export async function fetchMaqraahTimeSyncTiming(
 	date: Date = new Date(),
 	fetchImplementation: FetchImplementation = fetch
 ): Promise<MaqraahTimeSyncTiming> {
-	const timezone = configuration.timezone;
-	if (!isValidTimeZone(timezone)) {
-		throw new Error(`Invalid timezone configured for maqraah time sync: ${timezone}`);
+	const timezone = normalizeTimeZone(configuration.timezone);
+	if (!timezone) {
+		throw new Error(`Invalid timezone configured for maqraah time sync: ${configuration.timezone}`);
 	}
 
 	const localDate = formatDateForAlAdhan(date, timezone);
-	const url = buildAlAdhanTimingsUrl(configuration, localDate);
+	const url = buildAlAdhanTimingsUrl({ ...configuration, timezone }, localDate);
 	const response = await fetchImplementation(url);
 
 	if (!response.ok) {

@@ -2,7 +2,7 @@ import { Client } from 'discord.js';
 import * as cron from 'node-cron';
 import { configurationRepository } from '../../storage/sqlite';
 import { logger } from '../../observability/logging/logger';
-import { isValidTimeZone } from './cadence';
+import { normalizeTimeZone } from '../../shared/time';
 import { fetchMaqraahTimeSyncTiming, isMaqraahTimeSyncEnabled, MaqraahTimeSyncTiming } from './prayerTimes';
 import { scheduleReminder } from './scheduler';
 import { updateReminderVoiceChannelName } from './voiceChannel';
@@ -30,7 +30,8 @@ export async function scheduleMaqraahTimeSync(client: Client, runImmediately: bo
 		return;
 	}
 
-	if (!isValidTimeZone(configuration.timezone)) {
+	const timezone = normalizeTimeZone(configuration.timezone);
+	if (!timezone) {
 		logger.warn(`Invalid timezone configured for maqraah time sync: ${configuration.timezone}`, undefined, {
 			additionalData: { timezone: configuration.timezone },
 		});
@@ -42,12 +43,12 @@ export async function scheduleMaqraahTimeSync(client: Client, runImmediately: bo
 		async () => {
 			await syncMaqraahTimeFromMaghribSafely(client);
 		},
-		{ timezone: configuration.timezone }
+		{ timezone }
 	);
 
 	logger.recordSchedulerEvent('scheduled', {
 		cronTime: '7 * * * *',
-		timezone: configuration.timezone,
+		timezone,
 		stage: 'maqraah_time_sync_update',
 	});
 

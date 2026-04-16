@@ -2,8 +2,9 @@ import { Client } from 'discord.js';
 import * as cron from 'node-cron';
 import { configurationRepository, notesRepository, progressRepository, reminderEventsRepository } from '../../storage/sqlite';
 import { logger } from '../../observability/logging/logger';
+import { normalizeTimeZone, parseTimeToCron } from '../../shared/time';
 import { buildReminderActionRows, getReminderSessionId } from './components';
-import { buildReminderStageSchedules, isValidTimeZone, parseTimeToCron, reminderStages, ReminderStage, ReminderStageSchedule } from './cadence';
+import { buildReminderStageSchedules, reminderStages, ReminderStage, ReminderStageSchedule } from './cadence';
 import { buildPreReminderMessage, buildReminderMessages } from './messages';
 
 export let scheduledJob: cron.ScheduledTask | null = null;
@@ -15,7 +16,8 @@ export async function scheduleReminder(client: Client) {
 	stopScheduledJobs();
 
 	const configuration = await configurationRepository.getConfiguration();
-	if (!isValidTimeZone(configuration.timezone)) {
+	const timezone = normalizeTimeZone(configuration.timezone);
+	if (!timezone) {
 		logger.warn(`Invalid timezone configured: ${configuration.timezone}, skipping reminders`, undefined, {
 			additionalData: { timezone: configuration.timezone },
 		});
@@ -33,7 +35,7 @@ export async function scheduleReminder(client: Client) {
 
 	for (const schedule of schedules) {
 		logger.info(`Scheduling ${schedule.stage} reminder job with cron: ${schedule.cronTime}`, undefined, {
-			additionalData: { cronTime: schedule.cronTime, timezone: configuration.timezone, stage: schedule.stage },
+			additionalData: { cronTime: schedule.cronTime, timezone, stage: schedule.stage },
 		});
 
 		const job = cron.schedule(
@@ -42,7 +44,7 @@ export async function scheduleReminder(client: Client) {
 				await executeReminderStage(client, schedule);
 			},
 			{
-				timezone: configuration.timezone,
+				timezone,
 			}
 		);
 
@@ -51,7 +53,7 @@ export async function scheduleReminder(client: Client) {
 			scheduledJob = job;
 		}
 
-		logger.recordSchedulerEvent('scheduled', { cronTime: schedule.cronTime, timezone: configuration.timezone, stage: schedule.stage });
+		logger.recordSchedulerEvent('scheduled', { cronTime: schedule.cronTime, timezone, stage: schedule.stage });
 	}
 }
 
@@ -61,7 +63,8 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 	stopScheduledJobs();
 
 	const configuration = await configurationRepository.getConfiguration();
-	if (!isValidTimeZone(configuration.timezone)) {
+	const timezone = normalizeTimeZone(configuration.timezone);
+	if (!timezone) {
 		logger.warn(`Invalid timezone configured for override: ${configuration.timezone}`, undefined, {
 			additionalData: { timezone: configuration.timezone },
 		});
@@ -80,7 +83,7 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 		sessionDateOffsetMinutes: 0,
 	};
 
-	logger.info(`Scheduling one-time reminder with cron: ${cronTime}`, undefined, { additionalData: { cronTime, timezone: configuration.timezone } });
+	logger.info(`Scheduling one-time reminder with cron: ${cronTime}`, undefined, { additionalData: { cronTime, timezone } });
 
 	let tempJob: cron.ScheduledTask;
 	tempJob = cron.schedule(
@@ -94,13 +97,13 @@ export async function overrideNextReminder(client: Client, newTime: string) {
 			scheduleReminder(client);
 		},
 		{
-			timezone: configuration.timezone,
+			timezone,
 		}
 	);
 
 	scheduledJob = tempJob;
 	scheduledJobs.push(tempJob);
-	logger.recordSchedulerEvent('scheduled', { cronTime, timezone: configuration.timezone, isOverride: true, stage: reminderStages.MAIN });
+	logger.recordSchedulerEvent('scheduled', { cronTime, timezone, isOverride: true, stage: reminderStages.MAIN });
 }
 
 async function executeReminderStage(client: Client, schedule: ReminderStageSchedule, isOverride: boolean = false): Promise<void> {
@@ -110,7 +113,8 @@ async function executeReminderStage(client: Client, schedule: ReminderStageSched
 
 	try {
 		const configuration = await configurationRepository.getConfiguration();
-		if (!isValidTimeZone(configuration.timezone)) {
+		const timezone = normalizeTimeZone(configuration.timezone);
+		if (!timezone) {
 			logger.warn(`Invalid timezone configured during reminder execution: ${configuration.timezone}`, undefined, {
 				additionalData: { timezone: configuration.timezone, stage, isOverride },
 			});
@@ -118,7 +122,7 @@ async function executeReminderStage(client: Client, schedule: ReminderStageSched
 		}
 
 		const sessionStart = new Date(Date.now() + schedule.sessionDateOffsetMinutes * 60_000);
-		const sessionId = getReminderSessionId(sessionStart, configuration.timezone);
+		const sessionId = getReminderSessionId(sessionStart, timezone);
 
 		const isNewReminderEvent = await reminderEventsRepository.recordSentEventIfNew(sessionId, stage, sessionStart.toISOString());
 		if (!isNewReminderEvent) {

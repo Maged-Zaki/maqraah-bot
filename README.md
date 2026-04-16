@@ -66,8 +66,8 @@ Slash commands are discovered from `src/features/**/command.ts` and `src/feature
 
 ### `/configuration`
 
-- `/configuration update [role] [voicechannel] [timezone] [pre-reminder-enabled] [pre-reminder-minutes] [maqraah-reminder-enabled] [maqraah-time-sync-enabled] [maqraah-minutes-after-maghrib] [prayer-time-latitude] [prayer-time-longitude]`
-  Updates bot configuration. `timezone` must be an IANA timezone such as `Africa/Cairo`.
+- `/configuration update [role] [voicechannel] [maqraah-time] [timezone] [pre-reminder-enabled] [pre-reminder-minutes] [maqraah-reminder-enabled] [maqraah-time-sync-enabled] [maqraah-minutes-after-maghrib] [prayer-time-latitude] [prayer-time-longitude]`
+  Updates bot configuration. `maqraah-time` must use `H:MM AM/PM`, such as `9:05 PM`, and is saved in normalized form. `timezone` must be an IANA timezone such as `Africa/Cairo`.
   When `maqraah-time-sync-enabled` is true, the bot checks AlAdhan prayer timings with the configured timezone and location, then sets `dailyTime` to the configured number of minutes after Maghrib. Maghrib is rounded down to the current 5-minute bucket, so `6:31 PM` through `6:34 PM` keeps the same Maqraah time as `6:30 PM`, while `6:35 PM` moves it.
 - `/configuration show`
   Shows reminder time, timezone, role, voice channel, enabled reminder stages, and Maqraah time sync settings.
@@ -106,7 +106,7 @@ There is no `/notes add`, `/add-note`, `/notes remove-my`, or `/notes remove-all
 
 ### Reminder Utility
 
-- `/change-upcoming-maqraah-time time:<HH:MM AM/PM>`
+- `/change-upcoming-maqraah-time time:<H:MM AM/PM>`
   Overrides the next main maqraah reminder time once, then returns to the configured daily schedule.
 - `/sync-maqraah-time`
   Runs the Maghrib-based sync immediately, updates the configured maqraah time if needed, and reschedules reminders.

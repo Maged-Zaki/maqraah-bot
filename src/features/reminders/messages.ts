@@ -26,8 +26,7 @@ function buildMainReminderMessage(configuration: Configuration, progress: Progre
 	const nextPage = getNextPage(progress.lastPage);
 	const nextHadith = progress.lastHadith + 1;
 
-	let message = `<@&${configuration.roleId}> السلام عليكم ورحمة الله وبركاته\n`;
-	message += `وقت المقراة اليومية! 📖\n\n`;
+	let message = `<@&${configuration.roleId}> بدأت المقرأة\n\n`;
 	message += `الصفحة القادمة: [${nextPage}](https://quran.com/page/${nextPage})\n`;
 	message += `الحديث القادم: **${nextHadith}**\n`;
 

@@ -3,7 +3,7 @@ import * as cron from 'node-cron';
 import { configurationRepository, notesRepository, progressRepository, reminderEventsRepository } from '../../storage/sqlite';
 import { logger } from '../../observability/logging/logger';
 import { normalizeTimeZone, parseTimeToCron } from '../../shared/time';
-import { buildNotesCarryOverActionRows, buildReminderActionRows, getReminderSessionId } from './components';
+import { buildReminderActionRows, getReminderSessionId } from './components';
 import { buildReminderStageSchedules, reminderStages, ReminderStage, ReminderStageSchedule } from './cadence';
 import { buildPreReminderMessage, buildReminderMessages } from './messages';
 
@@ -194,13 +194,11 @@ async function sendMainReminder(channel: any, configuration: Awaited<ReturnType<
 		});
 	}
 
-	await channel.send({ content: mainMessage, components: buildReminderActionRows(sessionId) });
+	await channel.send({ content: mainMessage });
 
 	for (let i = 0; i < notesMessages.length; i++) {
-		const isLastNotesMessage = i === notesMessages.length - 1;
 		await channel.send({
 			content: notesMessages[i],
-			components: isLastNotesMessage ? buildNotesCarryOverActionRows(sessionId) : [],
 		});
 	}
 

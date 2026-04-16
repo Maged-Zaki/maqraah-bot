@@ -108,8 +108,6 @@ There is no `/notes add`, `/add-note`, `/notes remove-my`, or `/notes remove-all
 
 - `/change-upcoming-maqraah-time time:<H:MM AM/PM>`
   Overrides the next main maqraah reminder time once, then returns to the configured daily schedule.
-- `/sync-maqraah-time`
-  Runs the Maghrib-based sync immediately, updates the configured maqraah time if needed, and reschedules reminders.
 
 ### Help
 

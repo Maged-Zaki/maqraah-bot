@@ -4,17 +4,24 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - "README.md"
       - "docs/**"
-      - "*.md"
+      - "**/*.md"
 
 env:
   DEPLOY_PATH: /home/ubuntu/app
   USER: ubuntu
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm test
+
   deploy:
     runs-on: ubuntu-latest
+    needs: test
 
     steps:
       - name: Checkout code

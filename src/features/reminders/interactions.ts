@@ -12,14 +12,16 @@ export async function handleReminderButtonInteraction(interaction: ButtonInterac
 	const discordContext = buildDiscordContext(interaction, parsedCustomId.action);
 
 	try {
+		await interaction.deferUpdate();
+
 		switch (parsedCustomId.action) {
 			case reminderActions.JOINING_SHORTLY:
 				await attendanceRepository.upsertAttendance(parsedCustomId.sessionId, interaction.user.id, 'late');
-				await interaction.reply({ content: `<@${interaction.user.id}> هيتأخر شوية عن المقراة.` });
+				await sendChannelMessage(interaction, `<@${interaction.user.id}> هيتأخر شوية عن المقراة.`);
 				break;
 			case reminderActions.CANNOT_MAKE_IT:
 				await attendanceRepository.upsertAttendance(parsedCustomId.sessionId, interaction.user.id, 'cannot_make_it');
-				await interaction.reply({ content: `<@${interaction.user.id}> مش هيقدر يحضر المقراة النهارده.` });
+				await sendChannelMessage(interaction, `<@${interaction.user.id}> مش هيقدر يحضر المقراة النهارده.`);
 				break;
 		}
 
@@ -38,6 +40,15 @@ export async function handleReminderButtonInteraction(interaction: ButtonInterac
 	}
 
 	return true;
+}
+
+async function sendChannelMessage(interaction: ButtonInteraction, content: string): Promise<void> {
+	const channel = interaction.message.channel;
+	if (!channel.isSendable()) {
+		throw new Error('Reminder action channel is not sendable.');
+	}
+
+	await channel.send({ content });
 }
 
 function buildDiscordContext(interaction: ButtonInteraction, action: string): DiscordContext {

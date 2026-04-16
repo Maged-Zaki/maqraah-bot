@@ -77,7 +77,8 @@ db.serialize(() => {
 	     note TEXT NOT NULL,
 	     dateAdded TEXT NOT NULL,
 	     status TEXT DEFAULT 'pending',
-	     lastIncludedDate TEXT
+	     lastIncludedDate TEXT,
+	     isAnonymous INTEGER DEFAULT 0
 	   )
 	 `,
 		(err) => {
@@ -86,6 +87,8 @@ db.serialize(() => {
 			}
 		}
 	);
+
+	addColumnIfMissing('notes', 'isAnonymous INTEGER DEFAULT 0');
 
 	db.run(
 		`

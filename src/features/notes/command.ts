@@ -4,6 +4,7 @@ import { logger, DiscordContext } from '../../observability/logging/logger';
 import { chunkContent } from '../../shared/content/chunkContent';
 import {
 	buildNoSearchResultsMessage,
+	formatNoteAuthor,
 	formatSearchResultLine,
 	isNoteSearchStatus,
 	noteSearchStatuses,
@@ -12,6 +13,7 @@ import {
 
 const subcommands = {
 	CREATE: 'create',
+	CREATE_ANONYMOUS: 'create-annyomous',
 	SHOW_MINE: 'show-mine',
 	SHOW_ALL: 'show-all',
 	SEARCH: 'search',
@@ -29,6 +31,12 @@ export const data = new SlashCommandBuilder()
 		subcommand
 			.setName(subcommands.CREATE)
 			.setDescription('Creates a new note and saves it for upcoming maqraah reminder')
+			.addStringOption((option) => option.setName('text').setDescription('The note text').setRequired(true))
+	)
+	.addSubcommand((subcommand) =>
+		subcommand
+			.setName(subcommands.CREATE_ANONYMOUS)
+			.setDescription('Creates a new note without showing who added it')
 			.addStringOption((option) => option.setName('text').setDescription('The note text').setRequired(true))
 	)
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW_MINE).setDescription('Show your personal notes'))
@@ -105,6 +113,27 @@ export async function execute(interaction: any) {
 				await interaction.reply({ content: 'Note added! It will be reminded upcoming maqraah.', flags: MessageFlags.Ephemeral });
 				break;
 			}
+			case subcommands.CREATE_ANONYMOUS: {
+				const text = interaction.options.getString('text');
+
+				await notesRepository.addNote(interaction.user.id, text, { isAnonymous: true });
+
+				logger.info(`Anonymous note created successfully for user ${interaction.user.id}`, discordContext, {
+					operationType: 'note_create',
+					operationStatus: 'success',
+				});
+				logger.recordNoteEvent({
+					userId: interaction.user.id,
+					username: interaction.user.username,
+					guildId: interaction.guildId?.toString(),
+					channelId: interaction.channelId?.toString(),
+					noteContent: text,
+					operation: 'created',
+				});
+
+				await interaction.reply({ content: 'Anonymous note added! It will be reminded upcoming maqraah.', flags: MessageFlags.Ephemeral });
+				break;
+			}
 			case subcommands.SHOW_MINE: {
 				const notes = await notesRepository.getNotesByUserId(interaction.user.id);
 				const pendingNotes = notes.filter((n) => n.status === 'pending' || n.status === undefined);
@@ -164,7 +193,7 @@ export async function execute(interaction: any) {
 
 				logger.info(`Found ${notes.length} notes in database`, discordContext, { operationType: 'note_view_all', operationStatus: 'success' });
 
-				const notesContent = notes.map((n) => `<@${n.userId}>: ${n.note}`).join('\n');
+				const notesContent = notes.map((n) => `${formatNoteAuthor(n)}: ${n.note}`).join('\n');
 				const chunks = chunkContent(notesContent, 4000);
 
 				for (let i = 0; i < chunks.length; i++) {
@@ -204,6 +233,7 @@ export async function execute(interaction: any) {
 				const notes = await notesRepository.searchNotes({
 					query,
 					userId: user?.id,
+					includeAnonymous: user?.id === interaction.user.id,
 					status,
 					startDate: dateRange.startDate,
 					endDate: dateRange.endDate,
@@ -442,7 +472,7 @@ export async function execute(interaction: any) {
 
 				// Format the date for display
 				const formattedDate = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-				const notesContent = notes.map((n) => `<@${n.userId}>: ${n.note}`).join('\n');
+				const notesContent = notes.map((n) => `${formatNoteAuthor(n)}: ${n.note}`).join('\n');
 				const chunks = chunkContent(notesContent, 4000);
 
 				for (let i = 0; i < chunks.length; i++) {

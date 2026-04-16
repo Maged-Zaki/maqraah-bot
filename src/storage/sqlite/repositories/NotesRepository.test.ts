@@ -39,6 +39,35 @@ test('user filter limits search results', async () => {
 	}
 });
 
+test('user filter excludes anonymous notes unless explicitly included', async () => {
+	const { db, repository } = await createRepository();
+
+	try {
+		await insertNote(db, { userId: 'user-1', note: 'Public practice note', dateAdded: '2026-04-15T12:00:00.000Z', status: 'pending' });
+		await insertNote(db, {
+			userId: 'user-1',
+			note: 'Anonymous practice note',
+			dateAdded: '2026-04-15T13:00:00.000Z',
+			status: 'pending',
+			isAnonymous: 1,
+		});
+
+		const publicNotes = await repository.searchNotes({ query: 'practice', userId: 'user-1' });
+		const ownNotes = await repository.searchNotes({ query: 'practice', userId: 'user-1', includeAnonymous: true });
+
+		assert.deepEqual(
+			publicNotes.map((note) => note.note),
+			['Public practice note']
+		);
+		assert.deepEqual(
+			ownNotes.map((note) => note.note),
+			['Anonymous practice note', 'Public practice note']
+		);
+	} finally {
+		await close(db);
+	}
+});
+
 test('status filter limits search results', async () => {
 	const { db, repository } = await createRepository();
 
@@ -110,6 +139,23 @@ test('text search treats LIKE wildcards as literal search text', async () => {
 	}
 });
 
+test('addNote saves anonymous notes with the privacy flag', async () => {
+	const { db, repository } = await createRepository();
+
+	try {
+		await repository.addNote('user-1', 'Please review anonymously', { isAnonymous: true });
+
+		const notes = await repository.getAllNotes();
+
+		assert.equal(notes.length, 1);
+		assert.equal(notes[0].userId, 'user-1');
+		assert.equal(notes[0].note, 'Please review anonymously');
+		assert.equal(notes[0].isAnonymous, 1);
+	} finally {
+		await close(db);
+	}
+});
+
 async function createRepository(): Promise<{ db: sqlite3.Database; repository: NotesRepository }> {
 	const db = new sqlite3.Database(':memory:');
 	await run(
@@ -121,7 +167,8 @@ async function createRepository(): Promise<{ db: sqlite3.Database; repository: N
 				note TEXT NOT NULL,
 				dateAdded TEXT NOT NULL,
 				status TEXT DEFAULT 'pending',
-				lastIncludedDate TEXT
+				lastIncludedDate TEXT,
+				isAnonymous INTEGER DEFAULT 0
 			)
 		`
 	);
@@ -131,14 +178,15 @@ async function createRepository(): Promise<{ db: sqlite3.Database; repository: N
 
 function insertNote(
 	db: sqlite3.Database,
-	note: { userId: string; note: string; dateAdded: string; status?: string | null; lastIncludedDate?: string | null }
+	note: { userId: string; note: string; dateAdded: string; status?: string | null; lastIncludedDate?: string | null; isAnonymous?: boolean | number | null }
 ): Promise<void> {
-	return run(db, `INSERT INTO notes (userId, note, dateAdded, status, lastIncludedDate) VALUES (?, ?, ?, ?, ?)`, [
+	return run(db, `INSERT INTO notes (userId, note, dateAdded, status, lastIncludedDate, isAnonymous) VALUES (?, ?, ?, ?, ?, ?)`, [
 		note.userId,
 		note.note,
 		note.dateAdded,
 		note.status ?? 'pending',
 		note.lastIncludedDate ?? null,
+		note.isAnonymous ?? 0,
 	]);
 }
 

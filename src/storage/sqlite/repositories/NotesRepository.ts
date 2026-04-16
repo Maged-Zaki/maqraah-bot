@@ -8,6 +8,7 @@ export interface Note {
 	dateAdded: string;
 	status?: string;
 	lastIncludedDate?: string;
+	isAnonymous?: boolean | number | null;
 }
 
 export type NoteStatus = 'pending' | 'included';
@@ -15,28 +16,38 @@ export type NoteStatus = 'pending' | 'included';
 export interface NoteSearchCriteria {
 	query?: string;
 	userId?: string;
+	includeAnonymous?: boolean;
 	status?: NoteStatus;
 	startDate?: string;
 	endDate?: string;
 }
 
+export interface AddNoteOptions {
+	isAnonymous?: boolean;
+}
+
 export class NotesRepository {
 	constructor(private db: sqlite3.Database) {}
 
-	async addNote(userId: string, note: string): Promise<void> {
+	async addNote(userId: string, note: string, options: AddNoteOptions = {}): Promise<void> {
 		const startTime = Date.now();
+		const isAnonymous = options.isAnonymous ? 1 : 0;
 		return new Promise((resolve, reject) => {
-			this.db.run(`INSERT INTO notes (userId, note, dateAdded) VALUES (?, ?, ?)`, [userId, note, new Date().toISOString()], function (err) {
-				const duration = Date.now() - startTime;
-				if (err) {
-					logger.error('Failed to add note', err, undefined, { operationType: 'database_create', operationStatus: 'failure', duration });
-					logger.recordDatabaseEvent('create', 'notes', duration, false, err.message);
-					reject(err);
-				} else {
-					logger.recordDatabaseEvent('create', 'notes', duration, true);
-					resolve();
+			this.db.run(
+				`INSERT INTO notes (userId, note, dateAdded, isAnonymous) VALUES (?, ?, ?, ?)`,
+				[userId, note, new Date().toISOString(), isAnonymous],
+				function (err) {
+					const duration = Date.now() - startTime;
+					if (err) {
+						logger.error('Failed to add note', err, undefined, { operationType: 'database_create', operationStatus: 'failure', duration });
+						logger.recordDatabaseEvent('create', 'notes', duration, false, err.message);
+						reject(err);
+					} else {
+						logger.recordDatabaseEvent('create', 'notes', duration, true);
+						resolve();
+					}
 				}
-			});
+			);
 		});
 	}
 
@@ -257,6 +268,10 @@ export class NotesRepository {
 		if (criteria.userId) {
 			conditions.push(`userId = ?`);
 			params.push(criteria.userId);
+
+			if (!criteria.includeAnonymous) {
+				conditions.push(`COALESCE(isAnonymous, 0) = 0`);
+			}
 		}
 
 		if (criteria.status) {

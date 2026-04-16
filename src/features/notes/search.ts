@@ -19,7 +19,15 @@ export function buildNoSearchResultsMessage(query: string): string {
 export function formatSearchResultLine(note: Note): string {
 	const status = note.status ?? 'pending';
 	const displayDate = formatNoteDate(note.lastIncludedDate ?? note.dateAdded);
-	return `**#${note.id}** ${displayDate} [${status}] <@${note.userId}>: ${note.note}`;
+	return `**#${note.id}** ${displayDate} [${status}] ${formatNoteAuthor(note)}: ${note.note}`;
+}
+
+export function formatNoteAuthor(note: Note): string {
+	return isNoteAnonymous(note) ? 'Anonymous' : `<@${note.userId}>`;
+}
+
+export function isNoteAnonymous(note: Pick<Note, 'isAnonymous'>): boolean {
+	return note.isAnonymous === true || note.isAnonymous === 1;
 }
 
 export function parseSearchDateRange(

@@ -1,8 +1,8 @@
 import { Client, Collection, Events, GatewayIntentBits } from 'discord.js';
 import { scheduleMaqraahTimeSync } from '../features/reminders/maqraahTimeSync';
 import { scheduleReminder } from '../features/reminders/scheduler';
-import { configurationRepository } from '../infrastructure/database';
-import { logger } from '../infrastructure/logging/logger';
+import { configurationRepository } from '../storage/sqlite';
+import { logger } from '../observability/logging/logger';
 import { registerCommands } from './commandRegistry';
 import { routeInteraction } from './interactionRouter';
 import { sendWelcomeMessage } from './welcomeMessage';

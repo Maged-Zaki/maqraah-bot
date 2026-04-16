@@ -4,7 +4,7 @@ import { ProgressRepository } from './repositories/ProgressRepository';
 import { NotesRepository } from './repositories/NotesRepository';
 import { AttendanceRepository } from './repositories/AttendanceRepository';
 import { ReminderEventsRepository } from './repositories/ReminderEventsRepository';
-import { logger } from '../logging/logger';
+import { logger } from '../../observability/logging/logger';
 
 if (!process.env.DATABASE_PATH) {
 	logger.fatal('DATABASE_PATH is not defined in environment variables');

@@ -1,5 +1,5 @@
 import { Client, PermissionsBitField, TextChannel } from 'discord.js';
-import { logger } from '../infrastructure/logging/logger';
+import { logger } from '../observability/logging/logger';
 
 export async function sendWelcomeMessage(client: Client): Promise<void> {
 	const channelId = process.env.CHANNEL_ID;

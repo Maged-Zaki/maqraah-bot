@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { logger, DiscordContext } from '../../infrastructure/logging/logger';
+import { logger, DiscordContext } from '../../observability/logging/logger';
 import { syncMaqraahTimeFromMaghrib } from './maqraahTimeSync';
 
 export const data = new SlashCommandBuilder()

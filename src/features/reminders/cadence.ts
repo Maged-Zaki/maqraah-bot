@@ -1,4 +1,4 @@
-import type { Configuration } from '../../infrastructure/database/repositories/ConfigurationRepository';
+import type { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
 
 export const reminderStages = {
 	PRE: 'pre',

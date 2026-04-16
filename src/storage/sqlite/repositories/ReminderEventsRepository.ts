@@ -1,6 +1,6 @@
 import sqlite3 from 'sqlite3';
 import type { ReminderStage } from '../../../features/reminders/cadence';
-import { logger } from '../../logging/logger';
+import { logger } from '../../../observability/logging/logger';
 
 export interface ReminderEvent {
 	id: number;

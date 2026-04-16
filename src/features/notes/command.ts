@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
-import { notesRepository } from '../../infrastructure/database';
-import { logger, DiscordContext } from '../../infrastructure/logging/logger';
+import { notesRepository } from '../../storage/sqlite';
+import { logger, DiscordContext } from '../../observability/logging/logger';
 import { chunkContent } from '../../shared/content/chunkContent';
 
 const subcommands = {

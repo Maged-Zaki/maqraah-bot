@@ -1,7 +1,7 @@
 import { Client } from 'discord.js';
 import * as cron from 'node-cron';
-import { configurationRepository, notesRepository, progressRepository, reminderEventsRepository } from '../../infrastructure/database';
-import { logger } from '../../infrastructure/logging/logger';
+import { configurationRepository, notesRepository, progressRepository, reminderEventsRepository } from '../../storage/sqlite';
+import { logger } from '../../observability/logging/logger';
 import { buildReminderActionRows, getReminderSessionId } from './components';
 import { buildReminderStageSchedules, isValidTimeZone, parseTimeToCron, reminderStages, ReminderStage, ReminderStageSchedule } from './cadence';
 import { buildPreReminderMessage, buildReminderMessages } from './messages';

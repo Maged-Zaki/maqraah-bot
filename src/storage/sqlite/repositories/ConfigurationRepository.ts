@@ -1,5 +1,5 @@
 import sqlite3 from 'sqlite3';
-import { logger } from '../../logging/logger';
+import { logger } from '../../../observability/logging/logger';
 
 export interface Configuration {
 	roleId: string;

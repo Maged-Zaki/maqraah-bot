@@ -1,6 +1,6 @@
 import { ButtonInteraction, MessageFlags } from 'discord.js';
-import { attendanceRepository } from '../../infrastructure/database';
-import { logger, DiscordContext } from '../../infrastructure/logging/logger';
+import { attendanceRepository } from '../../storage/sqlite';
+import { logger, DiscordContext } from '../../observability/logging/logger';
 import { parseReminderActionCustomId, reminderActions } from './components';
 
 export async function handleReminderButtonInteraction(interaction: ButtonInteraction): Promise<boolean> {

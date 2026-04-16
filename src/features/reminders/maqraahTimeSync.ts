@@ -1,7 +1,7 @@
 import { Client } from 'discord.js';
 import * as cron from 'node-cron';
-import { configurationRepository } from '../../infrastructure/database';
-import { logger } from '../../infrastructure/logging/logger';
+import { configurationRepository } from '../../storage/sqlite';
+import { logger } from '../../observability/logging/logger';
 import { isValidTimeZone } from './cadence';
 import { fetchMaqraahTimeSyncTiming, isMaqraahTimeSyncEnabled, MaqraahTimeSyncTiming } from './prayerTimes';
 import { scheduleReminder } from './scheduler';

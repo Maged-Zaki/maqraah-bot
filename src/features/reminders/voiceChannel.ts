@@ -1,6 +1,6 @@
 import { Client } from 'discord.js';
-import { configurationRepository } from '../../infrastructure/database';
-import { logger } from '../../infrastructure/logging/logger';
+import { configurationRepository } from '../../storage/sqlite';
+import { logger } from '../../observability/logging/logger';
 
 export async function updateReminderVoiceChannelName(client: Client, dailyTime: string): Promise<void> {
 	const configuration = await configurationRepository.getConfiguration();

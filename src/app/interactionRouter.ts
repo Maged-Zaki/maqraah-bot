@@ -1,7 +1,7 @@
 import newrelic from 'newrelic';
 import { Interaction, MessageFlags } from 'discord.js';
 import { handleReminderButtonInteraction } from '../features/reminders/interactions';
-import { DiscordContext, logger } from '../infrastructure/logging/logger';
+import { DiscordContext, logger } from '../observability/logging/logger';
 
 export async function routeInteraction(interaction: Interaction): Promise<void> {
 	if (interaction.isButton()) {

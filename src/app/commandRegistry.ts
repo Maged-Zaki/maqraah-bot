@@ -1,7 +1,7 @@
 import { Client } from 'discord.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { logger } from '../infrastructure/logging/logger';
+import { logger } from '../observability/logging/logger';
 
 interface BotCommand {
 	data: {

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import sqlite3 from 'sqlite3';
-import { ReminderEventsRepository } from '../../infrastructure/database/repositories/ReminderEventsRepository';
-import { Configuration } from '../../infrastructure/database/repositories/ConfigurationRepository';
+import { ReminderEventsRepository } from '../../storage/sqlite/repositories/ReminderEventsRepository';
+import { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
 import { buildReminderStageSchedules, isValidTimeZone, reminderStages } from './cadence';
 import { buildAlAdhanTimingsUrl, buildMaqraahTimeSyncTiming, formatDateForAlAdhan, parsePrayerTimeToMinutes } from './prayerTimes';
 

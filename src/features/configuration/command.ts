@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, ChannelType, MessageFlags, EmbedBuilder } from 'discord.js';
-import { configurationRepository } from '../../infrastructure/database';
-import { logger, DiscordContext } from '../../infrastructure/logging/logger';
+import { configurationRepository } from '../../storage/sqlite';
+import { logger, DiscordContext } from '../../observability/logging/logger';
 import { defaultReminderCadence, getReminderOffset, isReminderStageEnabled, isValidTimeZone } from '../reminders/cadence';
 import { scheduleMaqraahTimeSync, syncMaqraahTimeFromMaghrib } from '../reminders/maqraahTimeSync';
 import { getMaqraahTimeSyncOffsetMinutes, isMaqraahTimeSyncEnabled, isValidLatitude, isValidLongitude } from '../reminders/prayerTimes';

@@ -1,4 +1,4 @@
-import type { Configuration } from '../../infrastructure/database/repositories/ConfigurationRepository';
+import type { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
 import { isValidTimeZone } from './cadence';
 
 export const maqraahTimeSyncDefaults = {

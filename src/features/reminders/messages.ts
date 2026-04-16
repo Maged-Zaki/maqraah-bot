@@ -1,6 +1,6 @@
-import { Configuration } from '../../infrastructure/database/repositories/ConfigurationRepository';
-import { Note } from '../../infrastructure/database/repositories/NotesRepository';
-import { Progress } from '../../infrastructure/database/repositories/ProgressRepository';
+import { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
+import { Note } from '../../storage/sqlite/repositories/NotesRepository';
+import { Progress } from '../../storage/sqlite/repositories/ProgressRepository';
 import { chunkContent } from '../../shared/content/chunkContent';
 import { getNextPage } from '../../shared/quran/pages';
 import { defaultReminderCadence, getReminderOffset } from './cadence';

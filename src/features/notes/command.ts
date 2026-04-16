@@ -2,11 +2,19 @@ import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { notesRepository } from '../../storage/sqlite';
 import { logger, DiscordContext } from '../../observability/logging/logger';
 import { chunkContent } from '../../shared/content/chunkContent';
+import {
+	buildNoSearchResultsMessage,
+	formatSearchResultLine,
+	isNoteSearchStatus,
+	noteSearchStatuses,
+	parseSearchDateRange,
+} from './search';
 
 const subcommands = {
 	CREATE: 'create',
 	SHOW_MINE: 'show-mine',
 	SHOW_ALL: 'show-all',
+	SEARCH: 'search',
 	DELETE: 'delete',
 	DELETE_MINE: 'delete-mine',
 	DELETE_ALL: 'delete-all',
@@ -25,6 +33,21 @@ export const data = new SlashCommandBuilder()
 	)
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW_MINE).setDescription('Show your personal notes'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW_ALL).setDescription('Show all notes from all users'))
+	.addSubcommand((subcommand) =>
+		subcommand
+			.setName(subcommands.SEARCH)
+			.setDescription('Search pending and history notes')
+			.addStringOption((option) => option.setName('query').setDescription('Text or #tag to search for').setRequired(true))
+			.addUserOption((option) => option.setName('user').setDescription('Only show notes from this user'))
+			.addStringOption((option) =>
+				option
+					.setName('status')
+					.setDescription('Only show notes with this status')
+					.addChoices(...noteSearchStatuses.map((status) => ({ name: status, value: status })))
+			)
+			.addStringOption((option) => option.setName('start-date').setDescription('Earliest date to include (YYYY-MM-DD)'))
+			.addStringOption((option) => option.setName('end-date').setDescription('Latest date to include (YYYY-MM-DD)'))
+	)
 	.addSubcommand((subcommand) =>
 		subcommand
 			.setName(subcommands.DELETE)
@@ -147,6 +170,75 @@ export async function execute(interaction: any) {
 				for (let i = 0; i < chunks.length; i++) {
 					const embed = new EmbedBuilder()
 						.setTitle(i === 0 ? 'All Notes' : `All Notes (${i + 1}/${chunks.length})`)
+						.setDescription(chunks[i])
+						.setColor(0x0099ff);
+
+					if (i === 0) {
+						await interaction.reply({ embeds: [embed], ephemeral: true });
+					} else {
+						await interaction.followUp({ embeds: [embed], ephemeral: true });
+					}
+				}
+				break;
+			}
+			case subcommands.SEARCH: {
+				const query = interaction.options.getString('query')?.trim() ?? '';
+				if (!query) {
+					await interaction.reply({ content: 'Search text cannot be empty.', flags: MessageFlags.Ephemeral });
+					return;
+				}
+
+				const user = interaction.options.getUser('user');
+				const status = interaction.options.getString('status');
+				if (status && !isNoteSearchStatus(status)) {
+					await interaction.reply({ content: 'Status must be pending or included.', flags: MessageFlags.Ephemeral });
+					return;
+				}
+
+				const dateRange = parseSearchDateRange(interaction.options.getString('start-date'), interaction.options.getString('end-date'));
+				if (dateRange.error) {
+					await interaction.reply({ content: dateRange.error, flags: MessageFlags.Ephemeral });
+					return;
+				}
+
+				const notes = await notesRepository.searchNotes({
+					query,
+					userId: user?.id,
+					status,
+					startDate: dateRange.startDate,
+					endDate: dateRange.endDate,
+				});
+
+				if (notes.length === 0) {
+					logger.info(`No notes found for search query`, discordContext, {
+						operationType: 'note_search',
+						operationStatus: 'success',
+						additionalData: { query, userId: user?.id, status, startDate: dateRange.startDate, endDate: dateRange.endDate },
+					});
+					await interaction.reply({ content: buildNoSearchResultsMessage(query), flags: MessageFlags.Ephemeral });
+					return;
+				}
+
+				logger.info(`Found ${notes.length} notes for search query`, discordContext, {
+					operationType: 'note_search',
+					operationStatus: 'success',
+					additionalData: { query, userId: user?.id, status, startDate: dateRange.startDate, endDate: dateRange.endDate, noteCount: notes.length },
+				});
+				logger.recordNoteEvent({
+					userId: interaction.user.id,
+					username: interaction.user.username,
+					guildId: interaction.guildId?.toString(),
+					channelId: interaction.channelId?.toString(),
+					noteCount: notes.length,
+					operation: 'viewed',
+				});
+
+				const notesContent = notes.map(formatSearchResultLine).join('\n');
+				const chunks = chunkContent(notesContent, 4000);
+
+				for (let i = 0; i < chunks.length; i++) {
+					const embed = new EmbedBuilder()
+						.setTitle(i === 0 ? 'Note Search Results' : `Note Search Results (${i + 1}/${chunks.length})`)
 						.setDescription(chunks[i])
 						.setColor(0x0099ff);
 

@@ -134,7 +134,7 @@ logger.info('Database initialization completed');
 // Create repository instances
 export const configurationRepository = new ConfigurationRepository(db);
 export const progressRepository = new ProgressRepository(db);
-export const notesRepository = new NotesRepository(db);
+export const notesRepository: NotesRepository = new NotesRepository(db);
 export const attendanceRepository = new AttendanceRepository(db);
 export const reminderEventsRepository = new ReminderEventsRepository(db);
 

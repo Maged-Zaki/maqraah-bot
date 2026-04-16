@@ -1,11 +1,11 @@
 import { Client, Collection, Events, GatewayIntentBits } from 'discord.js';
 import { scheduleMaqraahTimeSync } from '../features/reminders/maqraahTimeSync';
 import { scheduleReminder } from '../features/reminders/scheduler';
+import { sendFirstRunSetupGuideFromConfig } from '../features/setup/startup';
 import { configurationRepository } from '../storage/sqlite';
 import { logger } from '../observability/logging/logger';
 import { registerCommands } from './commandRegistry';
 import { routeInteraction } from './interactionRouter';
-import { sendWelcomeMessage } from './welcomeMessage';
 
 const requiredEnvVars = ['DISCORD_TOKEN', 'GUILD_ID', 'CHANNEL_ID'];
 
@@ -38,7 +38,7 @@ function registerLifecycleHandlers(client: Client): void {
 		await registerCommands(client);
 		await scheduleMaqraahTimeSync(client);
 		await scheduleReminder(client);
-		await sendWelcomeMessage(client);
+		await sendFirstRunSetupGuideFromConfig(client);
 	});
 
 	client.on('interactionCreate', routeInteraction);

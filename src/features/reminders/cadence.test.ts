@@ -168,6 +168,7 @@ function buildConfiguration(configuration: Partial<Configuration>): Configuratio
 		maqraahTimeSyncLatitude: 30.0444,
 		maqraahTimeSyncLongitude: 31.2357,
 		maqraahTimeSyncCalculationMethod: 5,
+		welcomeSentAt: null,
 		...configuration,
 	};
 }

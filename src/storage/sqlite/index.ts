@@ -32,7 +32,8 @@ db.serialize(() => {
 	     maqraahTimeSyncOffsetMinutes INTEGER DEFAULT 40,
 	     maqraahTimeSyncLatitude REAL DEFAULT 30.0444,
 	     maqraahTimeSyncLongitude REAL DEFAULT 31.2357,
-	     maqraahTimeSyncCalculationMethod INTEGER DEFAULT 5
+	     maqraahTimeSyncCalculationMethod INTEGER DEFAULT 5,
+	     welcomeSentAt TEXT
 	   )
 	 `,
 		(err) => {
@@ -47,6 +48,8 @@ db.serialize(() => {
 			logger.error('Failed to insert default configuration', err);
 		}
 	});
+
+	addColumnIfMissing('configuration', 'welcomeSentAt TEXT');
 	
 	db.run(
 		`

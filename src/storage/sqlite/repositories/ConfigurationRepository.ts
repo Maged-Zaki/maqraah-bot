@@ -14,6 +14,7 @@ export interface Configuration {
 	maqraahTimeSyncLatitude: number;
 	maqraahTimeSyncLongitude: number;
 	maqraahTimeSyncCalculationMethod: number;
+	welcomeSentAt: string | null;
 }
 
 export class ConfigurationRepository {

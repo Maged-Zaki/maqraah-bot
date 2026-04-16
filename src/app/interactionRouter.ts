@@ -1,11 +1,12 @@
 import newrelic from 'newrelic';
 import { Interaction, MessageFlags } from 'discord.js';
+import { handleDestructiveConfirmationButtonInteraction } from '../shared/confirmations/interactions';
 import { handleReminderButtonInteraction } from '../features/reminders/interactions';
 import { DiscordContext, logger } from '../observability/logging/logger';
 
 export async function routeInteraction(interaction: Interaction): Promise<void> {
 	if (interaction.isButton()) {
-		const handled = await handleReminderButtonInteraction(interaction);
+		const handled = (await handleDestructiveConfirmationButtonInteraction(interaction)) || (await handleReminderButtonInteraction(interaction));
 		if (!handled) {
 			logger.warn(`Unhandled button interaction: ${interaction.customId}`);
 		}

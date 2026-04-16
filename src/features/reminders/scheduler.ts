@@ -3,7 +3,7 @@ import * as cron from 'node-cron';
 import { configurationRepository, notesRepository, progressRepository, reminderEventsRepository } from '../../storage/sqlite';
 import { logger } from '../../observability/logging/logger';
 import { normalizeTimeZone, parseTimeToCron } from '../../shared/time';
-import { buildReminderActionRows, getReminderSessionId } from './components';
+import { buildNotesCarryOverActionRows, buildReminderActionRows, getReminderSessionId } from './components';
 import { buildReminderStageSchedules, reminderStages, ReminderStage, ReminderStageSchedule } from './cadence';
 import { buildPreReminderMessage, buildReminderMessages } from './messages';
 
@@ -182,7 +182,7 @@ async function sendMainReminder(channel: any, configuration: Awaited<ReturnType<
 	if (notes.length > 0) {
 		logger.info(`Marking ${notes.length} notes as included`, undefined, { additionalData: { noteCount: notes.length } });
 		const noteIds = notes.map((n) => n.id);
-		await notesRepository.updateNotesStatusWithDate(noteIds, 'included', new Date().toISOString());
+		await notesRepository.updateNotesStatusWithDate(noteIds, 'included', new Date().toISOString(), sessionId);
 		notes.forEach((note) => {
 			logger.recordNoteEvent({
 				userId: note.userId,
@@ -196,8 +196,12 @@ async function sendMainReminder(channel: any, configuration: Awaited<ReturnType<
 
 	await channel.send({ content: mainMessage, components: buildReminderActionRows(sessionId) });
 
-	for (const msg of notesMessages) {
-		await channel.send(msg);
+	for (let i = 0; i < notesMessages.length; i++) {
+		const isLastNotesMessage = i === notesMessages.length - 1;
+		await channel.send({
+			content: notesMessages[i],
+			components: isLastNotesMessage ? buildNotesCarryOverActionRows(sessionId) : [],
+		});
 	}
 
 	logger.recordReminderSentEvent(process.env.GUILD_ID!, process.env.CHANNEL_ID!, notes.length, true);

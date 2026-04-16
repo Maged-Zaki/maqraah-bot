@@ -156,6 +156,40 @@ test('addNote saves anonymous notes with the privacy flag', async () => {
 	}
 });
 
+test('included notes can be found by reminder session ID', async () => {
+	const { db, repository } = await createRepository();
+
+	try {
+		await insertNote(db, {
+			userId: 'user-1',
+			note: 'Carry this note',
+			dateAdded: '2026-04-15T12:00:00.000Z',
+			status: 'pending',
+		});
+		await insertNote(db, {
+			userId: 'user-2',
+			note: 'Different session note',
+			dateAdded: '2026-04-14T12:00:00.000Z',
+			status: 'included',
+			lastIncludedDate: '2026-04-14T19:00:00.000Z',
+			lastIncludedSessionId: '2026-04-14',
+		});
+
+		const [noteToCarry] = await repository.getNotesByUserId('user-1');
+		await repository.updateNotesStatusWithDate([noteToCarry.id], 'included', '2026-04-15T19:00:00.000Z', '2026-04-15');
+
+		const notes = await repository.getIncludedNotesBySessionId('2026-04-15');
+
+		assert.deepEqual(
+			notes.map((note) => note.note),
+			['Carry this note']
+		);
+		assert.equal(notes[0].lastIncludedSessionId, '2026-04-15');
+	} finally {
+		await close(db);
+	}
+});
+
 async function createRepository(): Promise<{ db: sqlite3.Database; repository: NotesRepository }> {
 	const db = new sqlite3.Database(':memory:');
 	await run(
@@ -168,6 +202,7 @@ async function createRepository(): Promise<{ db: sqlite3.Database; repository: N
 				dateAdded TEXT NOT NULL,
 				status TEXT DEFAULT 'pending',
 				lastIncludedDate TEXT,
+				lastIncludedSessionId TEXT,
 				isAnonymous INTEGER DEFAULT 0
 			)
 		`
@@ -178,16 +213,21 @@ async function createRepository(): Promise<{ db: sqlite3.Database; repository: N
 
 function insertNote(
 	db: sqlite3.Database,
-	note: { userId: string; note: string; dateAdded: string; status?: string | null; lastIncludedDate?: string | null; isAnonymous?: boolean | number | null }
+	note: {
+		userId: string;
+		note: string;
+		dateAdded: string;
+		status?: string | null;
+		lastIncludedDate?: string | null;
+		lastIncludedSessionId?: string | null;
+		isAnonymous?: boolean | number | null;
+	}
 ): Promise<void> {
-	return run(db, `INSERT INTO notes (userId, note, dateAdded, status, lastIncludedDate, isAnonymous) VALUES (?, ?, ?, ?, ?, ?)`, [
-		note.userId,
-		note.note,
-		note.dateAdded,
-		note.status ?? 'pending',
-		note.lastIncludedDate ?? null,
-		note.isAnonymous ?? 0,
-	]);
+	return run(
+		db,
+		`INSERT INTO notes (userId, note, dateAdded, status, lastIncludedDate, lastIncludedSessionId, isAnonymous) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		[note.userId, note.note, note.dateAdded, note.status ?? 'pending', note.lastIncludedDate ?? null, note.lastIncludedSessionId ?? null, note.isAnonymous ?? 0]
+	);
 }
 
 function run(db: sqlite3.Database, sql: string, params: unknown[] = []): Promise<void> {

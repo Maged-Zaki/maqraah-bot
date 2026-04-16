@@ -5,6 +5,7 @@ export const REMINDER_CUSTOM_ID_PREFIX = 'reminder';
 export const reminderActions = {
 	JOINING_SHORTLY: 'joining-shortly',
 	CANNOT_MAKE_IT: 'cannot-make-it',
+	CARRY_OVER_NOTES: 'carry-over-notes',
 } as const;
 
 export type ReminderAction = (typeof reminderActions)[keyof typeof reminderActions];
@@ -65,6 +66,16 @@ export function buildReminderActionRows(sessionId: string = getReminderSessionId
 		.setDisabled(disabled);
 
 	return [new ActionRowBuilder<ButtonBuilder>().addComponents(joiningShortlyButton, cannotMakeItButton)];
+}
+
+export function buildNotesCarryOverActionRows(sessionId: string = getReminderSessionId(), disabled: boolean = false): ActionRowBuilder<ButtonBuilder>[] {
+	const carryOverNotesButton = new ButtonBuilder()
+		.setCustomId(buildReminderActionCustomId(reminderActions.CARRY_OVER_NOTES, sessionId))
+		.setLabel('رحّل الملاحظات لمقراة بكرة')
+		.setStyle(ButtonStyle.Primary)
+		.setDisabled(disabled);
+
+	return [new ActionRowBuilder<ButtonBuilder>().addComponents(carryOverNotesButton)];
 }
 
 function isReminderAction(action: string | undefined): action is ReminderAction {

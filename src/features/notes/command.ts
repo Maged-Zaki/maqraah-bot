@@ -10,6 +10,7 @@ import {
 	noteSearchStatuses,
 	parseSearchDateRange,
 } from './search';
+import { requestNotesDeletionConfirmation } from './deleteConfirmations';
 
 const subcommands = {
 	CREATE: 'create',
@@ -337,36 +338,15 @@ export async function execute(interaction: any) {
 				// Map positions to notes (position 1 = index 0) and collect info for display
 				const notesToDelete = uniquePositions.map((pos) => ({
 					position: pos,
-					id: allNotes[pos - 1].id,
-					note: allNotes[pos - 1].note,
-					userId: allNotes[pos - 1].userId,
+					note: allNotes[pos - 1],
 				}));
-				const noteIdsToDelete = notesToDelete.map((n) => n.id);
-
-				// Delete the notes
-				await notesRepository.deleteNotes(noteIdsToDelete);
-
-				logger.info(`Deleted ${noteIdsToDelete.length} notes at positions: ${uniquePositions.join(', ')}`, discordContext, {
-					operationType: 'note_delete',
-					operationStatus: 'success',
-				});
-				logger.recordNoteEvent({
-					userId: interaction.user.id,
-					username: interaction.user.username,
-					guildId: interaction.guildId?.toString(),
-					channelId: interaction.channelId?.toString(),
-					noteCount: noteIdsToDelete.length,
-					noteIds: noteIdsToDelete,
-					operation: 'deleted',
-				});
-
-				// Format deleted notes for display
-				const deletedNotesList = notesToDelete.map((n) => `**#${n.position}**: ${n.note}`).join('\n');
-				const replyContent = `Deleted ${noteIdsToDelete.length} note(s):\n\n${deletedNotesList}`;
-
-				await interaction.reply({
-					content: replyContent,
-					flags: MessageFlags.Ephemeral,
+				await requestNotesDeletionConfirmation({
+					interaction,
+					notes: notesToDelete.map((selectedNote) => selectedNote.note),
+					repository: notesRepository,
+					discordContext,
+					scope: 'selected',
+					positionsById: new Map(notesToDelete.map((selectedNote) => [selectedNote.note.id, selectedNote.position])),
 				});
 				break;
 			}
@@ -383,24 +363,13 @@ export async function execute(interaction: any) {
 					return;
 				}
 
-				const noteIds = pendingNotes.map((n) => n.id);
-				await notesRepository.deleteNotes(noteIds);
-
-				logger.info(`Deleted ${pendingNotes.length} notes for user ${interaction.user.id}`, discordContext, {
-					operationType: 'note_delete',
-					operationStatus: 'success',
+				await requestNotesDeletionConfirmation({
+					interaction,
+					notes: pendingNotes,
+					repository: notesRepository,
+					discordContext,
+					scope: 'mine',
 				});
-				logger.recordNoteEvent({
-					userId: interaction.user.id,
-					username: interaction.user.username,
-					guildId: interaction.guildId?.toString(),
-					channelId: interaction.channelId?.toString(),
-					noteCount: pendingNotes.length,
-					noteIds,
-					operation: 'deleted',
-				});
-
-				await interaction.reply({ content: `Removed ${pendingNotes.length} note(s).`, flags: MessageFlags.Ephemeral });
 				break;
 			}
 			case subcommands.DELETE_ALL: {
@@ -412,11 +381,13 @@ export async function execute(interaction: any) {
 					return;
 				}
 
-				await notesRepository.deleteAllNotes();
-
-				logger.info(`Deleted all ${notes.length} notes`, discordContext, { operationType: 'note_delete_all', operationStatus: 'success' });
-
-				await interaction.reply({ content: `Removed \`${notes.length}\` notes for all users.` });
+				await requestNotesDeletionConfirmation({
+					interaction,
+					notes,
+					repository: notesRepository,
+					discordContext,
+					scope: 'all',
+				});
 				break;
 			}
 			case subcommands.CARRY_OVER_LAST_NOTES: {

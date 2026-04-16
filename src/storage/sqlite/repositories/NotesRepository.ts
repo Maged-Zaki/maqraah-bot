@@ -8,6 +8,7 @@ export interface Note {
 	dateAdded: string;
 	status?: string;
 	lastIncludedDate?: string;
+	lastIncludedSessionId?: string;
 	isAnonymous?: boolean | number | null;
 }
 
@@ -172,13 +173,15 @@ export class NotesRepository {
 		});
 	}
 
-	async updateNotesStatusWithDate(noteIds: number[], status: string, lastIncludedDate: string): Promise<void> {
+	async updateNotesStatusWithDate(noteIds: number[], status: string, lastIncludedDate: string, lastIncludedSessionId?: string): Promise<void> {
 		const startTime = Date.now();
 		const placeholders = noteIds.map(() => '?').join(',');
+		const sessionIdUpdate = lastIncludedSessionId ? ', lastIncludedSessionId = ?' : '';
+		const params = lastIncludedSessionId ? [status, lastIncludedDate, lastIncludedSessionId, ...noteIds] : [status, lastIncludedDate, ...noteIds];
 		return new Promise((resolve, reject) => {
 			this.db.run(
-				`UPDATE notes SET status = ?, lastIncludedDate = ? WHERE id IN (${placeholders})`,
-				[status, lastIncludedDate, ...noteIds],
+				`UPDATE notes SET status = ?, lastIncludedDate = ?${sessionIdUpdate} WHERE id IN (${placeholders})`,
+				params,
 				function (err) {
 					const duration = Date.now() - startTime;
 					if (err) {
@@ -212,6 +215,31 @@ export class NotesRepository {
 					resolve(rows);
 				}
 			});
+		});
+	}
+
+	async getIncludedNotesBySessionId(sessionId: string): Promise<Note[]> {
+		const startTime = Date.now();
+		return new Promise((resolve, reject) => {
+			this.db.all(
+				`SELECT * FROM notes WHERE status = 'included' AND lastIncludedSessionId = ? ORDER BY dateAdded ASC, id ASC`,
+				[sessionId],
+				(err, rows: Note[]) => {
+					const duration = Date.now() - startTime;
+					if (err) {
+						logger.error('Failed to get included notes by session ID', err, undefined, {
+							operationType: 'database_read',
+							operationStatus: 'failure',
+							duration,
+						});
+						logger.recordDatabaseEvent('read', 'notes', duration, false, err.message);
+						reject(err);
+					} else {
+						logger.recordDatabaseEvent('read', 'notes', duration, true);
+						resolve(rows);
+					}
+				}
+			);
 		});
 	}
 

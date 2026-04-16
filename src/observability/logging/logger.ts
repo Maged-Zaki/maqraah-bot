@@ -75,7 +75,7 @@ export interface NoteEventData {
 	noteCount?: number;
 	noteContent?: string;
 	noteIds?: number[];
-	operation: 'created' | 'viewed' | 'deleted' | 'included_in_reminder';
+	operation: 'created' | 'viewed' | 'deleted' | 'included_in_reminder' | 'carried_over';
 }
 
 // Create Winston logger with New Relic format enrichment

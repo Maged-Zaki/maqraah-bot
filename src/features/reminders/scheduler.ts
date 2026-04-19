@@ -3,9 +3,11 @@ import * as cron from 'node-cron';
 import { configurationRepository, notesRepository, progressRepository, reminderEventsRepository } from '../../storage/sqlite';
 import { logger } from '../../observability/logging/logger';
 import { normalizeTimeZone, parseTimeToCron } from '../../shared/time';
-import { buildReminderActionRows, getReminderSessionId } from './components';
+import { announcePendingAttendance } from './attendance';
+import { buildReminderActionRows } from './components';
 import { buildReminderStageSchedules, reminderStages, ReminderStage, ReminderStageSchedule } from './cadence';
 import { buildPreReminderMessage, buildReminderMessages } from './messages';
+import { getReminderSessionId } from './sessionId';
 
 export let scheduledJob: cron.ScheduledTask | null = null;
 export let scheduledJobs: cron.ScheduledTask[] = [];
@@ -165,13 +167,22 @@ async function sendReminderStage(client: Client, stage: ReminderStage, sessionId
 
 	switch (stage) {
 		case reminderStages.PRE:
-			await (channel as any).send({ content: buildPreReminderMessage(configuration), components: buildReminderActionRows(sessionId) });
+			await sendPreReminderStage(channel as any, configuration, sessionId);
 			logger.recordReminderSentEvent(process.env.GUILD_ID!, process.env.CHANNEL_ID!, 0, true);
 			return;
 		case reminderStages.MAIN:
 			await sendMainReminder(channel, configuration, sessionId);
 			return;
 	}
+}
+
+export async function sendPreReminderStage(
+	channel: { send: (options: { content: string; components?: ReturnType<typeof buildReminderActionRows> }) => Promise<unknown> },
+	configuration: Awaited<ReturnType<typeof configurationRepository.getConfiguration>>,
+	sessionId: string
+): Promise<void> {
+	await channel.send({ content: buildPreReminderMessage(configuration), components: buildReminderActionRows(sessionId) });
+	await announcePendingAttendance(channel, sessionId);
 }
 
 async function sendMainReminder(channel: any, configuration: Awaited<ReturnType<typeof configurationRepository.getConfiguration>>, sessionId: string): Promise<void> {

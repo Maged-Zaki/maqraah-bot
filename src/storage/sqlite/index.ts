@@ -103,6 +103,7 @@ db.serialize(() => {
 	     userId TEXT NOT NULL,
 	     status TEXT NOT NULL,
 	     updatedAt TEXT NOT NULL,
+	     announcedAt TEXT,
 	     UNIQUE(sessionId, userId)
 	   )
 	 `,
@@ -112,6 +113,8 @@ db.serialize(() => {
 			}
 		}
 	);
+
+	addColumnIfMissing('attendance', 'announcedAt TEXT');
 
 	db.run(
 		`

@@ -1,4 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { getReminderSessionId } from './sessionId';
 
 export const REMINDER_CUSTOM_ID_PREFIX = 'reminder';
 
@@ -13,28 +14,6 @@ export type ReminderAction = (typeof reminderActions)[keyof typeof reminderActio
 export interface ReminderActionCustomId {
 	action: ReminderAction;
 	sessionId: string;
-}
-
-export function getReminderSessionId(date: Date = new Date(), timezone?: string): string {
-	if (!timezone) {
-		return date.toISOString().slice(0, 10);
-	}
-
-	const dateParts = new Intl.DateTimeFormat('en-US', {
-		timeZone: timezone,
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit',
-	}).formatToParts(date);
-	const year = dateParts.find((part) => part.type === 'year')?.value;
-	const month = dateParts.find((part) => part.type === 'month')?.value;
-	const day = dateParts.find((part) => part.type === 'day')?.value;
-
-	if (!year || !month || !day) {
-		return date.toISOString().slice(0, 10);
-	}
-
-	return `${year}-${month}-${day}`;
 }
 
 export function buildReminderActionCustomId(action: ReminderAction, sessionId: string = getReminderSessionId()): string {

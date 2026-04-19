@@ -1,0 +1,220 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { MessageFlags } from 'discord.js';
+import { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
+
+process.env.DATABASE_PATH ??= ':memory:';
+
+const { attendanceRepository, configurationRepository, reminderEventsRepository } = require('../../storage/sqlite') as typeof import('../../storage/sqlite');
+const { attendanceStatuses } = require('./attendance') as typeof import('./attendance');
+const { handleMaqraahCommand } = require('./command') as typeof import('./command');
+
+test('cannot-attend preregisters the upcoming maqraah for today before reminder time', { concurrency: false }, async () => {
+	const replies: any[] = [];
+	const upserts: Array<{ sessionId: string; userId: string; status: string; announcedAt: string | null }> = [];
+
+	await withCommandRepositoryMocks(
+		{
+			getConfiguration: async () => buildConfiguration({ dailyTime: '7:00 PM', timezone: 'UTC' }),
+			hasSentEvent: async () => false,
+			upsertAttendance: async (sessionId: string, userId: string, status: string, announcedAt: string | null = null) => {
+				upserts.push({ sessionId, userId, status, announcedAt });
+			},
+		},
+		async () => {
+			await handleMaqraahCommand(
+				buildInteraction({
+					subcommand: 'cannot-attend-upcoming-maqraah',
+					replies,
+				}) as any,
+				new Date('2026-04-15T18:59:00.000Z')
+			);
+		}
+	);
+
+	assert.deepEqual(upserts, [{ sessionId: '2026-04-15', userId: 'user-1', status: attendanceStatuses.CANNOT_MAKE_IT, announcedAt: null }]);
+	assert.deepEqual(replies, [{ content: 'You are marked as unable to attend the upcoming maqraah.', flags: MessageFlags.Ephemeral }]);
+});
+
+test('will-be-late preregisters the next day once reminder time is reached', { concurrency: false }, async () => {
+	const replies: any[] = [];
+	const upserts: Array<{ sessionId: string; userId: string; status: string; announcedAt: string | null }> = [];
+
+	await withCommandRepositoryMocks(
+		{
+			getConfiguration: async () => buildConfiguration({ dailyTime: '7:00 PM', timezone: 'UTC' }),
+			hasSentEvent: async () => false,
+			upsertAttendance: async (sessionId: string, userId: string, status: string, announcedAt: string | null = null) => {
+				upserts.push({ sessionId, userId, status, announcedAt });
+			},
+		},
+		async () => {
+			await handleMaqraahCommand(
+				buildInteraction({
+					subcommand: 'will-be-late-upcoming-maqraah',
+					replies,
+				}) as any,
+				new Date('2026-04-15T19:00:00.000Z')
+			);
+		}
+	);
+
+	assert.deepEqual(upserts, [{ sessionId: '2026-04-16', userId: 'user-1', status: attendanceStatuses.LATE, announcedAt: null }]);
+	assert.deepEqual(replies, [{ content: 'You are marked as arriving late for the upcoming maqraah.', flags: MessageFlags.Ephemeral }]);
+});
+
+test('clear-upcoming-maqraah-status deletes preregistered attendance', { concurrency: false }, async () => {
+	const replies: any[] = [];
+	const clears: Array<{ sessionId: string; userId: string }> = [];
+
+	await withCommandRepositoryMocks(
+		{
+			getConfiguration: async () => buildConfiguration({ dailyTime: '7:00 PM', timezone: 'UTC' }),
+			hasSentEvent: async () => false,
+			deleteAttendance: async (sessionId: string, userId: string) => {
+				clears.push({ sessionId, userId });
+				return true;
+			},
+		},
+		async () => {
+			await handleMaqraahCommand(
+				buildInteraction({
+					subcommand: 'clear-upcoming-maqraah-status',
+					replies,
+				}) as any,
+				new Date('2026-04-15T18:00:00.000Z')
+			);
+		}
+	);
+
+	assert.deepEqual(clears, [{ sessionId: '2026-04-15', userId: 'user-1' }]);
+	assert.deepEqual(replies, [{ content: 'Your upcoming maqraah preregistration was cleared.', flags: MessageFlags.Ephemeral }]);
+});
+
+test('maqraah preregistration refuses when pre-reminders are disabled', { concurrency: false }, async () => {
+	const replies: any[] = [];
+
+	await withCommandRepositoryMocks(
+		{
+			getConfiguration: async () => buildConfiguration({ preReminderEnabled: 0 }),
+		},
+		async () => {
+			await handleMaqraahCommand(
+				buildInteraction({
+					subcommand: 'cannot-attend-upcoming-maqraah',
+					replies,
+				}) as any,
+				new Date('2026-04-15T18:00:00.000Z')
+			);
+		}
+	);
+
+	assert.deepEqual(replies, [
+		{
+			content: 'Pre-reminders are disabled right now, so preregistering for the upcoming maqraah is unavailable.',
+			flags: MessageFlags.Ephemeral,
+		},
+	]);
+});
+
+test('maqraah preregistration refuses after the pre reminder already went out', { concurrency: false }, async () => {
+	const replies: any[] = [];
+
+	await withCommandRepositoryMocks(
+		{
+			getConfiguration: async () => buildConfiguration({ dailyTime: '7:00 PM', timezone: 'UTC' }),
+			hasSentEvent: async () => true,
+		},
+		async () => {
+			await handleMaqraahCommand(
+				buildInteraction({
+					subcommand: 'cannot-attend-upcoming-maqraah',
+					replies,
+				}) as any,
+				new Date('2026-04-15T18:00:00.000Z')
+			);
+		}
+	);
+
+	assert.deepEqual(replies, [
+		{
+			content: 'The pre-maqraah reminder for that session has already been sent. Please use the reminder buttons instead.',
+			flags: MessageFlags.Ephemeral,
+		},
+	]);
+});
+
+async function withCommandRepositoryMocks(
+	overrides: Partial<
+		Pick<typeof configurationRepository, 'getConfiguration'> &
+			Pick<typeof reminderEventsRepository, 'hasSentEvent'> &
+			Pick<typeof attendanceRepository, 'upsertAttendance' | 'deleteAttendance'>
+	>,
+	callback: () => Promise<void>
+): Promise<void> {
+	const originalGetConfiguration = configurationRepository.getConfiguration;
+	const originalHasSentEvent = reminderEventsRepository.hasSentEvent;
+	const originalUpsertAttendance = attendanceRepository.upsertAttendance;
+	const originalDeleteAttendance = attendanceRepository.deleteAttendance;
+
+	if (overrides.getConfiguration) {
+		configurationRepository.getConfiguration = overrides.getConfiguration;
+	}
+
+	if (overrides.hasSentEvent) {
+		reminderEventsRepository.hasSentEvent = overrides.hasSentEvent;
+	}
+
+	if (overrides.upsertAttendance) {
+		attendanceRepository.upsertAttendance = overrides.upsertAttendance;
+	}
+
+	if (overrides.deleteAttendance) {
+		attendanceRepository.deleteAttendance = overrides.deleteAttendance;
+	}
+
+	try {
+		await callback();
+	} finally {
+		configurationRepository.getConfiguration = originalGetConfiguration;
+		reminderEventsRepository.hasSentEvent = originalHasSentEvent;
+		attendanceRepository.upsertAttendance = originalUpsertAttendance;
+		attendanceRepository.deleteAttendance = originalDeleteAttendance;
+	}
+}
+
+function buildInteraction(options: { subcommand: string; replies: any[] }): Record<string, unknown> {
+	return {
+		options: {
+			getSubcommand: () => options.subcommand,
+		},
+		user: {
+			id: 'user-1',
+			username: 'User One',
+		},
+		guildId: 'guild-1',
+		channelId: 'channel-1',
+		reply: async (payload: any) => {
+			options.replies.push(payload);
+		},
+	};
+}
+
+function buildConfiguration(configuration: Partial<Configuration>): Configuration {
+	return {
+		roleId: 'role-id',
+		dailyTime: '1:00 PM',
+		timezone: 'Africa/Cairo',
+		voiceChannelId: '',
+		preReminderEnabled: 1,
+		preReminderOffsetMinutes: 5,
+		mainReminderEnabled: 1,
+		maqraahTimeSyncEnabled: 0,
+		maqraahTimeSyncOffsetMinutes: 30,
+		maqraahTimeSyncLatitude: 30.0444,
+		maqraahTimeSyncLongitude: 31.2357,
+		maqraahTimeSyncCalculationMethod: 5,
+		welcomeSentAt: null,
+		...configuration,
+	};
+}

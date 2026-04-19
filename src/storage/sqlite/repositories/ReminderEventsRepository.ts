@@ -41,4 +41,30 @@ export class ReminderEventsRepository {
 			);
 		});
 	}
+
+	async hasSentEvent(sessionId: string, stage: ReminderStage): Promise<boolean> {
+		const startTime = Date.now();
+
+		return new Promise((resolve, reject) => {
+			this.db.get(
+				`SELECT 1 FROM reminder_events WHERE sessionId = ? AND stage = ? LIMIT 1`,
+				[sessionId, stage],
+				(err, row: { 1: number } | undefined) => {
+					const duration = Date.now() - startTime;
+					if (err) {
+						logger.error('Failed to check reminder event', err, undefined, {
+							operationType: 'database_read',
+							operationStatus: 'failure',
+							duration,
+						});
+						logger.recordDatabaseEvent('read', 'reminder_events', duration, false, err.message);
+						reject(err);
+					} else {
+						logger.recordDatabaseEvent('read', 'reminder_events', duration, true);
+						resolve(Boolean(row));
+					}
+				}
+			);
+		});
+	}
 }

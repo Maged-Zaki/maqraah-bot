@@ -1,6 +1,7 @@
 import { ButtonInteraction, MessageFlags } from 'discord.js';
 import { attendanceRepository, notesRepository } from '../../storage/sqlite';
 import { logger, DiscordContext } from '../../observability/logging/logger';
+import { announceAttendanceStatus, attendanceStatuses, AttendanceStatus } from './attendance';
 import { buildNotesCarryOverActionRows, parseReminderActionCustomId, reminderActions } from './components';
 
 export async function handleReminderButtonInteraction(interaction: ButtonInteraction): Promise<boolean> {
@@ -14,14 +15,10 @@ export async function handleReminderButtonInteraction(interaction: ButtonInterac
 	try {
 		switch (parsedCustomId.action) {
 			case reminderActions.JOINING_SHORTLY:
-				await interaction.deferUpdate();
-				await attendanceRepository.upsertAttendance(parsedCustomId.sessionId, interaction.user.id, 'late');
-				await sendChannelMessage(interaction, `<@${interaction.user.id}> هيتأخر شوية عن المقراة.`);
+				await handleAttendanceSelection(interaction, parsedCustomId.sessionId, attendanceStatuses.LATE);
 				break;
 			case reminderActions.CANNOT_MAKE_IT:
-				await interaction.deferUpdate();
-				await attendanceRepository.upsertAttendance(parsedCustomId.sessionId, interaction.user.id, 'cannot_make_it');
-				await sendChannelMessage(interaction, `<@${interaction.user.id}> مش هيقدر يحضر المقراة النهارده.`);
+				await handleAttendanceSelection(interaction, parsedCustomId.sessionId, attendanceStatuses.CANNOT_MAKE_IT);
 				break;
 			case reminderActions.CARRY_OVER_NOTES:
 				await carryOverReminderNotes(interaction, parsedCustomId.sessionId);
@@ -45,13 +42,21 @@ export async function handleReminderButtonInteraction(interaction: ButtonInterac
 	return true;
 }
 
-async function sendChannelMessage(interaction: ButtonInteraction, content: string): Promise<void> {
+async function handleAttendanceSelection(interaction: ButtonInteraction, sessionId: string, status: AttendanceStatus): Promise<void> {
+	await interaction.deferUpdate();
+
+	const existingAttendance = await attendanceRepository.getAttendance(sessionId, interaction.user.id);
+	if (existingAttendance?.status === status && existingAttendance.announcedAt) {
+		return;
+	}
+
 	const channel = interaction.message.channel;
-	if (!channel.isSendable()) {
+	if (!channel?.isSendable()) {
 		throw new Error('Reminder action channel is not sendable.');
 	}
 
-	await channel.send({ content });
+	await attendanceRepository.upsertAttendance(sessionId, interaction.user.id, status, null);
+	await announceAttendanceStatus(channel, sessionId, interaction.user.id, status);
 }
 
 async function carryOverReminderNotes(interaction: ButtonInteraction, sessionId: string): Promise<void> {
@@ -71,7 +76,11 @@ async function carryOverReminderNotes(interaction: ButtonInteraction, sessionId:
 	await interaction.update({
 		components: buildNotesCarryOverActionRows(sessionId, true),
 	});
-	await sendChannelMessage(interaction, `تم ترحيل ${notes.length} ملاحظة لمقراة بكرة إن شاء الله.`);
+	const channel = interaction.message.channel;
+	if (!channel?.isSendable()) {
+		throw new Error('Reminder action channel is not sendable.');
+	}
+	await channel.send({ content: `تم ترحيل ${notes.length} ملاحظة لمقراة بكرة إن شاء الله.` });
 
 	logger.recordNoteEvent({
 		userId: interaction.user.id,

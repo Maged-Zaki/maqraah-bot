@@ -22,7 +22,7 @@ test('generic scheduler sends active recurring schedules on selected weekdays', 
 					weekdays: '1,4',
 					time: '7:30 PM',
 					message: '<@&role-1> Team meeting starts soon.',
-					mentionUserIds: '123,456',
+					mentionUserIds: 'user:123,role:456',
 				}),
 			recordScheduleRun: async (id: number) => {
 				recordedRuns.push(id);
@@ -34,7 +34,7 @@ test('generic scheduler sends active recurring schedules on selected weekdays', 
 	);
 
 	assert.deepEqual(recordedRuns, [10]);
-	assert.equal(sentPayloads[0].content, '<@123> <@456>\n<@&role-1> Team meeting starts soon.');
+	assert.equal(sentPayloads[0].content, '<@123> <@&456>\n<@&role-1> Team meeting starts soon.');
 	assert.deepEqual(sentPayloads[0].allowedMentions, { parse: ['users', 'roles'] });
 });
 

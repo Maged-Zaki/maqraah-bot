@@ -40,7 +40,7 @@ test('/schedule create-recurring saves the schedule from command options', { con
 						days: 'monday, thursday',
 						time: '7:30 PM',
 						message: '<@&role-1> Team meeting starts soon.',
-						people: '<@123> <@456>',
+						people: '<@123> <@&456>',
 					},
 					client: createClient(sentMessages),
 					reply: (payload) => {
@@ -54,11 +54,11 @@ test('/schedule create-recurring saves the schedule from command options', { con
 	assert.equal(createdInput.name, 'Team meeting');
 	assert.equal(createdInput.weekdays, '1,4');
 	assert.equal(createdInput.time, '7:30 PM');
-	assert.equal(createdInput.mentionUserIds, '123,456');
+	assert.equal(createdInput.mentionUserIds, 'user:123,role:456');
 	assert.equal(createdInput.creatorUserId, 'user-1');
 	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
 	assert.equal(getEmbedFields(replyPayload).When, 'Monday and Thursday at 7:30 PM');
-	assert.equal(getEmbedFields(replyPayload).People, '<@123> <@456>');
+	assert.equal(getEmbedFields(replyPayload).People, '<@123> <@&456>');
 	assert.equal(sentMessages.length, 1);
 });
 
@@ -92,7 +92,7 @@ test('/schedule create-recurring notifies mentioned people after creation', { co
 						days: 'monday, thursday',
 						time: '7:30 PM',
 						message: 'Team meeting starts soon.',
-						people: '<@123> <@!456>, <@123>',
+						people: '<@123> <@!456>, <@&789>, <@123>, <@&789>',
 					},
 					client: createClient(sentMessages),
 					reply: (payload) => {
@@ -104,13 +104,13 @@ test('/schedule create-recurring notifies mentioned people after creation', { co
 	);
 
 	assert.equal(createdInput.name, 'Team meeting');
-	assert.equal(createdInput.mentionUserIds, '123,456');
+	assert.equal(createdInput.mentionUserIds, 'user:123,user:456,role:789');
 	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
 	assert.equal(sentMessages.length, 1);
-	assert.match(sentMessages[0].content, /^<@123> <@456>/);
+	assert.match(sentMessages[0].content, /^<@123> <@456> <@&789>/);
 	assert.match(sentMessages[0].content, /Team meeting/);
 	assert.match(sentMessages[0].content, /Monday and Thursday at 7:30 PM/);
-	assert.deepEqual(sentMessages[0].allowedMentions, { users: ['123', '456'] });
+	assert.deepEqual(sentMessages[0].allowedMentions, { users: ['123', '456'], roles: ['789'] });
 });
 
 test('/schedule create-recurring rejects invalid days', { concurrency: false }, async () => {
@@ -235,7 +235,7 @@ test('/schedule create-one-time saves date and time from command options', { con
 						date: '2099-04-20',
 						time: '8:05 AM',
 						message: 'Appointment starts soon.',
-						people: '<@789>',
+						people: '<@789> <@&987>',
 					},
 					client: createClient(sentMessages),
 					reply: (payload) => {
@@ -249,10 +249,10 @@ test('/schedule create-one-time saves date and time from command options', { con
 	assert.equal(createdInput.type, scheduleTypes.ONE_TIME);
 	assert.equal(createdInput.oneTimeDate, '2099-04-20');
 	assert.equal(createdInput.time, '8:05 AM');
-	assert.equal(createdInput.mentionUserIds, '789');
+	assert.equal(createdInput.mentionUserIds, 'user:789,role:987');
 	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
 	assert.equal(getEmbedFields(replyPayload).When, '2099-04-20 at 8:05 AM');
-	assert.equal(getEmbedFields(replyPayload).People, '<@789>');
+	assert.equal(getEmbedFields(replyPayload).People, '<@789> <@&987>');
 	assert.equal(sentMessages.length, 1);
 });
 
@@ -285,7 +285,7 @@ test('/schedule create-one-time notifies mentioned people after creation', { con
 						date: '2099-04-20',
 						time: '8:05 AM',
 						message: 'Appointment starts soon.',
-						people: '<@789>',
+						people: '<@789> <@&987>',
 					},
 					client: createClient(sentMessages),
 					reply: (payload) => {
@@ -298,9 +298,9 @@ test('/schedule create-one-time notifies mentioned people after creation', { con
 
 	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
 	assert.equal(sentMessages.length, 1);
-	assert.match(sentMessages[0].content, /^<@789>/);
+	assert.match(sentMessages[0].content, /^<@789> <@&987>/);
 	assert.match(sentMessages[0].content, /2099-04-20 at 8:05 AM/);
-	assert.deepEqual(sentMessages[0].allowedMentions, { users: ['789'] });
+	assert.deepEqual(sentMessages[0].allowedMentions, { users: ['789'], roles: ['987'] });
 });
 
 test('/schedule create-one-time rejects invalid date', { concurrency: false }, async () => {
@@ -388,7 +388,7 @@ test('/schedule update changes a recurring schedule from command options', { con
 						days: 'weekdays',
 						time: '8:00 PM',
 						message: 'Planning starts soon.',
-						people: '<@789>',
+						people: '<@789> <@&987>',
 					},
 					client: createClient(sentMessages),
 					reply: (payload) => {
@@ -403,16 +403,16 @@ test('/schedule update changes a recurring schedule from command options', { con
 		name: 'Planning',
 		time: '8:00 PM',
 		message: 'Planning starts soon.',
-		mentionUserIds: '789',
+		mentionUserIds: 'user:789,role:987',
 		weekdays: '1,2,3,4,5',
 		status: scheduleStatuses.ACTIVE,
 	});
 	assert.equal(getEmbedFields(replyPayload).When, 'weekdays at 8:00 PM');
-	assert.equal(getEmbedFields(replyPayload).People, '<@789>');
+	assert.equal(getEmbedFields(replyPayload).People, '<@789> <@&987>');
 	assert.equal(sentMessages.length, 1);
-	assert.match(sentMessages[0].content, /^<@789>/);
+	assert.match(sentMessages[0].content, /^<@789> <@&987>/);
 	assert.match(sentMessages[0].content, /Schedule \*\*Planning\*\* was updated: weekdays at 8:00 PM/);
-	assert.deepEqual(sentMessages[0].allowedMentions, { users: ['789'] });
+	assert.deepEqual(sentMessages[0].allowedMentions, { users: ['789'], roles: ['987'] });
 });
 
 test('/schedule update leaves people unchanged when people is omitted', { concurrency: false }, async () => {
@@ -523,7 +523,7 @@ test('/schedule update changes people from command options', { concurrency: fals
 					subcommand: 'update',
 					strings: {
 						name: 'Team meeting',
-						people: '<@456> <@!789>',
+						people: '<@456> <@!789> <@&987>',
 					},
 					client: createClient(sentMessages),
 					reply: (payload) => {
@@ -535,10 +535,10 @@ test('/schedule update changes people from command options', { concurrency: fals
 	);
 
 	assert.deepEqual(updateInput, {
-		mentionUserIds: '456,789',
+		mentionUserIds: 'user:456,user:789,role:987',
 		status: scheduleStatuses.ACTIVE,
 	});
-	assert.equal(getEmbedFields(replyPayload).People, '<@456> <@789>');
+	assert.equal(getEmbedFields(replyPayload).People, '<@456> <@789> <@&987>');
 	assert.equal(sentMessages.length, 0);
 });
 

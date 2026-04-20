@@ -6,7 +6,7 @@ import { logger, DiscordContext } from '../../observability/logging/logger';
 import { parseReminderTime } from '../../shared/time';
 import { getScheduleDisplayContext } from './context';
 import { buildScheduleListReply, buildScheduleSavedReply, buildScheduleShowReply, formatScheduleTiming } from './display';
-import { formatUserMentions, parseMentionUserIds, parsePeopleMentions, serializeMentionUserIds } from './mentions';
+import { formatMentionTargets, parsePeopleMentions, parseStoredMentionTargets, serializeMentionTargets } from './mentions';
 import {
 	isOneTimeScheduleDateTimeInFuture,
 	isValidScheduleDate,
@@ -53,7 +53,7 @@ export const data = new SlashCommandBuilder()
 			.addStringOption((option) =>
 				option
 					.setName(options.PEOPLE)
-					.setDescription('People to mention when this schedule fires, e.g. @user @user2')
+					.setDescription('People or roles to mention when this schedule fires, e.g. @user @role')
 					.setRequired(true)
 			)
 	)
@@ -68,7 +68,7 @@ export const data = new SlashCommandBuilder()
 			.addStringOption((option) =>
 				option
 					.setName(options.PEOPLE)
-					.setDescription('People to mention when this schedule fires, e.g. @user @user2')
+					.setDescription('People or roles to mention when this schedule fires, e.g. @user @role')
 					.setRequired(true)
 			)
 	)
@@ -82,7 +82,7 @@ export const data = new SlashCommandBuilder()
 			.addStringOption((option) => option.setName(options.DATE).setDescription('One-time date in YYYY-MM-DD'))
 			.addStringOption((option) => option.setName(options.TIME).setDescription('Time of day, e.g. 7:30 PM'))
 			.addStringOption((option) => option.setName(options.MESSAGE).setDescription('Reminder message'))
-			.addStringOption((option) => option.setName(options.PEOPLE).setDescription('People to mention when this schedule fires, e.g. @user @user2'))
+			.addStringOption((option) => option.setName(options.PEOPLE).setDescription('People or roles to mention when this schedule fires, e.g. @user @role'))
 	)
 	.addSubcommand((subcommand) =>
 		subcommand
@@ -177,7 +177,7 @@ async function handleCreateRecurring(interaction: any, discordContext: DiscordCo
 	}
 
 	if (!people.valid) {
-		await interaction.reply({ content: 'Invalid people list. Please mention Discord users like `@user @user2`.', flags: MessageFlags.Ephemeral });
+		await interaction.reply({ content: 'Invalid people list. Please mention Discord users or roles like `@user @role`.', flags: MessageFlags.Ephemeral });
 		return;
 	}
 
@@ -188,7 +188,7 @@ async function handleCreateRecurring(interaction: any, discordContext: DiscordCo
 		oneTimeDate: null,
 		time: parsedTime.displayTime,
 		message,
-		mentionUserIds: serializeMentionUserIds(people.userIds),
+		mentionUserIds: serializeMentionTargets(people.targets),
 		creatorUserId: interaction.user.id,
 	});
 
@@ -232,7 +232,7 @@ async function handleCreateOneTime(interaction: any, discordContext: DiscordCont
 	}
 
 	if (!people.valid) {
-		await interaction.reply({ content: 'Invalid people list. Please mention Discord users like `@user @user2`.', flags: MessageFlags.Ephemeral });
+		await interaction.reply({ content: 'Invalid people list. Please mention Discord users or roles like `@user @role`.', flags: MessageFlags.Ephemeral });
 		return;
 	}
 
@@ -254,7 +254,7 @@ async function handleCreateOneTime(interaction: any, discordContext: DiscordCont
 		oneTimeDate: date,
 		time: parsedTime.displayTime,
 		message,
-		mentionUserIds: serializeMentionUserIds(people.userIds),
+		mentionUserIds: serializeMentionTargets(people.targets),
 		creatorUserId: interaction.user.id,
 	});
 
@@ -312,10 +312,10 @@ async function handleUpdate(interaction: any, discordContext: DiscordContext): P
 	if (people !== null) {
 		const parsedPeople = parsePeopleMentions(people, true);
 		if (!parsedPeople.valid) {
-			await interaction.reply({ content: 'Invalid people list. Please mention Discord users like `@user @user2`.', flags: MessageFlags.Ephemeral });
+			await interaction.reply({ content: 'Invalid people list. Please mention Discord users or roles like `@user @role`.', flags: MessageFlags.Ephemeral });
 			return;
 		}
-		updates.mentionUserIds = serializeMentionUserIds(parsedPeople.userIds);
+		updates.mentionUserIds = serializeMentionTargets(parsedPeople.targets);
 	}
 
 	const days = interaction.options.getString(options.DAYS);
@@ -485,9 +485,18 @@ async function sendSchedulePeopleNotification(
 		rejectedMessageWarning: string;
 	}
 ): Promise<string | null> {
-	const userIds = parseMentionUserIds(schedule.mentionUserIds);
-	if (userIds.length === 0) {
+	const targets = parseStoredMentionTargets(schedule.mentionUserIds);
+	if (targets.length === 0) {
 		return null;
+	}
+	const userIds = targets.filter((target) => target.type === 'user').map((target) => target.id);
+	const roleIds = targets.filter((target) => target.type === 'role').map((target) => target.id);
+	const allowedMentions: { users?: string[]; roles?: string[] } = {};
+	if (userIds.length > 0) {
+		allowedMentions.users = userIds;
+	}
+	if (roleIds.length > 0) {
+		allowedMentions.roles = roleIds;
 	}
 
 	const channelId = process.env.CHANNEL_ID;
@@ -503,30 +512,42 @@ async function sendSchedulePeopleNotification(
 	try {
 		await channel.send({
 			content: options.content,
-			allowedMentions: { users: userIds },
+			allowedMentions,
 		});
 		logger.info(options.successMessage, discordContext, {
 			operationType: 'schedule_notification',
 			operationStatus: 'success',
-			additionalData: { scheduleId: schedule.id, scheduleName: schedule.name, userCount: userIds.length },
+			additionalData: {
+				scheduleId: schedule.id,
+				scheduleName: schedule.name,
+				mentionCount: targets.length,
+				userCount: userIds.length,
+				roleCount: roleIds.length,
+			},
 		});
 		return null;
 	} catch (error) {
 		logger.error(options.failureMessage, error as Error, discordContext, {
 			operationType: 'schedule_notification',
 			operationStatus: 'failure',
-			additionalData: { scheduleId: schedule.id, scheduleName: schedule.name, userCount: userIds.length },
+			additionalData: {
+				scheduleId: schedule.id,
+				scheduleName: schedule.name,
+				mentionCount: targets.length,
+				userCount: userIds.length,
+				roleCount: roleIds.length,
+			},
 		});
 		return options.rejectedMessageWarning;
 	}
 }
 
 function buildScheduleCreationNotification(schedule: Schedule): string {
-	const mentions = formatUserMentions(schedule.mentionUserIds);
+	const mentions = formatMentionTargets(schedule.mentionUserIds);
 	return `${mentions}\nA schedule was created: **${schedule.name}** - ${formatScheduleTiming(schedule)}.`;
 }
 
 function buildScheduleTimeUpdateNotification(schedule: Schedule): string {
-	const mentions = formatUserMentions(schedule.mentionUserIds);
+	const mentions = formatMentionTargets(schedule.mentionUserIds);
 	return `${mentions}\nSchedule **${schedule.name}** was updated: ${formatScheduleTiming(schedule)}.`;
 }

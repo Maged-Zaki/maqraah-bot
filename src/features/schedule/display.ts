@@ -1,7 +1,7 @@
 import { EmbedBuilder, MessageFlags } from 'discord.js';
 import type { Schedule } from '../../storage/sqlite/repositories/ScheduleRepository';
 import { scheduleTypes } from '../../storage/sqlite/repositories/ScheduleRepository';
-import { formatUserMentions } from './mentions';
+import { formatMentionTargets } from './mentions';
 import { formatScheduleRun, formatWeekdays, getNextScheduleRuns, parseStoredWeekdays } from './resolver';
 
 interface ScheduleReplyOptions {
@@ -125,7 +125,7 @@ function formatScheduleType(schedule: Schedule): string {
 }
 
 function formatSchedulePeople(schedule: Schedule): string {
-	return formatUserMentions(schedule.mentionUserIds) || 'None configured';
+	return formatMentionTargets(schedule.mentionUserIds) || 'None configured';
 }
 
 function previewText(value: string, maxLength: number): string {

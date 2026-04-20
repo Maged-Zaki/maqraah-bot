@@ -93,13 +93,13 @@ function resolveRoleDisplay(roleId: string | null | undefined, guild: any): Reso
 	const role = guild?.roles?.cache?.get(roleId);
 	if (!role) {
 		return {
-			value: `Role ID ${roleId}`,
+			value: formatRoleMention(roleId),
 			warnings: [`Configured role ${roleId} was not found in cache.`],
 		};
 	}
 
 	return {
-		value: `@${role.name ?? 'role'} (${role.id ?? roleId})`,
+		value: formatRoleMention(role.id ?? roleId),
 		warnings: [],
 	};
 }
@@ -116,7 +116,7 @@ function resolveReminderChannelDisplay(interaction: any): ResolvedDisplay {
 	const channel = getChannel(interaction, channelId);
 	if (!channel) {
 		return {
-			value: `Channel ID ${channelId}`,
+			value: formatChannelMention(channelId),
 			warnings: [`Configured reminder channel ${channelId} was not found in cache.`],
 		};
 	}
@@ -153,7 +153,7 @@ function resolveVoiceChannelDisplay(voiceChannelId: string | null | undefined, g
 	const channel = guild?.channels?.cache?.get(voiceChannelId);
 	if (!channel) {
 		return {
-			value: `Channel ID ${voiceChannelId}`,
+			value: formatChannelMention(voiceChannelId),
 			warnings: [`Configured voice channel ${voiceChannelId} was not found in cache.`],
 		};
 	}
@@ -197,9 +197,16 @@ function getPermissions(channel: any, user: any): PermissionsBitField | null {
 }
 
 function formatChannelDisplay(channel: any, fallbackId: string): string {
-	const name = channel.name ? `#${channel.name}` : 'Channel';
 	const id = channel.id ?? fallbackId;
-	return `${name} (${id})`;
+	return formatChannelMention(id);
+}
+
+function formatChannelMention(channelId: string): string {
+	return `<#${channelId}>`;
+}
+
+function formatRoleMention(roleId: string): string {
+	return `<@&${roleId}>`;
 }
 
 function formatPendingNoteCount(count: number): string {

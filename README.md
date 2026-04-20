@@ -74,14 +74,14 @@ Slash commands are discovered from `src/features/**/command.ts` and `src/feature
 
 There is no `/configuration set` command in the current bot.
 
-### `/progress`
+### `/maqraah progress`
 
-- `/progress update [last-quran-page-read] [last-hadith]`
+- `/maqraah progress update [last-quran-page-read] [last-hadith]`
   Updates shared reading progress. Qur'an pages must be between 1 and 604, and Hadith numbers must be positive.
-- `/progress show`
+- `/maqraah progress show`
   Shows the current shared reading progress.
 
-There is no `/progress set`, `/set-progress`, or `/show-progress` command in the current bot.
+There is no top-level `/progress`, `/progress set`, `/set-progress`, or `/show-progress` command in the current bot.
 
 ### `/notes`
 
@@ -116,7 +116,7 @@ There is no `/notes add`, `/add-note`, `/notes remove-my`, or `/notes remove-all
 
 ### Missing Test Command
 
-`/test` is documented in older README versions, but no current source command implements it. Use `/configuration show`, `/progress show`, or run the bot in a test server to validate configuration.
+`/test` is documented in older README versions, but no current source command implements it. Use `/configuration show`, `/maqraah progress show`, or run the bot in a test server to validate configuration.
 
 ## Reminder Flow
 
@@ -213,9 +213,10 @@ src/
   features/
     configuration/        /configuration command
     help/                 /help command
+    maqraah/              /maqraah command, progress dashboard, attendance, and reminders
     notes/                /notes command
-    progress/             /progress command
-    reminders/            reminder scheduling, messages, buttons, and override command
+    schedule/             /schedule command
+    setup/                /setup command and first-run setup guide
   storage/
     sqlite/               SQLite initialization and repositories
   observability/
@@ -278,9 +279,11 @@ npm run build
 To verify command coverage manually, compare the command reference above with command definitions in:
 
 - `src/features/configuration/command.ts`
-- `src/features/progress/command.ts`
+- `src/features/maqraah/command.ts`
+- `src/features/maqraah/reminders/changeUpcomingMaqraahTimeCommand.ts`
 - `src/features/notes/command.ts`
-- `src/features/reminders/changeUpcomingMaqraahTimeCommand.ts`
+- `src/features/schedule/command.ts`
+- `src/features/setup/command.ts`
 - `src/features/help/command.ts`
 
-Every slash command currently defined in source is documented above, and every documented command above has a matching source command. `/test` is explicitly marked missing.
+Use those source files as the current slash command inventory when updating this reference. `/test` is explicitly marked missing.

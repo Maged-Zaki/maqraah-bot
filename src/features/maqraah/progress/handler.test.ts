@@ -53,10 +53,9 @@ test('maqraah progress show renders configuration, progress, next readings, and 
 	assert.match(fields['Hadith Progress'], /Current Hadith: 34/);
 	assert.match(fields['Hadith Progress'], /Next Hadith: 35/);
 	assert.match(fields['Next Maqraah'], /2026-04-15 at 7:00 PM \(UTC\)/);
-	assert.match(fields['Reminder Channel'], /#maqraah-reminders \(reminder-channel\)/);
-	assert.match(fields['Reminder Role'], /@Daily Readers \(role-1\)/);
-	assert.doesNotMatch(fields['Reminder Role'], /<@&/);
-	assert.match(fields['Voice Channel'], /#Maqraah Voice \(voice-channel\)/);
+	assert.equal(fields['Reminder Channel'], '<#reminder-channel>');
+	assert.equal(fields['Reminder Role'], '<@&role-1>');
+	assert.equal(fields['Voice Channel'], '<#voice-channel>');
 	assert.equal(fields['Pending Notes'], '2 pending notes');
 	assert.equal(fields['Warnings'], 'None');
 });
@@ -138,7 +137,7 @@ test('maqraah progress show warns about invalid or missing configuration without
 	assert.match(fields['Warnings'], /Voice channel is not configured/);
 });
 
-test('progress update alias and maqraah progress update share validation and persistence', { concurrency: false }, async () => {
+test('maqraah progress update validates and persists progress', { concurrency: false }, async () => {
 	const updates: Array<Partial<Progress>> = [];
 
 	await withRepositoryMocks(
@@ -154,24 +153,12 @@ test('progress update alias and maqraah progress update share validation and per
 					integers: { 'last-quran-page-read': 22, 'last-hadith': 40 },
 					reply: () => undefined,
 				}) as any,
-				{ commandName: 'progress' }
-			);
-
-			await handleProgressCommand(
-				buildInteraction({
-					subcommand: 'update',
-					integers: { 'last-quran-page-read': 22, 'last-hadith': 40 },
-					reply: () => undefined,
-				}) as any,
 				{ commandName: 'maqraah', subcommandGroup: 'progress' }
 			);
 		}
 	);
 
-	assert.deepEqual(updates, [
-		{ lastPage: 22, lastHadith: 40 },
-		{ lastPage: 22, lastHadith: 40 },
-	]);
+	assert.deepEqual(updates, [{ lastPage: 22, lastHadith: 40 }]);
 });
 
 async function withRepositoryMocks(overrides: any, callback: () => Promise<void>): Promise<void> {

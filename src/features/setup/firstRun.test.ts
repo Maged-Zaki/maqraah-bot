@@ -18,7 +18,7 @@ test('first startup sends setup guide once and records welcomeSentAt', async () 
 		assert.equal(result.sent, true);
 		assert.equal(channel.sentMessages.length, 1);
 		assert.match(channel.sentMessages[0], /\/configuration update/);
-		assert.match(channel.sentMessages[0], /\/progress update/);
+		assert.match(channel.sentMessages[0], /\/maqraah progress update/);
 		assert.match(channel.sentMessages[0], /\/help/);
 		assert.match(repository.welcomeSentAt ?? '', /^\d{4}-\d{2}-\d{2}T/);
 	} finally {
@@ -62,7 +62,7 @@ test('/setup guide sends setup instructions publicly on demand', async () => {
 	assert.equal(replyPayload.flags, undefined);
 	assert.equal(replyPayload.ephemeral, undefined);
 	assert.match(replyPayload.content, /\/configuration update/);
-	assert.match(replyPayload.content, /\/progress update/);
+	assert.match(replyPayload.content, /\/maqraah progress update/);
 	assert.match(replyPayload.content, /\/help/);
 });
 

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
-import { Attendance } from '../../storage/sqlite/repositories/AttendanceRepository';
+import { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
+import { Attendance } from '../../../storage/sqlite/repositories/AttendanceRepository';
 
 process.env.DATABASE_PATH ??= ':memory:';
 
-const { attendanceRepository } = require('../../storage/sqlite') as typeof import('../../storage/sqlite');
+const { attendanceRepository } = require('../../../storage/sqlite') as typeof import('../../../storage/sqlite');
 const { sendPreReminderStage } = require('./scheduler') as typeof import('./scheduler');
 
 test('pre reminder sends the reminder first and then preregistered attendance messages', { concurrency: false }, async () => {

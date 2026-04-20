@@ -1,7 +1,7 @@
 import newrelic from 'newrelic';
 import { Interaction, MessageFlags } from 'discord.js';
 import { handleDestructiveConfirmationButtonInteraction } from '../shared/confirmations/interactions';
-import { handleReminderButtonInteraction } from '../features/reminders/interactions';
+import { handleReminderButtonInteraction } from '../features/maqraah/reminders/interactions';
 import { DiscordContext, logger } from '../observability/logging/logger';
 
 export async function routeInteraction(interaction: Interaction): Promise<void> {

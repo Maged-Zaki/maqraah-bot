@@ -1,8 +1,8 @@
 import { Client } from 'discord.js';
 import * as cron from 'node-cron';
-import { configurationRepository } from '../../storage/sqlite';
-import { logger } from '../../observability/logging/logger';
-import { normalizeTimeZone } from '../../shared/time';
+import { configurationRepository } from '../../../storage/sqlite';
+import { logger } from '../../../observability/logging/logger';
+import { normalizeTimeZone } from '../../../shared/time';
 import { fetchMaqraahTimeSyncTiming, isMaqraahTimeSyncEnabled, MaqraahTimeSyncTiming } from './prayerTimes';
 import { scheduleReminder } from './scheduler';
 import { updateReminderVoiceChannelName } from './voiceChannel';

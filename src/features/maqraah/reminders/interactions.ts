@@ -1,6 +1,6 @@
 import { ButtonInteraction, MessageFlags } from 'discord.js';
-import { attendanceRepository, notesRepository } from '../../storage/sqlite';
-import { logger, DiscordContext } from '../../observability/logging/logger';
+import { attendanceRepository, notesRepository } from '../../../storage/sqlite';
+import { logger, DiscordContext } from '../../../observability/logging/logger';
 import { announceAttendanceStatus, attendanceStatuses, AttendanceStatus } from './attendance';
 import { buildNotesCarryOverActionRows, parseReminderActionCustomId, reminderActions } from './components';
 

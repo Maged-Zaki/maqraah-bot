@@ -1,9 +1,11 @@
 import { MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { attendanceRepository, configurationRepository, reminderEventsRepository } from '../../storage/sqlite';
 import { logger, DiscordContext } from '../../observability/logging/logger';
-import { attendanceStatuses } from './attendance';
-import { defaultReminderCadence, isReminderStageEnabled, reminderStages } from './cadence';
-import { getUpcomingSessionId } from './sessionId';
+import { addProgressSubcommands, progressCommandGroup } from './progress/builders';
+import { handleProgressCommand } from './progress/handler';
+import { attendanceStatuses } from './reminders/attendance';
+import { defaultReminderCadence, isReminderStageEnabled, reminderStages } from './reminders/cadence';
+import { getUpcomingSessionId } from './reminders/sessionId';
 
 const subcommands = {
 	CANNOT_ATTEND: 'cannot-attend-upcoming-maqraah',
@@ -16,14 +18,21 @@ export const data = new SlashCommandBuilder()
 	.setDescription('Manage upcoming maqraah attendance')
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.CANNOT_ATTEND).setDescription('Preregister that you cannot attend the upcoming maqraah'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.WILL_BE_LATE).setDescription('Preregister that you will be late to the upcoming maqraah'))
-	.addSubcommand((subcommand) => subcommand.setName(subcommands.CLEAR_STATUS).setDescription('Clear your preregistered status for the upcoming maqraah'));
+	.addSubcommand((subcommand) => subcommand.setName(subcommands.CLEAR_STATUS).setDescription('Clear your preregistered status for the upcoming maqraah'))
+	.addSubcommandGroup((group) => addProgressSubcommands(group.setName(progressCommandGroup).setDescription('Manage maqraah reading progress')));
 
 export async function execute(interaction: any) {
 	await handleMaqraahCommand(interaction);
 }
 
 export async function handleMaqraahCommand(interaction: any, now: Date = new Date()): Promise<void> {
+	const subcommandGroup = typeof interaction.options.getSubcommandGroup === 'function' ? interaction.options.getSubcommandGroup(false) : null;
 	const subcommand = interaction.options.getSubcommand();
+
+	if (subcommandGroup === progressCommandGroup) {
+		await handleProgressCommand(interaction, { commandName: 'maqraah', subcommandGroup, now });
+		return;
+	}
 
 	const discordContext: DiscordContext = {
 		userId: interaction.user.id,

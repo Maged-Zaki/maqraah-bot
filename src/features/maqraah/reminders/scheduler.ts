@@ -1,8 +1,8 @@
 import { Client } from 'discord.js';
 import * as cron from 'node-cron';
-import { configurationRepository, notesRepository, progressRepository, reminderEventsRepository } from '../../storage/sqlite';
-import { logger } from '../../observability/logging/logger';
-import { normalizeTimeZone, parseTimeToCron } from '../../shared/time';
+import { configurationRepository, notesRepository, progressRepository, reminderEventsRepository } from '../../../storage/sqlite';
+import { logger } from '../../../observability/logging/logger';
+import { normalizeTimeZone, parseTimeToCron } from '../../../shared/time';
 import { announcePendingAttendance } from './attendance';
 import { buildReminderActionRows } from './components';
 import { buildReminderStageSchedules, reminderStages, ReminderStage, ReminderStageSchedule } from './cadence';

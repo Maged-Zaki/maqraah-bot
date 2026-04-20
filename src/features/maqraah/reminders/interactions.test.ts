@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Attendance } from '../../storage/sqlite/repositories/AttendanceRepository';
+import { Attendance } from '../../../storage/sqlite/repositories/AttendanceRepository';
 
 process.env.DATABASE_PATH ??= ':memory:';
 
-const { attendanceRepository } = require('../../storage/sqlite') as typeof import('../../storage/sqlite');
+const { attendanceRepository } = require('../../../storage/sqlite') as typeof import('../../../storage/sqlite');
 const { buildReminderActionCustomId, reminderActions } = require('./components') as typeof import('./components');
 const { handleReminderButtonInteraction } = require('./interactions') as typeof import('./interactions');
 

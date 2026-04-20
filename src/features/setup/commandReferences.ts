@@ -9,7 +9,10 @@ export function resolveSetupGuideCommandReferences(guild?: Guild | null): SetupG
 	};
 }
 
-function withCommandId(command: { name: string; subcommand?: string }, guild?: Guild | null): { name: string; subcommand?: string; id?: string } {
+function withCommandId(
+	command: { name: string; subcommand?: string; subcommandGroup?: string },
+	guild?: Guild | null
+): { name: string; subcommand?: string; subcommandGroup?: string; id?: string } {
 	const registeredCommand = guild?.commands.cache.find((candidate) => candidate.name === command.name);
 	return {
 		...command,

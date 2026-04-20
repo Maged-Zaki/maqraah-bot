@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
+import { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
 import { buildReminderMessages } from './messages';
 
 test('main reminder starts with the role mention and keeps reading details', () => {

@@ -1,5 +1,5 @@
-import { attendanceRepository } from '../../storage/sqlite';
-import { logger } from '../../observability/logging/logger';
+import { attendanceRepository } from '../../../storage/sqlite';
+import { logger } from '../../../observability/logging/logger';
 
 export const attendanceStatuses = {
 	LATE: 'late',

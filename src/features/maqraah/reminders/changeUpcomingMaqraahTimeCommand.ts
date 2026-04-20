@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { parseReminderTime } from '../../shared/time';
+import { parseReminderTime } from '../../../shared/time';
 import { overrideNextReminder } from './scheduler';
 
 const options = {

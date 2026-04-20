@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import sqlite3 from 'sqlite3';
-import { ReminderEventsRepository } from '../../storage/sqlite/repositories/ReminderEventsRepository';
-import { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
-import { isValidTimeZone } from '../../shared/time';
+import { ReminderEventsRepository } from '../../../storage/sqlite/repositories/ReminderEventsRepository';
+import { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
+import { isValidTimeZone } from '../../../shared/time';
 import { buildReminderStageSchedules, reminderStages } from './cadence';
 import { buildAlAdhanTimingsUrl, buildMaqraahTimeSyncTiming, formatDateForAlAdhan, parsePrayerTimeToMinutes } from './prayerTimes';
 

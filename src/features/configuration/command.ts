@@ -2,11 +2,11 @@ import { SlashCommandBuilder, ChannelType, MessageFlags, EmbedBuilder } from 'di
 import { configurationRepository } from '../../storage/sqlite';
 import { logger, DiscordContext } from '../../observability/logging/logger';
 import { normalizeTimeZone, parseReminderTime } from '../../shared/time';
-import { defaultReminderCadence, getReminderOffset, isReminderStageEnabled } from '../reminders/cadence';
-import { scheduleMaqraahTimeSync, syncMaqraahTimeFromMaghrib } from '../reminders/maqraahTimeSync';
-import { getMaqraahTimeSyncOffsetMinutes, isMaqraahTimeSyncEnabled, isValidLatitude, isValidLongitude } from '../reminders/prayerTimes';
-import { scheduleReminder } from '../reminders/scheduler';
-import { updateReminderVoiceChannelName } from '../reminders/voiceChannel';
+import { defaultReminderCadence, getReminderOffset, isReminderStageEnabled } from '../maqraah/reminders/cadence';
+import { scheduleMaqraahTimeSync, syncMaqraahTimeFromMaghrib } from '../maqraah/reminders/maqraahTimeSync';
+import { getMaqraahTimeSyncOffsetMinutes, isMaqraahTimeSyncEnabled, isValidLatitude, isValidLongitude } from '../maqraah/reminders/prayerTimes';
+import { scheduleReminder } from '../maqraah/reminders/scheduler';
+import { updateReminderVoiceChannelName } from '../maqraah/reminders/voiceChannel';
 
 const subcommands = {
 	UPDATE: 'update',

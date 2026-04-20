@@ -1,6 +1,7 @@
 type CommandReference = {
 	name: string;
 	subcommand?: string;
+	subcommandGroup?: string;
 	id?: string;
 };
 
@@ -12,7 +13,7 @@ export type SetupGuideCommandReferences = {
 
 export const defaultSetupGuideCommandReferences: SetupGuideCommandReferences = {
 	configurationUpdate: { name: 'configuration', subcommand: 'update' },
-	progressUpdate: { name: 'progress', subcommand: 'update' },
+	progressUpdate: { name: 'maqraah', subcommandGroup: 'progress', subcommand: 'update' },
 	help: { name: 'help' },
 };
 
@@ -33,7 +34,7 @@ export function buildSetupGuideMessage(commandReferences: SetupGuideCommandRefer
 }
 
 function formatCommandReference(command: CommandReference): string {
-	const commandPath = [command.name, command.subcommand].filter(Boolean).join(' ');
+	const commandPath = [command.name, command.subcommandGroup, command.subcommand].filter(Boolean).join(' ');
 
 	if (command.id) {
 		return `</${commandPath}:${command.id}>`;

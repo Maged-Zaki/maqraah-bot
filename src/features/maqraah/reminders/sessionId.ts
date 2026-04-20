@@ -1,5 +1,5 @@
-import type { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
-import { parseTimeToMinutes } from '../../shared/time';
+import type { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
+import { parseTimeToMinutes } from '../../../shared/time';
 
 interface TimeZoneDateParts {
 	isoDate: string;

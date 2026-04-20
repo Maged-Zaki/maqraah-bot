@@ -1,13 +1,29 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { MessageFlags } from 'discord.js';
+import { ApplicationCommandOptionType, MessageFlags } from 'discord.js';
 import { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
 
 process.env.DATABASE_PATH ??= ':memory:';
 
 const { attendanceRepository, configurationRepository, reminderEventsRepository } = require('../../storage/sqlite') as typeof import('../../storage/sqlite');
-const { attendanceStatuses } = require('./attendance') as typeof import('./attendance');
-const { handleMaqraahCommand } = require('./command') as typeof import('./command');
+const { attendanceStatuses } = require('./reminders/attendance') as typeof import('./reminders/attendance');
+const { data, handleMaqraahCommand } = require('./command') as typeof import('./command');
+
+test('maqraah command keeps attendance subcommands and exposes progress group', () => {
+	const command = data.toJSON() as any;
+	const optionNames = command.options.map((option: any) => option.name);
+
+	assert.ok(optionNames.includes('cannot-attend-upcoming-maqraah'));
+	assert.ok(optionNames.includes('will-be-late-upcoming-maqraah'));
+	assert.ok(optionNames.includes('clear-upcoming-maqraah-status'));
+
+	const progressGroup = command.options.find((option: any) => option.name === 'progress');
+	assert.equal(progressGroup.type, ApplicationCommandOptionType.SubcommandGroup);
+	assert.deepEqual(
+		progressGroup.options.map((option: any) => option.name),
+		['update', 'show']
+	);
+});
 
 test('cannot-attend preregisters the upcoming maqraah for today before reminder time', { concurrency: false }, async () => {
 	const replies: any[] = [];

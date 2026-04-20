@@ -1,5 +1,5 @@
-import type { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
-import { normalizeTimeZone } from '../../shared/time';
+import type { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
+import { normalizeTimeZone } from '../../../shared/time';
 
 export const maqraahTimeSyncDefaults = {
 	enabled: false,

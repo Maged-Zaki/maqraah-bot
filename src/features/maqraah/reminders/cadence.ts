@@ -1,5 +1,5 @@
-import type { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
-import { minutesToCron, parseTimeToMinutes } from '../../shared/time';
+import type { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
+import { minutesToCron, parseTimeToMinutes } from '../../../shared/time';
 
 export const reminderStages = {
 	PRE: 'pre',

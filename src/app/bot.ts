@@ -1,6 +1,7 @@
 import { Client, Collection, Events, GatewayIntentBits } from 'discord.js';
 import { scheduleMaqraahTimeSync } from '../features/maqraah/reminders/maqraahTimeSync';
 import { scheduleReminder } from '../features/maqraah/reminders/scheduler';
+import { scheduleGenericSchedules } from '../features/schedule/scheduler';
 import { sendFirstRunSetupGuideFromConfig } from '../features/setup/startup';
 import { configurationRepository } from '../storage/sqlite';
 import { logger } from '../observability/logging/logger';
@@ -38,6 +39,7 @@ function registerLifecycleHandlers(client: Client): void {
 		await registerCommands(client);
 		await scheduleMaqraahTimeSync(client);
 		await scheduleReminder(client);
+		await scheduleGenericSchedules(client);
 		await sendFirstRunSetupGuideFromConfig(client);
 	});
 

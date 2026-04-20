@@ -13,6 +13,7 @@ const { execute } = require('./command') as typeof import('./command');
 test('/schedule create-recurring saves the schedule from command options', { concurrency: false }, async () => {
 	let createdInput: any;
 	let replyPayload: any;
+	const sentMessages: any[] = [];
 
 	await withRepositoryMocks(
 		{
@@ -39,7 +40,7 @@ test('/schedule create-recurring saves the schedule from command options', { con
 						time: '7:30 PM',
 						message: '<@&role-1> Team meeting starts soon.',
 					},
-					client: createClient(),
+					client: createClient(sentMessages),
 					reply: (payload) => {
 						replyPayload = payload;
 					},
@@ -54,6 +55,56 @@ test('/schedule create-recurring saves the schedule from command options', { con
 	assert.equal(createdInput.creatorUserId, 'user-1');
 	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
 	assert.equal(getEmbedFields(replyPayload).When, 'Monday and Thursday at 7:30 PM');
+	assert.equal(sentMessages.length, 0);
+});
+
+test('/schedule create-recurring notifies mentioned people after creation', { concurrency: false }, async () => {
+	let createdInput: any;
+	let replyPayload: any;
+	const sentMessages: any[] = [];
+
+	await withRepositoryMocks(
+		{
+			getConfiguration: async () => ({ timezone: 'UTC' }),
+			getActiveSchedules: async () => [],
+			createSchedule: async (input: any) => {
+				createdInput = input;
+				return buildSchedule({
+					id: 12,
+					name: input.name,
+					weekdays: input.weekdays,
+					time: input.time,
+					message: input.message,
+				});
+			},
+		},
+		async () => {
+			await execute(
+				buildCommandInteraction({
+					subcommand: 'create-recurring',
+					strings: {
+						name: 'Team meeting',
+						days: 'monday, thursday',
+						time: '7:30 PM',
+						message: 'Team meeting starts soon.',
+						people: '<@123> <@!456>, <@123>',
+					},
+					client: createClient(sentMessages),
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+				}) as any
+			);
+		}
+	);
+
+	assert.equal(createdInput.name, 'Team meeting');
+	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
+	assert.equal(sentMessages.length, 1);
+	assert.match(sentMessages[0].content, /^<@123> <@456>/);
+	assert.match(sentMessages[0].content, /Team meeting/);
+	assert.match(sentMessages[0].content, /Monday and Thursday at 7:30 PM/);
+	assert.deepEqual(sentMessages[0].allowedMentions, { users: ['123', '456'] });
 });
 
 test('/schedule create-recurring rejects invalid days', { concurrency: false }, async () => {
@@ -78,9 +129,44 @@ test('/schedule create-recurring rejects invalid days', { concurrency: false }, 
 	assert.match(replyPayload.content, /Invalid days/);
 });
 
+test('/schedule create-recurring rejects invalid people mentions', { concurrency: false }, async () => {
+	let createCalled = false;
+	let replyPayload: any;
+
+	await withRepositoryMocks(
+		{
+			createSchedule: async () => {
+				createCalled = true;
+			},
+		},
+		async () => {
+			await execute(
+				buildCommandInteraction({
+					subcommand: 'create-recurring',
+					strings: {
+						name: 'Team meeting',
+						days: 'monday',
+						time: '7:30 PM',
+						message: 'Team meeting starts soon.',
+						people: '<@123> asdas',
+					},
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+				}) as any
+			);
+		}
+	);
+
+	assert.equal(createCalled, false);
+	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
+	assert.match(replyPayload.content, /Invalid people list/);
+});
+
 test('/schedule create-one-time saves date and time from command options', { concurrency: false }, async () => {
 	let createdInput: any;
 	let replyPayload: any;
+	const sentMessages: any[] = [];
 
 	await withRepositoryMocks(
 		{
@@ -109,7 +195,7 @@ test('/schedule create-one-time saves date and time from command options', { con
 						time: '8:05 AM',
 						message: 'Appointment starts soon.',
 					},
-					client: createClient(),
+					client: createClient(sentMessages),
 					reply: (payload) => {
 						replyPayload = payload;
 					},
@@ -123,6 +209,53 @@ test('/schedule create-one-time saves date and time from command options', { con
 	assert.equal(createdInput.time, '8:05 AM');
 	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
 	assert.equal(getEmbedFields(replyPayload).When, '2099-04-20 at 8:05 AM');
+	assert.equal(sentMessages.length, 0);
+});
+
+test('/schedule create-one-time notifies mentioned people after creation', { concurrency: false }, async () => {
+	let replyPayload: any;
+	const sentMessages: any[] = [];
+
+	await withRepositoryMocks(
+		{
+			getConfiguration: async () => ({ timezone: 'UTC' }),
+			getActiveSchedules: async () => [],
+			createSchedule: async (input: any) =>
+				buildSchedule({
+					id: 13,
+					type: scheduleTypes.ONE_TIME,
+					name: input.name,
+					weekdays: null,
+					oneTimeDate: input.oneTimeDate,
+					time: input.time,
+					message: input.message,
+				}),
+		},
+		async () => {
+			await execute(
+				buildCommandInteraction({
+					subcommand: 'create-one-time',
+					strings: {
+						name: 'Appointment',
+						date: '2099-04-20',
+						time: '8:05 AM',
+						message: 'Appointment starts soon.',
+						people: '<@789>',
+					},
+					client: createClient(sentMessages),
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+				}) as any
+			);
+		}
+	);
+
+	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
+	assert.equal(sentMessages.length, 1);
+	assert.match(sentMessages[0].content, /^<@789>/);
+	assert.match(sentMessages[0].content, /2099-04-20 at 8:05 AM/);
+	assert.deepEqual(sentMessages[0].allowedMentions, { users: ['789'] });
 });
 
 test('/schedule create-one-time rejects invalid date', { concurrency: false }, async () => {
@@ -415,11 +548,13 @@ function buildCommandInteraction(options: {
 	};
 }
 
-function createClient() {
+function createClient(sentMessages: any[] = []) {
 	const reminderChannel = {
 		id: 'reminder-channel',
 		name: 'reminders',
-		send: async () => undefined,
+		send: async (payload: any) => {
+			sentMessages.push(payload);
+		},
 	};
 	const guild = {
 		id: 'guild-1',

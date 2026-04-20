@@ -2,7 +2,6 @@ import newrelic from 'newrelic';
 import { Interaction, MessageFlags } from 'discord.js';
 import { handleDestructiveConfirmationButtonInteraction } from '../shared/confirmations/interactions';
 import { handleReminderButtonInteraction } from '../features/maqraah/reminders/interactions';
-import { handleScheduleModalSubmit, handleScheduleSelectMenuInteraction } from '../features/schedule/interactions';
 import { DiscordContext, logger } from '../observability/logging/logger';
 
 export async function routeInteraction(interaction: Interaction): Promise<void> {
@@ -10,22 +9,6 @@ export async function routeInteraction(interaction: Interaction): Promise<void> 
 		const handled = (await handleDestructiveConfirmationButtonInteraction(interaction)) || (await handleReminderButtonInteraction(interaction));
 		if (!handled) {
 			logger.warn(`Unhandled button interaction: ${interaction.customId}`);
-		}
-		return;
-	}
-
-	if (interaction.isStringSelectMenu()) {
-		const handled = await handleScheduleSelectMenuInteraction(interaction);
-		if (!handled) {
-			logger.warn(`Unhandled select menu interaction: ${interaction.customId}`);
-		}
-		return;
-	}
-
-	if (interaction.isModalSubmit()) {
-		const handled = await handleScheduleModalSubmit(interaction);
-		if (!handled) {
-			logger.warn(`Unhandled modal interaction: ${interaction.customId}`);
 		}
 		return;
 	}

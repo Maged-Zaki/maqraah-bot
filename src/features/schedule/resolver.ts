@@ -62,6 +62,42 @@ export function parseWeekdayValues(values: string[]): number[] | null {
 	return normalizeWeekdays(weekdays);
 }
 
+export function parseWeekdayInput(input: string | null | undefined): number[] | null {
+	if (!input) {
+		return null;
+	}
+
+	const normalizedInput = input.trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+	if (normalizedInput.length === 0) {
+		return null;
+	}
+
+	if (['daily', 'everyday', 'every day', 'all', 'all days'].includes(normalizedInput)) {
+		return allWeekdayValues;
+	}
+
+	if (['weekday', 'weekdays'].includes(normalizedInput)) {
+		return weekdayValues;
+	}
+
+	if (['weekend', 'weekends'].includes(normalizedInput)) {
+		return weekendValues;
+	}
+
+	const parts = normalizedInput.split(',').map((part) => part.trim());
+
+	if (parts.length === 0 || parts.some((part) => part.length === 0)) {
+		return null;
+	}
+
+	const weekdays = parts.map((part) => weekdayByKey.get(part)?.value ?? null);
+	if (weekdays.some((weekday) => weekday === null)) {
+		return null;
+	}
+
+	return normalizeWeekdays(weekdays as number[]);
+}
+
 export function parseStoredWeekdays(value: string | null | undefined): number[] {
 	if (!value) {
 		return [];
@@ -111,6 +147,20 @@ export function isValidScheduleDate(date: string | null | undefined): boolean {
 		parsedDate.getUTCMonth() === month - 1 &&
 		parsedDate.getUTCDate() === day
 	);
+}
+
+export function isOneTimeScheduleDateTimeInFuture(date: string, time: string, timezone: string, now: Date = new Date()): boolean {
+	if (!isValidScheduleDate(date)) {
+		return false;
+	}
+
+	const scheduledMinutes = parseTimeToMinutes(time);
+	const currentDate = getTimeZoneDateParts(now, timezone);
+	if (scheduledMinutes === null || !currentDate) {
+		return false;
+	}
+
+	return compareIsoDateTime(date, scheduledMinutes, currentDate.isoDate, currentDate.minutesSinceMidnight) > 0;
 }
 
 export function buildScheduleCronEntries(schedule: Schedule, timezone: string, now: Date = new Date()): ScheduleCronEntry[] {

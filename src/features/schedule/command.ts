@@ -1,13 +1,17 @@
 import { MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { scheduleRepository } from '../../storage/sqlite';
-import { scheduleTypes } from '../../storage/sqlite/repositories/ScheduleRepository';
+import { normalizeScheduleName, scheduleStatuses, scheduleTypes } from '../../storage/sqlite/repositories/ScheduleRepository';
 import { logger, DiscordContext } from '../../observability/logging/logger';
-import { buildOneTimeScheduleModal, buildWeekdaySelectPayload } from './components';
+import { parseReminderTime } from '../../shared/time';
 import { getScheduleDisplayContext } from './context';
-import { buildScheduleListReply, buildScheduleShowReply } from './display';
-import { parseStoredWeekdays } from './resolver';
+import { buildScheduleListReply, buildScheduleSavedReply, buildScheduleShowReply } from './display';
+import {
+	isOneTimeScheduleDateTimeInFuture,
+	isValidScheduleDate,
+	parseWeekdayInput,
+	serializeWeekdays,
+} from './resolver';
 import { scheduleGenericSchedules } from './scheduler';
-import { createPendingScheduleSetup, scheduleSetupActions } from './state';
 
 const subcommands = {
 	CREATE_RECURRING: 'create-recurring',
@@ -20,18 +24,49 @@ const subcommands = {
 
 const options = {
 	NAME: 'name',
+	NEW_NAME: 'new-name',
+	DAYS: 'days',
+	DATE: 'date',
+	TIME: 'time',
+	MESSAGE: 'message',
 } as const;
 
 export const data = new SlashCommandBuilder()
 	.setName('schedule')
 	.setDescription('Manage generic reminders')
-	.addSubcommand((subcommand) => subcommand.setName(subcommands.CREATE_RECURRING).setDescription('Create a recurring reminder'))
-	.addSubcommand((subcommand) => subcommand.setName(subcommands.CREATE_ONE_TIME).setDescription('Create a one-time reminder'))
+	.addSubcommand((subcommand) =>
+		subcommand
+			.setName(subcommands.CREATE_RECURRING)
+			.setDescription('Create a recurring reminder')
+			.addStringOption((option) => option.setName(options.NAME).setDescription('Schedule name').setRequired(true))
+			.addStringOption((option) =>
+				option
+					.setName(options.DAYS)
+					.setDescription('Days, comma-separated: monday, thursday')
+					.setRequired(true)
+			)
+			.addStringOption((option) => option.setName(options.TIME).setDescription('Time of day, e.g. 7:30 PM').setRequired(true))
+			.addStringOption((option) => option.setName(options.MESSAGE).setDescription('Reminder message').setRequired(true))
+	)
+	.addSubcommand((subcommand) =>
+		subcommand
+			.setName(subcommands.CREATE_ONE_TIME)
+			.setDescription('Create a one-time reminder')
+			.addStringOption((option) => option.setName(options.NAME).setDescription('Schedule name').setRequired(true))
+			.addStringOption((option) => option.setName(options.DATE).setDescription('Date in YYYY-MM-DD').setRequired(true))
+			.addStringOption((option) => option.setName(options.TIME).setDescription('Time of day, e.g. 7:30 PM').setRequired(true))
+			.addStringOption((option) => option.setName(options.MESSAGE).setDescription('Reminder message').setRequired(true))
+	)
 	.addSubcommand((subcommand) =>
 		subcommand
 			.setName(subcommands.UPDATE)
 			.setDescription('Update an existing reminder')
 			.addStringOption((option) => option.setName(options.NAME).setDescription('Schedule name').setRequired(true))
+			.addStringOption((option) => option.setName(options.NEW_NAME).setDescription('New schedule name'))
+			.addStringOption((option) => option.setName(options.DAYS).setDescription('Recurring days, comma-separated: monday, thursday'))
+			.addStringOption((option) => option.setName(options.DATE).setDescription('One-time date in YYYY-MM-DD'))
+			.addStringOption((option) => option.setName(options.TIME).setDescription('Time of day, e.g. 7:30 PM'))
+			.addStringOption((option) => option.setName(options.MESSAGE).setDescription('Reminder message'))
 	)
 	.addSubcommand((subcommand) =>
 		subcommand
@@ -88,28 +123,116 @@ export async function execute(interaction: any): Promise<void> {
 			operationType: 'schedule_command',
 			operationStatus: 'failure',
 		});
-		await interaction.reply({ content: 'There was an error executing this command!', flags: MessageFlags.Ephemeral });
+		await interaction.reply({
+			content: isUniqueNameError(error) ? 'A schedule with that name already exists.' : 'There was an error executing this command!',
+			flags: MessageFlags.Ephemeral,
+		});
 	}
 }
 
 async function handleCreateRecurring(interaction: any, discordContext: DiscordContext): Promise<void> {
-	const token = createPendingScheduleSetup({
-		action: scheduleSetupActions.CREATE_RECURRING,
-		userId: interaction.user.id,
+	const name = normalizeScheduleName(interaction.options.getString(options.NAME) ?? '');
+	const weekdays = getSelectedWeekdays(interaction);
+	const parsedTime = parseReminderTime(interaction.options.getString(options.TIME));
+	const message = (interaction.options.getString(options.MESSAGE) ?? '').trim();
+
+	if (!name) {
+		await interaction.reply({ content: 'Schedule name cannot be empty.', flags: MessageFlags.Ephemeral });
+		return;
+	}
+
+	if (!weekdays) {
+		await interaction.reply({
+			content: 'Invalid days. Use full weekday names separated by commas, such as `monday` or `monday, thursday`.',
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	if (!parsedTime) {
+		await interaction.reply({ content: 'Invalid time. Please use `H:MM AM/PM`, such as `7:30 PM`.', flags: MessageFlags.Ephemeral });
+		return;
+	}
+
+	if (!message) {
+		await interaction.reply({ content: 'Schedule message cannot be empty.', flags: MessageFlags.Ephemeral });
+		return;
+	}
+
+	const schedule = await scheduleRepository.createSchedule({
+		name,
+		type: scheduleTypes.RECURRING,
+		weekdays: serializeWeekdays(weekdays),
+		oneTimeDate: null,
+		time: parsedTime.displayTime,
+		message,
+		creatorUserId: interaction.user.id,
 	});
 
-	logger.info('Opening recurring schedule weekday picker', discordContext, { operationType: 'schedule_form' });
-	await interaction.reply(buildWeekdaySelectPayload(token));
+	await scheduleGenericSchedules(interaction.client);
+	const context = await getScheduleDisplayContext(interaction);
+	logger.info('Recurring schedule created', discordContext, {
+		operationType: 'schedule_save',
+		operationStatus: 'success',
+		additionalData: { scheduleId: schedule.id, scheduleName: schedule.name },
+	});
+	await interaction.reply(buildScheduleSavedReply({ schedule, timezone: context.timezone, warnings: context.warnings, title: 'Recurring Schedule Created' }));
 }
 
 async function handleCreateOneTime(interaction: any, discordContext: DiscordContext): Promise<void> {
-	const token = createPendingScheduleSetup({
-		action: scheduleSetupActions.CREATE_ONE_TIME,
-		userId: interaction.user.id,
+	const name = normalizeScheduleName(interaction.options.getString(options.NAME) ?? '');
+	const date = (interaction.options.getString(options.DATE) ?? '').trim();
+	const parsedTime = parseReminderTime(interaction.options.getString(options.TIME));
+	const message = (interaction.options.getString(options.MESSAGE) ?? '').trim();
+
+	if (!name) {
+		await interaction.reply({ content: 'Schedule name cannot be empty.', flags: MessageFlags.Ephemeral });
+		return;
+	}
+
+	if (!isValidScheduleDate(date)) {
+		await interaction.reply({ content: 'Invalid date. Please use `YYYY-MM-DD`, such as `2026-04-20`.', flags: MessageFlags.Ephemeral });
+		return;
+	}
+
+	if (!parsedTime) {
+		await interaction.reply({ content: 'Invalid time. Please use `H:MM AM/PM`, such as `7:30 PM`.', flags: MessageFlags.Ephemeral });
+		return;
+	}
+
+	if (!message) {
+		await interaction.reply({ content: 'Schedule message cannot be empty.', flags: MessageFlags.Ephemeral });
+		return;
+	}
+
+	const context = await getScheduleDisplayContext(interaction);
+	if (!context.timezone) {
+		await interaction.reply({ content: 'Timezone is invalid. Please update configuration before creating schedules.', flags: MessageFlags.Ephemeral });
+		return;
+	}
+
+	if (!isOneTimeScheduleDateTimeInFuture(date, parsedTime.displayTime, context.timezone)) {
+		await interaction.reply({ content: 'One-time schedules must be set for a future date and time.', flags: MessageFlags.Ephemeral });
+		return;
+	}
+
+	const schedule = await scheduleRepository.createSchedule({
+		name,
+		type: scheduleTypes.ONE_TIME,
+		weekdays: null,
+		oneTimeDate: date,
+		time: parsedTime.displayTime,
+		message,
+		creatorUserId: interaction.user.id,
 	});
 
-	logger.info('Opening one-time schedule modal', discordContext, { operationType: 'schedule_form' });
-	await interaction.showModal(buildOneTimeScheduleModal(token));
+	await scheduleGenericSchedules(interaction.client);
+	logger.info('One-time schedule created', discordContext, {
+		operationType: 'schedule_save',
+		operationStatus: 'success',
+		additionalData: { scheduleId: schedule.id, scheduleName: schedule.name },
+	});
+	await interaction.reply(buildScheduleSavedReply({ schedule, timezone: context.timezone, warnings: context.warnings, title: 'One-Time Schedule Created' }));
 }
 
 async function handleUpdate(interaction: any, discordContext: DiscordContext): Promise<void> {
@@ -120,28 +243,101 @@ async function handleUpdate(interaction: any, discordContext: DiscordContext): P
 		return;
 	}
 
-	if (schedule.type === scheduleTypes.ONE_TIME) {
-		const token = createPendingScheduleSetup({
-			action: scheduleSetupActions.UPDATE_ONE_TIME,
-			userId: interaction.user.id,
-			scheduleId: schedule.id,
-		});
-		await interaction.showModal(buildOneTimeScheduleModal(token, schedule));
+	const updates: any = {};
+	const newName = interaction.options.getString(options.NEW_NAME);
+	if (newName !== null) {
+		const normalizedName = normalizeScheduleName(newName);
+		if (!normalizedName) {
+			await interaction.reply({ content: 'New schedule name cannot be empty.', flags: MessageFlags.Ephemeral });
+			return;
+		}
+		updates.name = normalizedName;
+	}
+
+	const time = interaction.options.getString(options.TIME);
+	if (time !== null) {
+		const parsedTime = parseReminderTime(time);
+		if (!parsedTime) {
+			await interaction.reply({ content: 'Invalid time. Please use `H:MM AM/PM`, such as `7:30 PM`.', flags: MessageFlags.Ephemeral });
+			return;
+		}
+		updates.time = parsedTime.displayTime;
+	}
+
+	const message = interaction.options.getString(options.MESSAGE);
+	if (message !== null) {
+		const trimmedMessage = message.trim();
+		if (!trimmedMessage) {
+			await interaction.reply({ content: 'Schedule message cannot be empty.', flags: MessageFlags.Ephemeral });
+			return;
+		}
+		updates.message = trimmedMessage;
+	}
+
+	const days = interaction.options.getString(options.DAYS);
+	if (days !== null) {
+		if (schedule.type === scheduleTypes.ONE_TIME) {
+			await interaction.reply({ content: 'Days can only be updated for recurring schedules.', flags: MessageFlags.Ephemeral });
+			return;
+		}
+		const weekdays = parseWeekdayInput(days);
+		if (!weekdays) {
+			await interaction.reply({
+				content: 'Invalid days. Use full weekday names separated by commas, such as `monday` or `monday, thursday`.',
+				flags: MessageFlags.Ephemeral,
+			});
+			return;
+		}
+		updates.weekdays = serializeWeekdays(weekdays);
+	}
+
+	const date = interaction.options.getString(options.DATE);
+	if (date !== null) {
+		if (schedule.type === scheduleTypes.RECURRING) {
+			await interaction.reply({ content: 'Date can only be updated for one-time schedules.', flags: MessageFlags.Ephemeral });
+			return;
+		}
+		if (!isValidScheduleDate(date)) {
+			await interaction.reply({ content: 'Invalid date. Please use `YYYY-MM-DD`, such as `2026-04-20`.', flags: MessageFlags.Ephemeral });
+			return;
+		}
+		updates.oneTimeDate = date;
+	}
+
+	const context = await getScheduleDisplayContext(interaction);
+	if (!context.timezone) {
+		await interaction.reply({ content: 'Timezone is invalid. Please update configuration before updating schedules.', flags: MessageFlags.Ephemeral });
 		return;
 	}
 
-	const token = createPendingScheduleSetup({
-		action: scheduleSetupActions.UPDATE_RECURRING,
-		userId: interaction.user.id,
-		scheduleId: schedule.id,
-		weekdays: parseStoredWeekdays(schedule.weekdays),
-	});
+	if (schedule.type === scheduleTypes.ONE_TIME && (updates.oneTimeDate !== undefined || updates.time !== undefined)) {
+		const nextDate = (updates.oneTimeDate as string | undefined) ?? schedule.oneTimeDate;
+		const nextTime = (updates.time as string | undefined) ?? schedule.time;
+		if (!nextDate || !isOneTimeScheduleDateTimeInFuture(nextDate, nextTime, context.timezone)) {
+			await interaction.reply({ content: 'One-time schedules must be set for a future date and time.', flags: MessageFlags.Ephemeral });
+			return;
+		}
+	}
 
-	logger.info('Opening recurring schedule weekday picker for update', discordContext, {
-		operationType: 'schedule_form',
-		additionalData: { scheduleId: schedule.id, scheduleName: schedule.name },
+	if (Object.keys(updates).length === 0) {
+		await interaction.reply({ content: 'No options provided.', flags: MessageFlags.Ephemeral });
+		return;
+	}
+
+	updates.status = scheduleStatuses.ACTIVE;
+	const updatedSchedule = await scheduleRepository.updateScheduleById(schedule.id, updates);
+	if (!updatedSchedule) {
+		await interaction.reply({ content: 'Schedule not found.', flags: MessageFlags.Ephemeral });
+		return;
+	}
+
+	await scheduleGenericSchedules(interaction.client);
+	logger.info('Schedule updated', discordContext, {
+		operationType: 'schedule_save',
+		operationStatus: 'success',
+		additionalData: { scheduleId: updatedSchedule.id, scheduleName: updatedSchedule.name },
 	});
-	await interaction.reply(buildWeekdaySelectPayload(token, parseStoredWeekdays(schedule.weekdays)));
+	await interaction.reply(buildScheduleSavedReply({ schedule: updatedSchedule, timezone: context.timezone, warnings: context.warnings, title: 'Schedule Updated' }));
 }
 
 async function handleDelete(interaction: any, discordContext: DiscordContext): Promise<void> {
@@ -188,4 +384,12 @@ async function handleShow(interaction: any, discordContext: DiscordContext): Pro
 		additionalData: { scheduleId: schedule.id, scheduleName: schedule.name },
 	});
 	await interaction.reply(buildScheduleShowReply({ schedule, timezone: context.timezone, warnings: context.warnings }));
+}
+
+function isUniqueNameError(error: unknown): boolean {
+	return error instanceof Error && /UNIQUE constraint failed|SQLITE_CONSTRAINT/i.test(error.message);
+}
+
+function getSelectedWeekdays(interaction: any): number[] | null {
+	return parseWeekdayInput(interaction.options.getString(options.DAYS));
 }

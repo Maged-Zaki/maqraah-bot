@@ -7,6 +7,7 @@ import {
 	formatWeekdays,
 	getNextScheduleRuns,
 	isValidScheduleDate,
+	parseWeekdayInput,
 	parseStoredWeekdays,
 	serializeWeekdays,
 	shouldExecuteScheduleNow,
@@ -32,6 +33,20 @@ test('daily behavior is represented by all seven weekdays', () => {
 
 	assert.equal(formatWeekdays(parseStoredWeekdays(schedule.weekdays)), 'every day');
 	assert.equal(buildScheduleCronEntries(schedule, 'UTC').length, 7);
+});
+
+test('weekday command input accepts comma-separated full day names case-insensitively', () => {
+	assert.deepEqual(parseWeekdayInput('monday'), [1]);
+	assert.deepEqual(parseWeekdayInput('MonDay'), [1]);
+	assert.deepEqual(parseWeekdayInput('monday, thursday'), [1, 4]);
+	assert.deepEqual(parseWeekdayInput('monday,thursday'), [1, 4]);
+	assert.deepEqual(parseWeekdayInput('weekdays'), [1, 2, 3, 4, 5]);
+	assert.deepEqual(parseWeekdayInput('weekends'), [6, 7]);
+	assert.deepEqual(parseWeekdayInput('everyday'), [1, 2, 3, 4, 5, 6, 7]);
+	assert.equal(parseWeekdayInput('monday, thursday, asdas'), null);
+	assert.equal(parseWeekdayInput('monday thursday'), null);
+	assert.equal(parseWeekdayInput('mon thu'), null);
+	assert.equal(parseWeekdayInput('funday'), null);
 });
 
 test('weekdays skip weekends in next-run previews', () => {

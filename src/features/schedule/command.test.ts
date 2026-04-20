@@ -9,72 +9,63 @@ process.env.CHANNEL_ID ??= 'reminder-channel';
 const { configurationRepository, scheduleRepository } = require('../../storage/sqlite') as typeof import('../../storage/sqlite');
 const { scheduleStatuses, scheduleTypes } = require('../../storage/sqlite/repositories/ScheduleRepository') as typeof import('../../storage/sqlite/repositories/ScheduleRepository');
 const { execute } = require('./command') as typeof import('./command');
-const { buildOneTimeModalCustomId, buildRecurringModalCustomId } = require('./components') as typeof import('./components');
-const { handleScheduleModalSubmit, handleScheduleSelectMenuInteraction } = require('./interactions') as typeof import('./interactions');
-const { createPendingScheduleSetup, scheduleSetupActions } = require('./state') as typeof import('./state');
 
-test('/schedule create-recurring returns a weekday picker', { concurrency: false }, async () => {
+test('/schedule create-recurring saves the schedule from command options', { concurrency: false }, async () => {
+	let createdInput: any;
+	let replyPayload: any;
+
+	await withRepositoryMocks(
+		{
+			getConfiguration: async () => ({ timezone: 'UTC' }),
+			getActiveSchedules: async () => [],
+			createSchedule: async (input: any) => {
+				createdInput = input;
+				return buildSchedule({
+					id: 10,
+					name: input.name,
+					weekdays: input.weekdays,
+					time: input.time,
+					message: input.message,
+				});
+			},
+		},
+		async () => {
+			await execute(
+				buildCommandInteraction({
+					subcommand: 'create-recurring',
+					strings: {
+						name: 'Team meeting',
+						days: 'monday, thursday',
+						time: '7:30 PM',
+						message: '<@&role-1> Team meeting starts soon.',
+					},
+					client: createClient(),
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+				}) as any
+			);
+		}
+	);
+
+	assert.equal(createdInput.name, 'Team meeting');
+	assert.equal(createdInput.weekdays, '1,4');
+	assert.equal(createdInput.time, '7:30 PM');
+	assert.equal(createdInput.creatorUserId, 'user-1');
+	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
+	assert.equal(getEmbedFields(replyPayload).When, 'Monday and Thursday at 7:30 PM');
+});
+
+test('/schedule create-recurring rejects invalid days', { concurrency: false }, async () => {
 	let replyPayload: any;
 
 	await execute(
 		buildCommandInteraction({
 			subcommand: 'create-recurring',
-			reply: (payload) => {
-				replyPayload = payload;
-			},
-		}) as any
-	);
-
-	assert.match(replyPayload.content, /Choose one or more days/);
-	assert.equal(replyPayload.ephemeral, true);
-	assert.equal(replyPayload.components.length, 1);
-});
-
-test('/schedule create-one-time opens a one-time modal', { concurrency: false }, async () => {
-	let modal: any;
-
-	await execute(
-		buildCommandInteraction({
-			subcommand: 'create-one-time',
-			showModal: (payload) => {
-				modal = payload;
-			},
-		}) as any
-	);
-
-	assert.match(modal.data.custom_id, /^schedule:modal:one-time:/);
-});
-
-test('weekday picker opens the recurring modal with selected days', { concurrency: false }, async () => {
-	const token = createPendingScheduleSetup({ action: scheduleSetupActions.CREATE_RECURRING, userId: 'user-1' });
-	let modal: any;
-
-	const handled = await handleScheduleSelectMenuInteraction({
-		customId: `schedule:weekday:${token}`,
-		values: ['monday', 'thursday'],
-		user: { id: 'user-1', username: 'User One' },
-		guildId: 'guild-1',
-		channelId: 'channel-1',
-		showModal: async (payload: any) => {
-			modal = payload;
-		},
-		reply: async () => undefined,
-	});
-
-	assert.equal(handled, true);
-	assert.equal(modal.data.custom_id, buildRecurringModalCustomId(token));
-});
-
-test('recurring modal rejects invalid time', { concurrency: false }, async () => {
-	const token = createPendingScheduleSetup({ action: scheduleSetupActions.CREATE_RECURRING, userId: 'user-1', weekdays: [1] });
-	let replyPayload: any;
-
-	const handled = await handleScheduleModalSubmit(
-		buildModalInteraction({
-			customId: buildRecurringModalCustomId(token),
-			fields: {
+			strings: {
 				name: 'Team meeting',
-				time: '25:00 PM',
+				days: 'funday',
+				time: '7:30 PM',
 				message: 'Team meeting starts soon.',
 			},
 			reply: (payload) => {
@@ -83,19 +74,64 @@ test('recurring modal rejects invalid time', { concurrency: false }, async () =>
 		}) as any
 	);
 
-	assert.equal(handled, true);
 	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
-	assert.match(replyPayload.content, /Invalid time/);
+	assert.match(replyPayload.content, /Invalid days/);
 });
 
-test('one-time modal rejects invalid date', { concurrency: false }, async () => {
-	const token = createPendingScheduleSetup({ action: scheduleSetupActions.CREATE_ONE_TIME, userId: 'user-1' });
+test('/schedule create-one-time saves date and time from command options', { concurrency: false }, async () => {
+	let createdInput: any;
 	let replyPayload: any;
 
-	const handled = await handleScheduleModalSubmit(
-		buildModalInteraction({
-			customId: buildOneTimeModalCustomId(token),
-			fields: {
+	await withRepositoryMocks(
+		{
+			getConfiguration: async () => ({ timezone: 'UTC' }),
+			getActiveSchedules: async () => [],
+			createSchedule: async (input: any) => {
+				createdInput = input;
+				return buildSchedule({
+					id: 11,
+					type: scheduleTypes.ONE_TIME,
+					name: input.name,
+					weekdays: null,
+					oneTimeDate: input.oneTimeDate,
+					time: input.time,
+					message: input.message,
+				});
+			},
+		},
+		async () => {
+			await execute(
+				buildCommandInteraction({
+					subcommand: 'create-one-time',
+					strings: {
+						name: 'Appointment',
+						date: '2099-04-20',
+						time: '8:05 AM',
+						message: 'Appointment starts soon.',
+					},
+					client: createClient(),
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+				}) as any
+			);
+		}
+	);
+
+	assert.equal(createdInput.type, scheduleTypes.ONE_TIME);
+	assert.equal(createdInput.oneTimeDate, '2099-04-20');
+	assert.equal(createdInput.time, '8:05 AM');
+	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
+	assert.equal(getEmbedFields(replyPayload).When, '2099-04-20 at 8:05 AM');
+});
+
+test('/schedule create-one-time rejects invalid date', { concurrency: false }, async () => {
+	let replyPayload: any;
+
+	await execute(
+		buildCommandInteraction({
+			subcommand: 'create-one-time',
+			strings: {
 				name: 'Appointment',
 				date: '2026-02-31',
 				time: '7:30 PM',
@@ -107,9 +143,150 @@ test('one-time modal rejects invalid date', { concurrency: false }, async () => 
 		}) as any
 	);
 
-	assert.equal(handled, true);
 	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
 	assert.match(replyPayload.content, /Invalid date/);
+});
+
+test('/schedule create-one-time rejects past date and time', { concurrency: false }, async () => {
+	let replyPayload: any;
+
+	await withRepositoryMocks(
+		{
+			getConfiguration: async () => ({ timezone: 'UTC' }),
+		},
+		async () => {
+			await execute(
+				buildCommandInteraction({
+					subcommand: 'create-one-time',
+					strings: {
+						name: 'Past appointment',
+						date: '2020-01-01',
+						time: '7:30 PM',
+						message: 'Appointment starts soon.',
+					},
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+				}) as any
+			);
+		}
+	);
+
+	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
+	assert.match(replyPayload.content, /future date and time/);
+});
+
+test('/schedule update changes a recurring schedule from command options', { concurrency: false }, async () => {
+	let updateInput: any;
+	let replyPayload: any;
+
+	await withRepositoryMocks(
+		{
+			getConfiguration: async () => ({ timezone: 'UTC' }),
+			getActiveSchedules: async () => [],
+			getScheduleByName: async () => buildSchedule({ id: 20, name: 'Team meeting', weekdays: '1' }),
+			updateScheduleById: async (_id: number, input: any) => {
+				updateInput = input;
+				return buildSchedule({
+					id: 20,
+					name: input.name,
+					weekdays: input.weekdays,
+					time: input.time,
+					message: input.message,
+				});
+			},
+		},
+		async () => {
+			await execute(
+				buildCommandInteraction({
+					subcommand: 'update',
+					strings: {
+						name: 'Team meeting',
+						'new-name': 'Planning',
+						days: 'weekdays',
+						time: '8:00 PM',
+						message: 'Planning starts soon.',
+					},
+					client: createClient(),
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+				}) as any
+			);
+		}
+	);
+
+	assert.deepEqual(updateInput, {
+		name: 'Planning',
+		time: '8:00 PM',
+		message: 'Planning starts soon.',
+		weekdays: '1,2,3,4,5',
+		status: scheduleStatuses.ACTIVE,
+	});
+	assert.equal(getEmbedFields(replyPayload).When, 'weekdays at 8:00 PM');
+});
+
+test('/schedule list renders one-time schedules before they fire', { concurrency: false }, async () => {
+	let replyPayload: any;
+
+	await withRepositoryMocks(
+		{
+			getConfiguration: async () => ({ timezone: 'UTC' }),
+			getActiveSchedules: async () => [
+				buildSchedule({
+					type: scheduleTypes.ONE_TIME,
+					name: 'Appointment',
+					weekdays: null,
+					oneTimeDate: '2099-04-20',
+					time: '8:05 AM',
+					message: 'Appointment starts soon.',
+				}),
+			],
+		},
+		async () => {
+			await execute(
+				buildCommandInteraction({
+					subcommand: 'list',
+					client: createClient(),
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+				}) as any
+			);
+		}
+	);
+
+	const fields = getEmbedFields(replyPayload);
+	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
+	assert.match(fields.Appointment, /2099-04-20 at 8:05 AM/);
+	assert.match(fields.Appointment, /Next:/);
+});
+
+test('/schedule update rejects days for one-time schedules', { concurrency: false }, async () => {
+	let replyPayload: any;
+
+	await withRepositoryMocks(
+		{
+			getScheduleByName: async () => buildSchedule({ type: scheduleTypes.ONE_TIME, weekdays: null, oneTimeDate: '2026-04-20' }),
+		},
+		async () => {
+			await execute(
+				buildCommandInteraction({
+					subcommand: 'update',
+					strings: {
+						name: 'Appointment',
+						days: 'monday',
+					},
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+				}) as any
+			);
+		}
+	);
+
+	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
+	assert.match(replyPayload.content, /Days can only be updated/);
 });
 
 test('/schedule list renders the schedule dashboard', { concurrency: false }, async () => {
@@ -181,6 +358,9 @@ test('/schedule delete removes a schedule and refreshes jobs', { concurrency: fa
 async function withRepositoryMocks(overrides: any, callback: () => Promise<void>): Promise<void> {
 	const originalGetConfiguration = configurationRepository.getConfiguration;
 	const originalGetActiveSchedules = scheduleRepository.getActiveSchedules;
+	const originalCreateSchedule = scheduleRepository.createSchedule;
+	const originalGetScheduleByName = scheduleRepository.getScheduleByName;
+	const originalUpdateScheduleById = scheduleRepository.updateScheduleById;
 	const originalDeleteScheduleByName = scheduleRepository.deleteScheduleByName;
 
 	if (overrides.getConfiguration) {
@@ -188,6 +368,15 @@ async function withRepositoryMocks(overrides: any, callback: () => Promise<void>
 	}
 	if (overrides.getActiveSchedules) {
 		scheduleRepository.getActiveSchedules = overrides.getActiveSchedules;
+	}
+	if (overrides.createSchedule) {
+		scheduleRepository.createSchedule = overrides.createSchedule;
+	}
+	if (overrides.getScheduleByName) {
+		scheduleRepository.getScheduleByName = overrides.getScheduleByName;
+	}
+	if (overrides.updateScheduleById) {
+		scheduleRepository.updateScheduleById = overrides.updateScheduleById;
 	}
 	if (overrides.deleteScheduleByName) {
 		scheduleRepository.deleteScheduleByName = overrides.deleteScheduleByName;
@@ -198,6 +387,9 @@ async function withRepositoryMocks(overrides: any, callback: () => Promise<void>
 	} finally {
 		configurationRepository.getConfiguration = originalGetConfiguration;
 		scheduleRepository.getActiveSchedules = originalGetActiveSchedules;
+		scheduleRepository.createSchedule = originalCreateSchedule;
+		scheduleRepository.getScheduleByName = originalGetScheduleByName;
+		scheduleRepository.updateScheduleById = originalUpdateScheduleById;
 		scheduleRepository.deleteScheduleByName = originalDeleteScheduleByName;
 	}
 }
@@ -206,7 +398,6 @@ function buildCommandInteraction(options: {
 	subcommand: string;
 	strings?: Record<string, string>;
 	reply?: (payload: any) => void;
-	showModal?: (payload: any) => void;
 	client?: any;
 }): Record<string, unknown> {
 	const client = options.client ?? createClient();
@@ -221,28 +412,6 @@ function buildCommandInteraction(options: {
 		client,
 		guild: client.guilds.cache.get('guild-1'),
 		reply: async (payload: any) => options.reply?.(payload),
-		showModal: async (payload: any) => options.showModal?.(payload),
-	};
-}
-
-function buildModalInteraction(options: {
-	customId: string;
-	fields: Record<string, string>;
-	reply: (payload: any) => void;
-	client?: any;
-}): Record<string, unknown> {
-	const client = options.client ?? createClient();
-	return {
-		customId: options.customId,
-		fields: {
-			getTextInputValue: (name: string) => options.fields[name],
-		},
-		user: { id: 'user-1', username: 'User One' },
-		guildId: 'guild-1',
-		channelId: 'channel-1',
-		client,
-		guild: client.guilds.cache.get('guild-1'),
-		reply: async (payload: any) => options.reply(payload),
 	};
 }
 

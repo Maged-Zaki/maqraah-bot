@@ -376,12 +376,15 @@ async function handleUpdate(interaction: any, discordContext: DiscordContext): P
 	}
 
 	await scheduleGenericSchedules(interaction.client);
+	const notificationWarning =
+		updates.time !== undefined ? await sendScheduleTimeUpdateNotification(interaction, updatedSchedule, discordContext) : null;
+	const warnings = notificationWarning ? [...context.warnings, notificationWarning] : context.warnings;
 	logger.info('Schedule updated', discordContext, {
 		operationType: 'schedule_save',
 		operationStatus: 'success',
 		additionalData: { scheduleId: updatedSchedule.id, scheduleName: updatedSchedule.name },
 	});
-	await interaction.reply(buildScheduleSavedReply({ schedule: updatedSchedule, timezone: context.timezone, warnings: context.warnings, title: 'Schedule Updated' }));
+	await interaction.reply(buildScheduleSavedReply({ schedule: updatedSchedule, timezone: context.timezone, warnings, title: 'Schedule Updated' }));
 }
 
 async function handleDelete(interaction: any, discordContext: DiscordContext): Promise<void> {
@@ -443,6 +446,45 @@ async function sendScheduleCreationNotification(
 	schedule: Schedule,
 	discordContext: DiscordContext
 ): Promise<string | null> {
+	return sendSchedulePeopleNotification(interaction, schedule, discordContext, {
+		content: buildScheduleCreationNotification(schedule),
+		successMessage: 'Schedule creation notification sent',
+		failureMessage: 'Failed to send schedule creation notification',
+		missingChannelWarning: 'People were not notified because the reminder channel is not configured.',
+		unsendableChannelWarning: (channelId) => `People were not notified because configured reminder channel ${channelId} is not sendable.`,
+		rejectedMessageWarning: 'People were not notified because Discord rejected the notification message.',
+	});
+}
+
+async function sendScheduleTimeUpdateNotification(
+	interaction: any,
+	schedule: Schedule,
+	discordContext: DiscordContext
+): Promise<string | null> {
+	return sendSchedulePeopleNotification(interaction, schedule, discordContext, {
+		content: buildScheduleTimeUpdateNotification(schedule),
+		successMessage: 'Schedule time update notification sent',
+		failureMessage: 'Failed to send schedule time update notification',
+		missingChannelWarning: 'People were not notified about the schedule time update because the reminder channel is not configured.',
+		unsendableChannelWarning: (channelId) =>
+			`People were not notified about the schedule time update because configured reminder channel ${channelId} is not sendable.`,
+		rejectedMessageWarning: 'People were not notified about the schedule time update because Discord rejected the notification message.',
+	});
+}
+
+async function sendSchedulePeopleNotification(
+	interaction: any,
+	schedule: Schedule,
+	discordContext: DiscordContext,
+	options: {
+		content: string;
+		successMessage: string;
+		failureMessage: string;
+		missingChannelWarning: string;
+		unsendableChannelWarning: (channelId: string) => string;
+		rejectedMessageWarning: string;
+	}
+): Promise<string | null> {
 	const userIds = parseMentionUserIds(schedule.mentionUserIds);
 	if (userIds.length === 0) {
 		return null;
@@ -450,36 +492,41 @@ async function sendScheduleCreationNotification(
 
 	const channelId = process.env.CHANNEL_ID;
 	if (!channelId) {
-		return 'People were not notified because the reminder channel is not configured.';
+		return options.missingChannelWarning;
 	}
 
 	const channel = interaction.client?.channels?.cache?.get(channelId) ?? interaction.guild?.channels?.cache?.get(channelId);
 	if (!channel || typeof channel.send !== 'function') {
-		return `People were not notified because configured reminder channel ${channelId} is not sendable.`;
+		return options.unsendableChannelWarning(channelId);
 	}
 
 	try {
 		await channel.send({
-			content: buildScheduleCreationNotification(schedule),
+			content: options.content,
 			allowedMentions: { users: userIds },
 		});
-		logger.info('Schedule creation notification sent', discordContext, {
+		logger.info(options.successMessage, discordContext, {
 			operationType: 'schedule_notification',
 			operationStatus: 'success',
 			additionalData: { scheduleId: schedule.id, scheduleName: schedule.name, userCount: userIds.length },
 		});
 		return null;
 	} catch (error) {
-		logger.error('Failed to send schedule creation notification', error as Error, discordContext, {
+		logger.error(options.failureMessage, error as Error, discordContext, {
 			operationType: 'schedule_notification',
 			operationStatus: 'failure',
 			additionalData: { scheduleId: schedule.id, scheduleName: schedule.name, userCount: userIds.length },
 		});
-		return 'People were not notified because Discord rejected the notification message.';
+		return options.rejectedMessageWarning;
 	}
 }
 
 function buildScheduleCreationNotification(schedule: Schedule): string {
 	const mentions = formatUserMentions(schedule.mentionUserIds);
 	return `${mentions}\nA schedule was created: **${schedule.name}** - ${formatScheduleTiming(schedule)}.`;
+}
+
+function buildScheduleTimeUpdateNotification(schedule: Schedule): string {
+	const mentions = formatUserMentions(schedule.mentionUserIds);
+	return `${mentions}\nSchedule **${schedule.name}** was updated: ${formatScheduleTiming(schedule)}.`;
 }

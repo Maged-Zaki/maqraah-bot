@@ -359,6 +359,7 @@ test('/schedule create-one-time rejects past date and time', { concurrency: fals
 test('/schedule update changes a recurring schedule from command options', { concurrency: false }, async () => {
 	let updateInput: any;
 	let replyPayload: any;
+	const sentMessages: any[] = [];
 
 	await withRepositoryMocks(
 		{
@@ -389,7 +390,7 @@ test('/schedule update changes a recurring schedule from command options', { con
 						message: 'Planning starts soon.',
 						people: '<@789>',
 					},
-					client: createClient(),
+					client: createClient(sentMessages),
 					reply: (payload) => {
 						replyPayload = payload;
 					},
@@ -408,6 +409,60 @@ test('/schedule update changes a recurring schedule from command options', { con
 	});
 	assert.equal(getEmbedFields(replyPayload).When, 'weekdays at 8:00 PM');
 	assert.equal(getEmbedFields(replyPayload).People, '<@789>');
+	assert.equal(sentMessages.length, 1);
+	assert.match(sentMessages[0].content, /^<@789>/);
+	assert.match(sentMessages[0].content, /Schedule \*\*Planning\*\* was updated: weekdays at 8:00 PM/);
+	assert.deepEqual(sentMessages[0].allowedMentions, { users: ['789'] });
+});
+
+test('/schedule update leaves people unchanged when people is omitted', { concurrency: false }, async () => {
+	let updateInput: any;
+	let replyPayload: any;
+	const sentMessages: any[] = [];
+
+	await withRepositoryMocks(
+		{
+			getConfiguration: async () => ({ timezone: 'UTC' }),
+			getActiveSchedules: async () => [],
+			getScheduleByName: async () => buildSchedule({ id: 23, name: 'Team meeting', weekdays: '1', mentionUserIds: '123,456' }),
+			updateScheduleById: async (_id: number, input: any) => {
+				updateInput = input;
+				return buildSchedule({
+					id: 23,
+					name: 'Team meeting',
+					weekdays: '1',
+					time: input.time,
+					mentionUserIds: '123,456',
+				});
+			},
+		},
+		async () => {
+			await execute(
+				buildCommandInteraction({
+					subcommand: 'update',
+					strings: {
+						name: 'Team meeting',
+						time: '8:00 PM',
+					},
+					client: createClient(sentMessages),
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+				}) as any
+			);
+		}
+	);
+
+	assert.deepEqual(updateInput, {
+		time: '8:00 PM',
+		status: scheduleStatuses.ACTIVE,
+	});
+	assert.equal('mentionUserIds' in updateInput, false);
+	assert.equal(getEmbedFields(replyPayload).People, '<@123> <@456>');
+	assert.equal(sentMessages.length, 1);
+	assert.match(sentMessages[0].content, /^<@123> <@456>/);
+	assert.match(sentMessages[0].content, /Schedule \*\*Team meeting\*\* was updated: Monday at 8:00 PM/);
+	assert.deepEqual(sentMessages[0].allowedMentions, { users: ['123', '456'] });
 });
 
 test('/schedule list renders one-time schedules before they fire', { concurrency: false }, async () => {
@@ -450,6 +505,7 @@ test('/schedule list renders one-time schedules before they fire', { concurrency
 test('/schedule update changes people from command options', { concurrency: false }, async () => {
 	let updateInput: any;
 	let replyPayload: any;
+	const sentMessages: any[] = [];
 
 	await withRepositoryMocks(
 		{
@@ -469,7 +525,7 @@ test('/schedule update changes people from command options', { concurrency: fals
 						name: 'Team meeting',
 						people: '<@456> <@!789>',
 					},
-					client: createClient(),
+					client: createClient(sentMessages),
 					reply: (payload) => {
 						replyPayload = payload;
 					},
@@ -483,6 +539,7 @@ test('/schedule update changes people from command options', { concurrency: fals
 		status: scheduleStatuses.ACTIVE,
 	});
 	assert.equal(getEmbedFields(replyPayload).People, '<@456> <@789>');
+	assert.equal(sentMessages.length, 0);
 });
 
 test('/schedule update rejects invalid people mentions', { concurrency: false }, async () => {

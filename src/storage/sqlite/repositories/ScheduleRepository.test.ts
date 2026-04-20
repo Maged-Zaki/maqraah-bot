@@ -74,6 +74,33 @@ test('schedule names are unique case-insensitively', async () => {
 	}
 });
 
+test('partial schedule updates preserve omitted fields', async () => {
+	const { db, repository } = await createRepository();
+
+	try {
+		const created = await repository.createSchedule({
+			name: 'Team Meeting',
+			type: scheduleTypes.RECURRING,
+			weekdays: '1,4',
+			time: '7:30 PM',
+			message: 'Team meeting starts soon.',
+			mentionUserIds: '123,456',
+			creatorUserId: 'user-1',
+		});
+
+		const updated = await repository.updateScheduleById(created.id, {
+			time: '8:00 PM',
+		});
+
+		assert.equal(updated?.time, '8:00 PM');
+		assert.equal(updated?.name, 'Team Meeting');
+		assert.equal(updated?.message, 'Team meeting starts soon.');
+		assert.equal(updated?.mentionUserIds, '123,456');
+	} finally {
+		await close(db);
+	}
+});
+
 test('completed schedules are excluded from active schedule lists', async () => {
 	const { db, repository } = await createRepository();
 

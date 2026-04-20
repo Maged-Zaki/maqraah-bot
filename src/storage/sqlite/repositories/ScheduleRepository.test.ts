@@ -13,21 +13,25 @@ test('schedules can be created, read, updated, and deleted by name', async () =>
 			weekdays: '1,4',
 			time: '7:30 PM',
 			message: 'Team meeting starts soon.',
+			mentionUserIds: '123,456',
 			creatorUserId: 'user-1',
 		});
 
 		assert.equal(created.name, 'Team Meeting');
 		assert.equal(created.nameKey, 'team meeting');
+		assert.equal(created.mentionUserIds, '123,456');
 
 		const updated = await repository.updateScheduleById(created.id, {
 			name: 'Planning',
 			weekdays: '2',
 			time: '8:00 PM',
 			message: 'Planning starts soon.',
+			mentionUserIds: '789',
 		});
 
 		assert.equal(updated?.name, 'Planning');
 		assert.equal(updated?.weekdays, '2');
+		assert.equal(updated?.mentionUserIds, '789');
 		assert.equal((await repository.getScheduleByName('planning'))?.message, 'Planning starts soon.');
 
 		const deleted = await repository.deleteScheduleByName('PLANNING');
@@ -48,6 +52,7 @@ test('schedule names are unique case-insensitively', async () => {
 			weekdays: '1',
 			time: '7:30 PM',
 			message: 'Team meeting starts soon.',
+			mentionUserIds: '123',
 			creatorUserId: 'user-1',
 		});
 
@@ -59,6 +64,7 @@ test('schedule names are unique case-insensitively', async () => {
 					weekdays: '2',
 					time: '8:00 PM',
 					message: 'Another meeting.',
+					mentionUserIds: '456',
 					creatorUserId: 'user-2',
 				}),
 			/UNIQUE constraint failed|SQLITE_CONSTRAINT/
@@ -78,6 +84,7 @@ test('completed schedules are excluded from active schedule lists', async () => 
 			oneTimeDate: '2026-04-20',
 			time: '7:30 PM',
 			message: 'Active reminder.',
+			mentionUserIds: '123',
 			creatorUserId: 'user-1',
 		});
 		const completed = await repository.createSchedule({
@@ -86,6 +93,7 @@ test('completed schedules are excluded from active schedule lists', async () => 
 			oneTimeDate: '2026-04-21',
 			time: '7:30 PM',
 			message: 'Completed reminder.',
+			mentionUserIds: '456',
 			creatorUserId: 'user-1',
 		});
 
@@ -118,6 +126,7 @@ async function createRepository(): Promise<{ db: sqlite3.Database; repository: S
 				oneTimeDate TEXT,
 				time TEXT NOT NULL,
 				message TEXT NOT NULL,
+				mentionUserIds TEXT NOT NULL DEFAULT '',
 				status TEXT DEFAULT 'active',
 				creatorUserId TEXT NOT NULL,
 				createdAt TEXT NOT NULL,

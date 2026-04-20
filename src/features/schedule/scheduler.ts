@@ -5,6 +5,7 @@ import { scheduleStatuses, scheduleTypes } from '../../storage/sqlite/repositori
 import type { Schedule } from '../../storage/sqlite/repositories/ScheduleRepository';
 import { logger } from '../../observability/logging/logger';
 import { normalizeTimeZone } from '../../shared/time';
+import { buildScheduleFireMessage } from './mentions';
 import { buildScheduleCronEntries, isOneTimeSchedulePast, shouldExecuteScheduleNow } from './resolver';
 
 export let scheduledGenericScheduleJobs: cron.ScheduledTask[] = [];
@@ -124,7 +125,7 @@ async function sendScheduleMessage(client: Client, schedule: Schedule): Promise<
 	}
 
 	await (channel as any).send({
-		content: schedule.message,
+		content: buildScheduleFireMessage(schedule),
 		allowedMentions: { parse: ['users', 'roles'] },
 	});
 }

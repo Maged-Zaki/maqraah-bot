@@ -22,6 +22,7 @@ test('generic scheduler sends active recurring schedules on selected weekdays', 
 					weekdays: '1,4',
 					time: '7:30 PM',
 					message: '<@&role-1> Team meeting starts soon.',
+					mentionUserIds: '123,456',
 				}),
 			recordScheduleRun: async (id: number) => {
 				recordedRuns.push(id);
@@ -33,7 +34,7 @@ test('generic scheduler sends active recurring schedules on selected weekdays', 
 	);
 
 	assert.deepEqual(recordedRuns, [10]);
-	assert.equal(sentPayloads[0].content, '<@&role-1> Team meeting starts soon.');
+	assert.equal(sentPayloads[0].content, '<@123> <@456>\n<@&role-1> Team meeting starts soon.');
 	assert.deepEqual(sentPayloads[0].allowedMentions, { parse: ['users', 'roles'] });
 });
 
@@ -84,6 +85,7 @@ test('generic scheduler completes one-time schedules after sending', { concurren
 	);
 
 	assert.equal(sentPayloads.length, 1);
+	assert.match(sentPayloads[0].content, /^<@123>/);
 	assert.deepEqual(completedSchedules, [20]);
 });
 
@@ -143,6 +145,7 @@ function buildSchedule(schedule: Partial<Schedule>): Schedule {
 		oneTimeDate: null,
 		time: '7:30 PM',
 		message: 'Team meeting starts soon.',
+		mentionUserIds: '123',
 		status: scheduleStatuses.ACTIVE,
 		creatorUserId: 'user-1',
 		createdAt: '2026-04-15T12:00:00.000Z',

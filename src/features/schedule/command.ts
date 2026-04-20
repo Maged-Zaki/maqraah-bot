@@ -6,6 +6,7 @@ import { logger, DiscordContext } from '../../observability/logging/logger';
 import { parseReminderTime } from '../../shared/time';
 import { getScheduleDisplayContext } from './context';
 import { buildScheduleListReply, buildScheduleSavedReply, buildScheduleShowReply, formatScheduleTiming } from './display';
+import { formatUserMentions, parseMentionUserIds, parsePeopleMentions, serializeMentionUserIds } from './mentions';
 import {
 	isOneTimeScheduleDateTimeInFuture,
 	isValidScheduleDate,
@@ -49,7 +50,12 @@ export const data = new SlashCommandBuilder()
 			)
 			.addStringOption((option) => option.setName(options.TIME).setDescription('Time of day, e.g. 7:30 PM').setRequired(true))
 			.addStringOption((option) => option.setName(options.MESSAGE).setDescription('Reminder message').setRequired(true))
-			.addStringOption((option) => option.setName(options.PEOPLE).setDescription('People to notify now, e.g. @user @user2'))
+			.addStringOption((option) =>
+				option
+					.setName(options.PEOPLE)
+					.setDescription('People to mention when this schedule fires, e.g. @user @user2')
+					.setRequired(true)
+			)
 	)
 	.addSubcommand((subcommand) =>
 		subcommand
@@ -59,7 +65,12 @@ export const data = new SlashCommandBuilder()
 			.addStringOption((option) => option.setName(options.DATE).setDescription('Date in YYYY-MM-DD').setRequired(true))
 			.addStringOption((option) => option.setName(options.TIME).setDescription('Time of day, e.g. 7:30 PM').setRequired(true))
 			.addStringOption((option) => option.setName(options.MESSAGE).setDescription('Reminder message').setRequired(true))
-			.addStringOption((option) => option.setName(options.PEOPLE).setDescription('People to notify now, e.g. @user @user2'))
+			.addStringOption((option) =>
+				option
+					.setName(options.PEOPLE)
+					.setDescription('People to mention when this schedule fires, e.g. @user @user2')
+					.setRequired(true)
+			)
 	)
 	.addSubcommand((subcommand) =>
 		subcommand
@@ -71,6 +82,7 @@ export const data = new SlashCommandBuilder()
 			.addStringOption((option) => option.setName(options.DATE).setDescription('One-time date in YYYY-MM-DD'))
 			.addStringOption((option) => option.setName(options.TIME).setDescription('Time of day, e.g. 7:30 PM'))
 			.addStringOption((option) => option.setName(options.MESSAGE).setDescription('Reminder message'))
+			.addStringOption((option) => option.setName(options.PEOPLE).setDescription('People to mention when this schedule fires, e.g. @user @user2'))
 	)
 	.addSubcommand((subcommand) =>
 		subcommand
@@ -139,7 +151,7 @@ async function handleCreateRecurring(interaction: any, discordContext: DiscordCo
 	const weekdays = getSelectedWeekdays(interaction);
 	const parsedTime = parseReminderTime(interaction.options.getString(options.TIME));
 	const message = (interaction.options.getString(options.MESSAGE) ?? '').trim();
-	const people = parsePeopleMentions(interaction.options.getString(options.PEOPLE));
+	const people = parsePeopleMentions(interaction.options.getString(options.PEOPLE), true);
 
 	if (!name) {
 		await interaction.reply({ content: 'Schedule name cannot be empty.', flags: MessageFlags.Ephemeral });
@@ -176,12 +188,13 @@ async function handleCreateRecurring(interaction: any, discordContext: DiscordCo
 		oneTimeDate: null,
 		time: parsedTime.displayTime,
 		message,
+		mentionUserIds: serializeMentionUserIds(people.userIds),
 		creatorUserId: interaction.user.id,
 	});
 
 	await scheduleGenericSchedules(interaction.client);
 	const context = await getScheduleDisplayContext(interaction);
-	const notificationWarning = await sendScheduleCreationNotification(interaction, schedule, people.userIds, discordContext);
+	const notificationWarning = await sendScheduleCreationNotification(interaction, schedule, discordContext);
 	const warnings = notificationWarning ? [...context.warnings, notificationWarning] : context.warnings;
 	logger.info('Recurring schedule created', discordContext, {
 		operationType: 'schedule_save',
@@ -196,7 +209,7 @@ async function handleCreateOneTime(interaction: any, discordContext: DiscordCont
 	const date = (interaction.options.getString(options.DATE) ?? '').trim();
 	const parsedTime = parseReminderTime(interaction.options.getString(options.TIME));
 	const message = (interaction.options.getString(options.MESSAGE) ?? '').trim();
-	const people = parsePeopleMentions(interaction.options.getString(options.PEOPLE));
+	const people = parsePeopleMentions(interaction.options.getString(options.PEOPLE), true);
 
 	if (!name) {
 		await interaction.reply({ content: 'Schedule name cannot be empty.', flags: MessageFlags.Ephemeral });
@@ -241,11 +254,12 @@ async function handleCreateOneTime(interaction: any, discordContext: DiscordCont
 		oneTimeDate: date,
 		time: parsedTime.displayTime,
 		message,
+		mentionUserIds: serializeMentionUserIds(people.userIds),
 		creatorUserId: interaction.user.id,
 	});
 
 	await scheduleGenericSchedules(interaction.client);
-	const notificationWarning = await sendScheduleCreationNotification(interaction, schedule, people.userIds, discordContext);
+	const notificationWarning = await sendScheduleCreationNotification(interaction, schedule, discordContext);
 	const warnings = notificationWarning ? [...context.warnings, notificationWarning] : context.warnings;
 	logger.info('One-time schedule created', discordContext, {
 		operationType: 'schedule_save',
@@ -292,6 +306,16 @@ async function handleUpdate(interaction: any, discordContext: DiscordContext): P
 			return;
 		}
 		updates.message = trimmedMessage;
+	}
+
+	const people = interaction.options.getString(options.PEOPLE);
+	if (people !== null) {
+		const parsedPeople = parsePeopleMentions(people, true);
+		if (!parsedPeople.valid) {
+			await interaction.reply({ content: 'Invalid people list. Please mention Discord users like `@user @user2`.', flags: MessageFlags.Ephemeral });
+			return;
+		}
+		updates.mentionUserIds = serializeMentionUserIds(parsedPeople.userIds);
 	}
 
 	const days = interaction.options.getString(options.DAYS);
@@ -414,36 +438,12 @@ function getSelectedWeekdays(interaction: any): number[] | null {
 	return parseWeekdayInput(interaction.options.getString(options.DAYS));
 }
 
-function parsePeopleMentions(input: string | null | undefined): { valid: boolean; userIds: string[] } {
-	if (input === null || input === undefined) {
-		return { valid: true, userIds: [] };
-	}
-
-	const trimmedInput = input.trim();
-	if (!trimmedInput) {
-		return { valid: false, userIds: [] };
-	}
-
-	const userMentionPattern = /<@!?(\d+)>/g;
-	const userIds: string[] = [];
-	for (const match of trimmedInput.matchAll(userMentionPattern)) {
-		userIds.push(match[1]);
-	}
-
-	const leftoverText = trimmedInput.replace(userMentionPattern, '').replace(/[,\s]+/g, '');
-	if (userIds.length === 0 || leftoverText.length > 0) {
-		return { valid: false, userIds: [] };
-	}
-
-	return { valid: true, userIds: [...new Set(userIds)] };
-}
-
 async function sendScheduleCreationNotification(
 	interaction: any,
 	schedule: Schedule,
-	userIds: string[],
 	discordContext: DiscordContext
 ): Promise<string | null> {
+	const userIds = parseMentionUserIds(schedule.mentionUserIds);
 	if (userIds.length === 0) {
 		return null;
 	}
@@ -460,7 +460,7 @@ async function sendScheduleCreationNotification(
 
 	try {
 		await channel.send({
-			content: buildScheduleCreationNotification(schedule, userIds),
+			content: buildScheduleCreationNotification(schedule),
 			allowedMentions: { users: userIds },
 		});
 		logger.info('Schedule creation notification sent', discordContext, {
@@ -479,7 +479,7 @@ async function sendScheduleCreationNotification(
 	}
 }
 
-function buildScheduleCreationNotification(schedule: Schedule, userIds: string[]): string {
-	const mentions = userIds.map((userId) => `<@${userId}>`).join(' ');
+function buildScheduleCreationNotification(schedule: Schedule): string {
+	const mentions = formatUserMentions(schedule.mentionUserIds);
 	return `${mentions}\nA schedule was created: **${schedule.name}** - ${formatScheduleTiming(schedule)}.`;
 }

@@ -24,6 +24,7 @@ export interface Schedule {
 	oneTimeDate: string | null;
 	time: string;
 	message: string;
+	mentionUserIds: string;
 	status: ScheduleStatus;
 	creatorUserId: string;
 	createdAt: string;
@@ -38,6 +39,7 @@ export interface CreateScheduleInput {
 	oneTimeDate?: string | null;
 	time: string;
 	message: string;
+	mentionUserIds: string;
 	creatorUserId: string;
 }
 
@@ -47,6 +49,7 @@ export interface UpdateScheduleInput {
 	oneTimeDate?: string | null;
 	time?: string;
 	message?: string;
+	mentionUserIds?: string;
 	status?: ScheduleStatus;
 }
 
@@ -70,12 +73,13 @@ export class ScheduleRepository {
 						oneTimeDate,
 						time,
 						message,
+						mentionUserIds,
 						status,
 						creatorUserId,
 						createdAt,
 						updatedAt
 					)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				`,
 				[
 					name,
@@ -85,6 +89,7 @@ export class ScheduleRepository {
 					input.oneTimeDate ?? null,
 					input.time,
 					input.message,
+					input.mentionUserIds,
 					scheduleStatuses.ACTIVE,
 					input.creatorUserId,
 					now,
@@ -211,6 +216,11 @@ export class ScheduleRepository {
 		if (updates.message !== undefined) {
 			fields.push('message = ?');
 			values.push(updates.message);
+		}
+
+		if (updates.mentionUserIds !== undefined) {
+			fields.push('mentionUserIds = ?');
+			values.push(updates.mentionUserIds);
 		}
 
 		if (updates.status !== undefined) {

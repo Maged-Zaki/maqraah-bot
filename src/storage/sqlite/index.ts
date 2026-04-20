@@ -146,6 +146,7 @@ db.serialize(() => {
 	     oneTimeDate TEXT,
 	     time TEXT NOT NULL,
 	     message TEXT NOT NULL,
+	     mentionUserIds TEXT NOT NULL DEFAULT '',
 	     status TEXT DEFAULT 'active',
 	     creatorUserId TEXT NOT NULL,
 	     createdAt TEXT NOT NULL,
@@ -159,6 +160,8 @@ db.serialize(() => {
 			}
 		}
 	);
+
+	addColumnIfMissing('schedules', "mentionUserIds TEXT NOT NULL DEFAULT ''");
 
 	db.run(`CREATE INDEX IF NOT EXISTS idx_schedules_status ON schedules(status)`, (err) => {
 		if (err) {

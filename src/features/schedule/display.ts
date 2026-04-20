@@ -1,6 +1,7 @@
 import { EmbedBuilder, MessageFlags } from 'discord.js';
 import type { Schedule } from '../../storage/sqlite/repositories/ScheduleRepository';
 import { scheduleTypes } from '../../storage/sqlite/repositories/ScheduleRepository';
+import { formatUserMentions } from './mentions';
 import { formatScheduleRun, formatWeekdays, getNextScheduleRuns, parseStoredWeekdays } from './resolver';
 
 interface ScheduleReplyOptions {
@@ -59,6 +60,7 @@ export function buildScheduleListReply(options: ScheduleListReplyOptions) {
 				value: [
 					`When: ${formatScheduleTiming(schedule)}`,
 					`Next: ${nextRun ? formatScheduleRun(nextRun) : 'Not available'}`,
+					`People: ${formatSchedulePeople(schedule)}`,
 					`Message: ${previewText(schedule.message, 140)}`,
 				].join('\n'),
 				inline: false,
@@ -98,6 +100,7 @@ function buildScheduleEmbed(options: ScheduleReplyOptions & { includeMessage: bo
 			{ name: 'Name', value: options.schedule.name, inline: true },
 			{ name: 'Type', value: formatScheduleType(options.schedule), inline: true },
 			{ name: 'When', value: formatScheduleTiming(options.schedule), inline: false },
+			{ name: 'People', value: formatSchedulePeople(options.schedule), inline: false },
 			{
 				name: 'Next Runs',
 				value: nextRuns.length > 0 ? nextRuns.map(formatScheduleRun).join('\n') : 'Not available',
@@ -119,6 +122,10 @@ function buildScheduleEmbed(options: ScheduleReplyOptions & { includeMessage: bo
 
 function formatScheduleType(schedule: Schedule): string {
 	return schedule.type === scheduleTypes.ONE_TIME ? 'One-time' : 'Recurring';
+}
+
+function formatSchedulePeople(schedule: Schedule): string {
+	return formatUserMentions(schedule.mentionUserIds) || 'None configured';
 }
 
 function previewText(value: string, maxLength: number): string {

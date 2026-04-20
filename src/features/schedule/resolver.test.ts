@@ -88,6 +88,7 @@ function buildSchedule(schedule: Partial<Schedule>): Schedule {
 		oneTimeDate: null,
 		time: '7:30 PM',
 		message: 'Team meeting starts soon.',
+		mentionUserIds: '123',
 		status: scheduleStatuses.ACTIVE,
 		creatorUserId: 'user-1',
 		createdAt: '2026-04-15T12:00:00.000Z',

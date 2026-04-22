@@ -57,7 +57,8 @@ db.serialize(() => {
 	   CREATE TABLE IF NOT EXISTS progress (
 	     id INTEGER PRIMARY KEY DEFAULT 1,
 	     lastPage INTEGER DEFAULT 0,
-	     lastHadith INTEGER DEFAULT 0
+	     lastHadith INTEGER DEFAULT 0,
+	     khatmahCycleCount INTEGER DEFAULT 0
 	   )
 	 `,
 		(err) => {
@@ -72,6 +73,25 @@ db.serialize(() => {
 			logger.error('Failed to insert default progress', err);
 		}
 	});
+
+	addColumnIfMissing('progress', 'khatmahCycleCount INTEGER DEFAULT 0');
+
+	db.run(
+		`
+	   CREATE TABLE IF NOT EXISTS quran_progress_history (
+	     id INTEGER PRIMARY KEY AUTOINCREMENT,
+	     lastPage INTEGER NOT NULL,
+	     khatmahCycleCount INTEGER NOT NULL DEFAULT 0,
+	     pagesAdvanced INTEGER NOT NULL,
+	     recordedAt TEXT NOT NULL
+	   )
+	 `,
+		(err) => {
+			if (err) {
+				logger.error('Failed to create quran_progress_history table', err);
+			}
+		}
+	);
 
 	db.run(
 		`

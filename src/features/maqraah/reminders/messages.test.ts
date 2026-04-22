@@ -11,6 +11,7 @@ test('main reminder starts with the role mention and keeps reading details', () 
 		{
 			lastPage: 12,
 			lastHadith: 34,
+			khatmahCycleCount: 0,
 		},
 		[]
 	);

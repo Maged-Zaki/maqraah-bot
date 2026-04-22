@@ -1,7 +1,14 @@
 import { EmbedBuilder, MessageFlags, PermissionsBitField } from 'discord.js';
 import type { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
-import type { Progress } from '../../../storage/sqlite/repositories/ProgressRepository';
+import type { Progress, QuranProgressHistoryEntry } from '../../../storage/sqlite/repositories/ProgressRepository';
 import { getNextPage } from '../../../shared/quran/pages';
+import {
+	calculatePagesRemaining,
+	calculateProgressPercentage,
+	estimateKhatmahCompletion,
+	getCompletedKhatmahCount,
+	TOTAL_QURAN_PAGES,
+} from '../../../shared/quran/progress';
 import { normalizeTimeZone, parseReminderTime } from '../../../shared/time';
 import { defaultReminderCadence, isReminderStageEnabled } from '../reminders/cadence';
 import { getUpcomingSessionId } from '../reminders/sessionId';
@@ -9,6 +16,7 @@ import { getUpcomingSessionId } from '../reminders/sessionId';
 interface ProgressDashboardInput {
 	configuration: Configuration;
 	progress: Progress;
+	recentQuranProgressHistory: QuranProgressHistoryEntry[];
 	pendingNoteCount: number;
 	interaction: any;
 	now?: Date;
@@ -51,11 +59,25 @@ export function buildProgressDashboardReply(input: ProgressDashboardInput) {
 	const currentHadith = Number.isInteger(input.progress.lastHadith) ? input.progress.lastHadith : 0;
 	const nextPage = getNextPage(currentPage);
 	const nextHadith = currentHadith + 1;
+	const percentageComplete = calculateProgressPercentage(currentPage);
+	const pagesRemaining = calculatePagesRemaining(currentPage);
+	const completedKhatmahs = getCompletedKhatmahCount(input.progress);
+	const estimatedCompletion = formatEstimatedCompletion(currentPage, input.recentQuranProgressHistory, timezone, input.now);
 
 	const embed = new EmbedBuilder()
 		.setTitle('Maqraah Progress')
 		.addFields(
-			{ name: "Qur'an Progress", value: `Current page: ${currentPage}\nNext page: ${nextPage}`, inline: true },
+			{
+				name: "Qur'an Progress",
+				value:
+					`Current page: ${currentPage} / ${TOTAL_QURAN_PAGES}\n` +
+					`Next page: ${nextPage}\n` +
+					`Percentage complete: ${percentageComplete.toFixed(2)}%\n` +
+					`Pages remaining: ${pagesRemaining}\n` +
+					`Completed khatmahs: ${completedKhatmahs}\n` +
+					`Estimated completion: ${estimatedCompletion}`,
+				inline: true,
+			},
 			{ name: 'Hadith Progress', value: `Current Hadith: ${currentHadith}\nNext Hadith: ${nextHadith}`, inline: true },
 			{ name: 'Next Maqraah', value: nextMaqraah, inline: false },
 			{ name: 'Reminder Channel', value: reminderChannelDisplay.value, inline: true },
@@ -71,6 +93,34 @@ export function buildProgressDashboardReply(input: ProgressDashboardInput) {
 		flags: MessageFlags.Ephemeral,
 		allowedMentions: { parse: [] as string[] },
 	};
+}
+
+function formatEstimatedCompletion(
+	currentPage: number,
+	recentQuranProgressHistory: QuranProgressHistoryEntry[],
+	timezone: string | null,
+	now?: Date
+): string {
+	const estimate = estimateKhatmahCompletion(currentPage, recentQuranProgressHistory, now);
+
+	if (estimate === 'completed') {
+		return 'Completed';
+	}
+
+	if (!estimate) {
+		return 'Not enough history yet';
+	}
+
+	if (!timezone) {
+		return 'Not available';
+	}
+
+	return new Intl.DateTimeFormat('en-US', {
+		timeZone: timezone,
+		year: 'numeric',
+		month: 'short',
+		day: 'numeric',
+	}).format(estimate.estimatedCompletionDate);
 }
 
 function formatNextMaqraah(dailyTime: string, timezone: string, now: Date = new Date()): string {

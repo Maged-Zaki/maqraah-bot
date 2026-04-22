@@ -1,6 +1,7 @@
 import { MessageFlags } from 'discord.js';
 import { configurationRepository, notesRepository, progressRepository } from '../../../storage/sqlite';
 import { logger, DiscordContext } from '../../../observability/logging/logger';
+import { getCompletedKhatmahCount } from '../../../shared/quran/progress';
 import { buildProgressDashboardReply } from './dashboard';
 import { progressOptions, progressSubcommands } from './builders';
 
@@ -93,31 +94,87 @@ async function handleProgressUpdate(interaction: any, discordContext: DiscordCon
 	}
 
 	logger.info('Updating progress with changes', discordContext, { additionalData: { updates } });
-	await progressRepository.updateProgress(updates);
+	let quranProgressUpdate: Awaited<ReturnType<typeof progressRepository.updateQuranProgress>> | null = null;
+
+	if (lastPage !== null) {
+		quranProgressUpdate = await progressRepository.updateQuranProgress(lastPage);
+		if (quranProgressUpdate.completedKhatmah) {
+			const completedKhatmahs = getCompletedKhatmahCount(quranProgressUpdate.progress);
+			replyMessages.push(`Alhamdulillah! Khatmah \`${completedKhatmahs}\` is complete.`);
+			await announceKhatmahCompletion(interaction, quranProgressUpdate.progress, discordContext);
+		}
+	}
+
+	if (lastHadith !== null) {
+		await progressRepository.updateProgress({ lastHadith });
+	}
+
 	logger.info('Progress updated successfully', discordContext, { operationType: 'progress_update', operationStatus: 'success' });
 	await interaction.reply(replyMessages.join('\n'));
 }
 
 async function handleProgressShow(interaction: any, discordContext: DiscordContext, now?: Date): Promise<void> {
-	const [configuration, progress, notes] = await Promise.all([
+	const [configuration, progress, recentQuranProgressHistory, notes] = await Promise.all([
 		configurationRepository.getConfiguration(),
 		progressRepository.getProgress(),
+		progressRepository.getRecentQuranProgressHistory(),
 		notesRepository.getNotesByStatus('pending'),
 	]);
 
 	logger.info('Displaying current maqraah progress dashboard', discordContext, {
 		operationType: 'progress_show',
 		operationStatus: 'success',
-		additionalData: { progress, pendingNoteCount: notes.length },
+		additionalData: { progress, pendingNoteCount: notes.length, recentQuranHistoryCount: recentQuranProgressHistory.length },
 	});
 
 	await interaction.reply(
 		buildProgressDashboardReply({
 			configuration,
 			progress,
+			recentQuranProgressHistory,
 			pendingNoteCount: notes.length,
 			interaction,
 			now,
 		})
 	);
+}
+
+async function announceKhatmahCompletion(interaction: any, progress: { lastPage: number; khatmahCycleCount: number }, discordContext: DiscordContext): Promise<void> {
+	const channelId = process.env.CHANNEL_ID;
+	if (!channelId) {
+		logger.warn('Skipping khatmah completion announcement because CHANNEL_ID is not configured', discordContext, {
+			operationType: 'khatmah_completion_announcement',
+			operationStatus: 'failure',
+		});
+		return;
+	}
+
+	const channel = interaction.client?.channels?.cache?.get(channelId);
+	if (!channel || typeof channel.send !== 'function') {
+		logger.warn('Skipping khatmah completion announcement because the reminder channel is unavailable', discordContext, {
+			operationType: 'khatmah_completion_announcement',
+			operationStatus: 'failure',
+			additionalData: { channelId },
+		});
+		return;
+	}
+
+	const completedKhatmahs = getCompletedKhatmahCount(progress);
+	const completionMessage =
+		progress.lastPage === 604
+			? `Alhamdulillah! The maqraah has completed khatmah #${completedKhatmahs}.`
+			: `Alhamdulillah! The maqraah has completed khatmah #${completedKhatmahs} and started the next cycle on page ${progress.lastPage}.`;
+
+	try {
+		await channel.send({
+			content: completionMessage,
+			allowedMentions: { parse: [] as string[] },
+		});
+	} catch (error) {
+		logger.error('Failed to announce khatmah completion', error as Error, discordContext, {
+			operationType: 'khatmah_completion_announcement',
+			operationStatus: 'failure',
+			additionalData: { channelId, completedKhatmahs, lastPage: progress.lastPage },
+		});
+	}
 }

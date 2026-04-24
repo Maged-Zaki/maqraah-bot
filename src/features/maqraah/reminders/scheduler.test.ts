@@ -2,11 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
 import { Attendance } from '../../../storage/sqlite/repositories/AttendanceRepository';
+import type { Note } from '../../../storage/sqlite/repositories/NotesRepository';
+import type { Progress } from '../../../storage/sqlite/repositories/ProgressRepository';
 
 process.env.DATABASE_PATH ??= ':memory:';
 
-const { attendanceRepository } = require('../../../storage/sqlite') as typeof import('../../../storage/sqlite');
-const { sendPreReminderStage } = require('./scheduler') as typeof import('./scheduler');
+const { attendanceRepository, notesRepository, progressRepository } = require('../../../storage/sqlite') as typeof import('../../../storage/sqlite');
+const { parseReminderActionCustomId, reminderActions } = require('./components') as typeof import('./components');
+const { sendMainReminder, sendPreReminderStage } = require('./scheduler') as typeof import('./scheduler');
 
 test('pre reminder sends the reminder first and then preregistered attendance messages', { concurrency: false }, async () => {
 	const sentPayloads: Array<{ content: string; components?: unknown[] }> = [];
@@ -83,6 +86,43 @@ test('pre reminder keeps announcing later rows when one preregistered send fails
 	assert.deepEqual(markedAttendance, ['user-2']);
 });
 
+test('main reminder sends the current quran page prompt after notes', { concurrency: false }, async () => {
+	const sentPayloads: Array<{ content: string; components?: unknown[] }> = [];
+	const includedNoteIds: number[][] = [];
+
+	await withMainReminderRepositoryMocks(
+		{
+			getProgress: async () => buildProgress({ lastPage: 12, lastHadith: 34 }),
+			getNotesByStatus: async () => [buildNote({ id: 7, note: 'Review tajweed point' })],
+			updateNotesStatusWithDate: async (noteIds: number[]) => {
+				includedNoteIds.push(noteIds);
+			},
+		},
+		async () => {
+			await sendMainReminder(
+				{
+					send: async (payload: { content: string; components?: unknown[] }) => {
+						sentPayloads.push(payload);
+					},
+				},
+				buildConfiguration({ roleId: 'daily-role' }),
+				'2026-04-15'
+			);
+		}
+	);
+
+	assert.deepEqual(includedNoteIds, [[7]]);
+	assert.match(sentPayloads[0]?.content, /الصفحة القادمة: \[13\]/);
+	assert.equal(sentPayloads[1]?.content, 'ملاحظات اليوم:\n1. Review tajweed point\n');
+	assert.equal(sentPayloads[2]?.content, 'Current page: **13**');
+	const row = (sentPayloads[2]?.components?.[0] as any).toJSON();
+	assert.deepEqual(parseReminderActionCustomId(row.components[0].custom_id), {
+		action: reminderActions.NEXT_QURAN_PAGE,
+		sessionId: '2026-04-15',
+		page: 13,
+	});
+});
+
 async function withAttendanceRepositoryMocks(
 	overrides: Partial<Pick<typeof attendanceRepository, 'getAttendanceBySessionId' | 'markAttendanceAnnounced'>>,
 	callback: () => Promise<void>
@@ -106,6 +146,35 @@ async function withAttendanceRepositoryMocks(
 	}
 }
 
+async function withMainReminderRepositoryMocks(
+	overrides: Partial<Pick<typeof progressRepository, 'getProgress'> & Pick<typeof notesRepository, 'getNotesByStatus' | 'updateNotesStatusWithDate'>>,
+	callback: () => Promise<void>
+): Promise<void> {
+	const originalGetProgress = progressRepository.getProgress;
+	const originalGetNotesByStatus = notesRepository.getNotesByStatus;
+	const originalUpdateNotesStatusWithDate = notesRepository.updateNotesStatusWithDate;
+
+	if (overrides.getProgress) {
+		progressRepository.getProgress = overrides.getProgress;
+	}
+
+	if (overrides.getNotesByStatus) {
+		notesRepository.getNotesByStatus = overrides.getNotesByStatus;
+	}
+
+	if (overrides.updateNotesStatusWithDate) {
+		notesRepository.updateNotesStatusWithDate = overrides.updateNotesStatusWithDate;
+	}
+
+	try {
+		await callback();
+	} finally {
+		progressRepository.getProgress = originalGetProgress;
+		notesRepository.getNotesByStatus = originalGetNotesByStatus;
+		notesRepository.updateNotesStatusWithDate = originalUpdateNotesStatusWithDate;
+	}
+}
+
 function buildAttendance(attendance: Partial<Attendance>): Attendance {
 	return {
 		id: 1,
@@ -115,6 +184,26 @@ function buildAttendance(attendance: Partial<Attendance>): Attendance {
 		updatedAt: '2026-04-15T10:00:00.000Z',
 		announcedAt: null,
 		...attendance,
+	};
+}
+
+function buildProgress(progress: Partial<Progress>): Progress {
+	return {
+		lastPage: 0,
+		lastHadith: 0,
+		khatmahCycleCount: 0,
+		...progress,
+	};
+}
+
+function buildNote(note: Partial<Note>): Note {
+	return {
+		id: 1,
+		userId: 'user-1',
+		note: 'Note',
+		dateAdded: '2026-04-15T10:00:00.000Z',
+		status: 'pending',
+		...note,
 	};
 }
 

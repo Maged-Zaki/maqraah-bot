@@ -139,7 +139,7 @@ async function handleProgressShow(interaction: any, discordContext: DiscordConte
 	);
 }
 
-async function announceKhatmahCompletion(interaction: any, progress: { lastPage: number; khatmahCycleCount: number }, discordContext: DiscordContext): Promise<void> {
+export async function announceKhatmahCompletion(interaction: any, progress: { lastPage: number; khatmahCycleCount: number }, discordContext: DiscordContext): Promise<void> {
 	const channelId = process.env.CHANNEL_ID;
 	if (!channelId) {
 		logger.warn('Skipping khatmah completion announcement because CHANNEL_ID is not configured', discordContext, {

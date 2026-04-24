@@ -3,8 +3,9 @@ import * as cron from 'node-cron';
 import { configurationRepository, notesRepository, progressRepository, reminderEventsRepository } from '../../../storage/sqlite';
 import { logger } from '../../../observability/logging/logger';
 import { normalizeTimeZone, parseTimeToCron } from '../../../shared/time';
+import { getNextPage } from '../../../shared/quran/pages';
 import { announcePendingAttendance } from './attendance';
-import { buildReminderActionRows } from './components';
+import { buildCurrentQuranPageActionRows, buildCurrentQuranPageMessage, buildReminderActionRows } from './components';
 import { buildReminderStageSchedules, reminderStages, ReminderStage, ReminderStageSchedule } from './cadence';
 import { buildPreReminderMessage, buildReminderMessages } from './messages';
 import { getReminderSessionId } from './sessionId';
@@ -185,10 +186,11 @@ export async function sendPreReminderStage(
 	await announcePendingAttendance(channel, sessionId);
 }
 
-async function sendMainReminder(channel: any, configuration: Awaited<ReturnType<typeof configurationRepository.getConfiguration>>, sessionId: string): Promise<void> {
+export async function sendMainReminder(channel: any, configuration: Awaited<ReturnType<typeof configurationRepository.getConfiguration>>, sessionId: string): Promise<void> {
 	const progress = await progressRepository.getProgress();
 	const notes = await notesRepository.getNotesByStatus('pending');
 	const { mainMessage, notesMessages } = buildReminderMessages(configuration, progress, notes);
+	const currentPage = getNextPage(progress.lastPage);
 
 	if (notes.length > 0) {
 		logger.info(`Marking ${notes.length} notes as included`, undefined, { additionalData: { noteCount: notes.length } });
@@ -212,6 +214,11 @@ async function sendMainReminder(channel: any, configuration: Awaited<ReturnType<
 			content: notesMessages[i],
 		});
 	}
+
+	await channel.send({
+		content: buildCurrentQuranPageMessage(currentPage),
+		components: buildCurrentQuranPageActionRows(sessionId, currentPage),
+	});
 
 	logger.recordReminderSentEvent(process.env.GUILD_ID!, process.env.CHANNEL_ID!, notes.length, true);
 }

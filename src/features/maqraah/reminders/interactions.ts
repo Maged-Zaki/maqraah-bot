@@ -1,8 +1,17 @@
 import { ButtonInteraction, MessageFlags } from 'discord.js';
-import { attendanceRepository, notesRepository } from '../../../storage/sqlite';
+import { attendanceRepository, notesRepository, progressRepository } from '../../../storage/sqlite';
 import { logger, DiscordContext } from '../../../observability/logging/logger';
+import { getNextPage } from '../../../shared/quran/pages';
+import { TOTAL_QURAN_PAGES } from '../../../shared/quran/progress';
+import { announceKhatmahCompletion } from '../progress/handler';
 import { announceAttendanceStatus, attendanceStatuses, AttendanceStatus } from './attendance';
-import { buildNotesCarryOverActionRows, parseReminderActionCustomId, reminderActions } from './components';
+import {
+	buildCurrentQuranPageActionRows,
+	buildCurrentQuranPageMessage,
+	buildNotesCarryOverActionRows,
+	parseReminderActionCustomId,
+	reminderActions,
+} from './components';
 
 export async function handleReminderButtonInteraction(interaction: ButtonInteraction): Promise<boolean> {
 	const parsedCustomId = parseReminderActionCustomId(interaction.customId);
@@ -23,6 +32,9 @@ export async function handleReminderButtonInteraction(interaction: ButtonInterac
 			case reminderActions.CARRY_OVER_NOTES:
 				await carryOverReminderNotes(interaction, parsedCustomId.sessionId);
 				break;
+			case reminderActions.NEXT_QURAN_PAGE:
+				await handleNextQuranPage(interaction, parsedCustomId.sessionId, parsedCustomId.page, discordContext);
+				break;
 		}
 
 		logger.info('Reminder action handled', discordContext, {
@@ -40,6 +52,43 @@ export async function handleReminderButtonInteraction(interaction: ButtonInterac
 	}
 
 	return true;
+}
+
+async function handleNextQuranPage(interaction: ButtonInteraction, sessionId: string, page: number, discordContext: DiscordContext): Promise<void> {
+	if (page < 1 || page > TOTAL_QURAN_PAGES) {
+		await interaction.reply({ content: 'Quran page must be between 1 and 604.', flags: MessageFlags.Ephemeral });
+		return;
+	}
+
+	const channel = interaction.message.channel;
+	if (!channel?.isSendable()) {
+		throw new Error('Reminder action channel is not sendable.');
+	}
+
+	const progress = await progressRepository.getProgress();
+	const currentPage = getNextPage(progress.lastPage);
+	if (page !== currentPage) {
+		await interaction.update({ components: [] });
+		await interaction.followUp({
+			content: `That page is no longer the current maqraah page. Current page is **${currentPage}**.`,
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	const quranProgressUpdate = await progressRepository.updateQuranProgress(page);
+	const nextPage = getNextPage(quranProgressUpdate.progress.lastPage);
+
+	await interaction.update({ components: [] });
+
+	if (quranProgressUpdate.completedKhatmah) {
+		await announceKhatmahCompletion(interaction, quranProgressUpdate.progress, discordContext);
+	}
+
+	await channel.send({
+		content: buildCurrentQuranPageMessage(nextPage),
+		components: buildCurrentQuranPageActionRows(sessionId, nextPage),
+	});
 }
 
 async function handleAttendanceSelection(interaction: ButtonInteraction, sessionId: string, status: AttendanceStatus): Promise<void> {

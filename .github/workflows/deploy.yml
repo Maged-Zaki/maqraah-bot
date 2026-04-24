@@ -7,6 +7,8 @@ on:
       - "docs/**"
       - "**/*.md"
 
+  workflow_dispatch:
+
 env:
   DEPLOY_PATH: /home/ubuntu/app
   USER: ubuntu

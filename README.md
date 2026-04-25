@@ -7,6 +7,7 @@ A Discord bot for running a daily maqraah reminder. It tracks Qur'an and Hadith 
 - Daily maqraah reminders in a configured channel
 - Optional pre-reminder stage before the main reminder
 - Optional automatic Maqraah time updates from Maghrib prayer time via AlAdhan
+- Optional role-based fasting and Islamic event reminders
 - Qur'an page and Hadith progress tracking
 - Pending notes, notes history, delete-by-number, and carry-over support
 - Reminder attendance buttons for "joining shortly" and "cannot make it"
@@ -58,6 +59,7 @@ The bot needs:
 - View Channels
 - Send Messages
 - Use Slash Commands
+- Manage Roles, if you want users to subscribe to optional reminder categories
 - Manage Channels, only if you want the bot to rename the configured voice channel when the Maqraah time changes
 
 ## Command Reference
@@ -109,6 +111,19 @@ There is no `/notes add`, `/add-note`, `/notes remove-my`, or `/notes remove-all
 - `/change-upcoming-maqraah-time time:<H:MM AM/PM>`
   Overrides the next main maqraah reminder time once, then returns to the configured daily schedule.
 
+### `/reminders`
+
+- `/reminders subscribe category:<fasting|islamic-events>`
+  Adds the matching reminder role to you. The bot creates or relinks the category role when needed.
+- `/reminders unsubscribe category:<fasting|islamic-events>`
+  Removes the matching reminder role from you.
+- `/reminders list`
+  Shows your current optional reminder subscriptions.
+- `/reminders configuration show`
+  Shows the global optional-reminder configuration, including the channel where reminders are sent.
+- `/reminders configuration update [days-before] [time] [channel]`
+  Updates when optional reminders are sent. Each option is optional, so you can update only the channel, only the time, or only the days-before value. Use `channel` to choose the text channel for reminder messages.
+
 ### Help
 
 - `/help`
@@ -130,6 +145,8 @@ The scheduler uses `dailyTime` and `timezone` from the database. By default, it 
 If Maqraah time sync is enabled, the bot checks once an hour at minute 7 in the configured timezone. On startup and after relevant configuration changes, it also checks immediately. When the sync changes the configured Maqraah time, it announces the change in the reminder channel with the configured role mention. API failures are logged and retried by the regular checker.
 
 The main reminder includes the next Qur'an page, next Hadith number, and reminder action buttons. Pending notes are sent as separate numbered note messages when present. After a main reminder includes pending notes, those notes are marked `included` and stamped with `lastIncludedDate`; they are not deleted automatically. Use `/notes carry-over-last-notes` to reuse included notes.
+
+Optional subscription reminders are separate from maqraah reminders. They use Discord roles named `تذكيرات الصيام` and `تذكيرات المناسبات الإسلامية`, send to the configured optional-reminder channel, and mention only the target category role through `allowedMentions`. Hijri dates are resolved through AlAdhan's Islamic calendar API and cached for the current and next Gregorian month; send-time checks use the cached calendar and skip Hijri-based reminders if no cached date is available.
 
 Reminder buttons record attendance in SQLite:
 
@@ -205,6 +222,49 @@ Single-row table with `id = 1`.
 
 `reminder_events` has a unique constraint on `(sessionId, stage)` to avoid duplicate reminder sends for the same session stage.
 
+### `reminder_category_roles`
+
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `categoryKey` | `TEXT PRIMARY KEY` | Reminder category key |
+| `roleId` | `TEXT NOT NULL` | Discord role ID used for subscriptions |
+| `roleName` | `TEXT NOT NULL` | Expected role name |
+| `createdAt` | `TEXT NOT NULL` | ISO creation timestamp |
+| `updatedAt` | `TEXT NOT NULL` | ISO update timestamp |
+
+### `reminder_settings`
+
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | `INTEGER PRIMARY KEY` | Singleton row |
+| `channelId` | `TEXT NOT NULL` | Channel for optional reminders |
+| `daysBefore` | `INTEGER NOT NULL` | Days before the event to send |
+| `sendTime` | `TEXT NOT NULL` | Daily send time |
+| `updatedAt` | `TEXT NOT NULL` | ISO update timestamp |
+
+### `hijri_calendar_cache`
+
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `gregorianDate` | `TEXT PRIMARY KEY` | Gregorian date in `YYYY-MM-DD` |
+| `hijriYear` | `INTEGER NOT NULL` | Hijri year |
+| `hijriMonth` | `INTEGER NOT NULL` | Hijri month number |
+| `hijriDay` | `INTEGER NOT NULL` | Hijri day |
+| `hijriMonthNameAr` | `TEXT NOT NULL` | Arabic Hijri month name |
+| `hijriMonthNameEn` | `TEXT NOT NULL` | English Hijri month name |
+| `provider` | `TEXT NOT NULL` | Calendar provider name |
+| `fetchedAt` | `TEXT NOT NULL` | ISO fetch timestamp |
+
+### `subscription_reminder_events`
+
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `eventKey` | `TEXT PRIMARY KEY` | Unique sent reminder occurrence |
+| `categoryKey` | `TEXT NOT NULL` | Reminder category key |
+| `targetRoleId` | `TEXT NOT NULL` | Role mentioned by the reminder |
+| `scheduledFor` | `TEXT NOT NULL` | Scheduled send timestamp |
+| `sentAt` | `TEXT NOT NULL` | Actual send timestamp |
+
 ## Project Structure
 
 ```text
@@ -217,6 +277,7 @@ src/
     notes/                /notes command
     schedule/             /schedule command
     setup/                /setup command and first-run setup guide
+    subscriptionReminders/ /reminders command, role subscriptions, calendar cache, scheduler
   storage/
     sqlite/               SQLite initialization and repositories
   observability/

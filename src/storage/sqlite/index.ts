@@ -5,6 +5,10 @@ import { NotesRepository } from './repositories/NotesRepository';
 import { AttendanceRepository } from './repositories/AttendanceRepository';
 import { ReminderEventsRepository } from './repositories/ReminderEventsRepository';
 import { ScheduleRepository } from './repositories/ScheduleRepository';
+import { ReminderCategoryRoleRepository } from './repositories/ReminderCategoryRoleRepository';
+import { ReminderSettingsRepository, subscriptionReminderSettingsDefaults } from './repositories/ReminderSettingsRepository';
+import { HijriCalendarCacheRepository } from './repositories/HijriCalendarCacheRepository';
+import { SubscriptionReminderEventsRepository } from './repositories/SubscriptionReminderEventsRepository';
 import { logger } from '../../observability/logging/logger';
 
 if (!process.env.DATABASE_PATH) {
@@ -188,6 +192,92 @@ db.serialize(() => {
 			logger.error('Failed to create schedules status index', err);
 		}
 	});
+
+	db.run(
+		`
+	   CREATE TABLE IF NOT EXISTS reminder_category_roles (
+	     categoryKey TEXT PRIMARY KEY,
+	     roleId TEXT NOT NULL,
+	     roleName TEXT NOT NULL,
+	     createdAt TEXT NOT NULL,
+	     updatedAt TEXT NOT NULL
+	   )
+	 `,
+		(err) => {
+			if (err) {
+				logger.error('Failed to create reminder_category_roles table', err);
+			}
+		}
+	);
+
+	db.run(
+		`
+	   CREATE TABLE IF NOT EXISTS reminder_settings (
+	     id INTEGER PRIMARY KEY DEFAULT 1,
+	     channelId TEXT NOT NULL DEFAULT '',
+	     daysBefore INTEGER NOT NULL DEFAULT ${subscriptionReminderSettingsDefaults.daysBefore},
+	     sendTime TEXT NOT NULL DEFAULT '${subscriptionReminderSettingsDefaults.sendTime}',
+	     updatedAt TEXT NOT NULL
+	   )
+	 `,
+		(err) => {
+			if (err) {
+				logger.error('Failed to create reminder_settings table', err);
+			}
+		}
+	);
+
+	db.run(
+		`INSERT OR IGNORE INTO reminder_settings (id, channelId, daysBefore, sendTime, updatedAt) VALUES (1, ?, ?, ?, ?)`,
+		[
+			process.env.CHANNEL_ID ?? '',
+			subscriptionReminderSettingsDefaults.daysBefore,
+			subscriptionReminderSettingsDefaults.sendTime,
+			new Date().toISOString(),
+		],
+		(err) => {
+			if (err) {
+				logger.error('Failed to insert default reminder_settings row', err);
+			}
+		}
+	);
+
+	db.run(
+		`
+	   CREATE TABLE IF NOT EXISTS hijri_calendar_cache (
+	     gregorianDate TEXT PRIMARY KEY,
+	     hijriYear INTEGER NOT NULL,
+	     hijriMonth INTEGER NOT NULL,
+	     hijriDay INTEGER NOT NULL,
+	     hijriMonthNameAr TEXT NOT NULL,
+	     hijriMonthNameEn TEXT NOT NULL,
+	     provider TEXT NOT NULL,
+	     fetchedAt TEXT NOT NULL
+	   )
+	 `,
+		(err) => {
+			if (err) {
+				logger.error('Failed to create hijri_calendar_cache table', err);
+			}
+		}
+	);
+
+	db.run(
+		`
+	   CREATE TABLE IF NOT EXISTS subscription_reminder_events (
+	     eventKey TEXT PRIMARY KEY,
+	     categoryKey TEXT NOT NULL,
+	     targetRoleId TEXT NOT NULL,
+	     scheduledFor TEXT NOT NULL,
+	     sentAt TEXT NOT NULL
+	   )
+	 `,
+		(err) => {
+			if (err) {
+				logger.error('Failed to create subscription_reminder_events table', err);
+			}
+		}
+	);
 });
 
 // Handle database errors
@@ -204,6 +294,10 @@ export const notesRepository: NotesRepository = new NotesRepository(db);
 export const attendanceRepository = new AttendanceRepository(db);
 export const reminderEventsRepository = new ReminderEventsRepository(db);
 export const scheduleRepository = new ScheduleRepository(db);
+export const reminderCategoryRoleRepository = new ReminderCategoryRoleRepository(db);
+export const reminderSettingsRepository = new ReminderSettingsRepository(db);
+export const hijriCalendarCacheRepository = new HijriCalendarCacheRepository(db);
+export const subscriptionReminderEventsRepository = new SubscriptionReminderEventsRepository(db);
 
 function addColumnIfMissing(tableName: string, columnDefinition: string): void {
 	db.run(`ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`, (err) => {

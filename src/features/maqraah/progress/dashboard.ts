@@ -1,14 +1,7 @@
 import { EmbedBuilder, MessageFlags, PermissionsBitField } from 'discord.js';
 import type { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
-import type { Progress, QuranProgressHistoryEntry } from '../../../storage/sqlite/repositories/ProgressRepository';
-import { getNextPage } from '../../../shared/quran/pages';
-import {
-	calculatePagesRemaining,
-	calculateProgressPercentage,
-	estimateKhatmahCompletion,
-	getCompletedKhatmahCount,
-	TOTAL_QURAN_PAGES,
-} from '../../../shared/quran/progress';
+import type { Progress } from '../../../storage/sqlite/repositories/ProgressRepository';
+import { TOTAL_QURAN_PAGES } from '../../../shared/quran/progress';
 import { normalizeTimeZone, parseReminderTime } from '../../../shared/time';
 import { defaultReminderCadence, isReminderStageEnabled } from '../reminders/cadence';
 import { getUpcomingSessionId } from '../reminders/sessionId';
@@ -16,7 +9,6 @@ import { getUpcomingSessionId } from '../reminders/sessionId';
 interface ProgressDashboardInput {
 	configuration: Configuration;
 	progress: Progress;
-	recentQuranProgressHistory: QuranProgressHistoryEntry[];
 	pendingNoteCount: number;
 	interaction: any;
 	now?: Date;
@@ -55,30 +47,18 @@ export function buildProgressDashboardReply(input: ProgressDashboardInput) {
 	warnings.push(...voiceChannelDisplay.warnings);
 
 	const nextMaqraah = parsedTime && timezone ? formatNextMaqraah(input.configuration.dailyTime, timezone, input.now) : 'Not available';
-	const currentPage = Number.isInteger(input.progress.lastPage) ? input.progress.lastPage : 0;
-	const currentHadith = Number.isInteger(input.progress.lastHadith) ? input.progress.lastHadith : 0;
-	const nextPage = getNextPage(currentPage);
-	const nextHadith = currentHadith + 1;
-	const percentageComplete = calculateProgressPercentage(currentPage);
-	const pagesRemaining = calculatePagesRemaining(currentPage);
-	const completedKhatmahs = getCompletedKhatmahCount(input.progress);
-	const estimatedCompletion = formatEstimatedCompletion(currentPage, input.recentQuranProgressHistory, timezone, input.now);
+	const currentPage = Number.isInteger(input.progress.currentPage) ? input.progress.currentPage : 1;
+	const currentHadith = Number.isInteger(input.progress.currentHadith) ? input.progress.currentHadith : 1;
 
 	const embed = new EmbedBuilder()
 		.setTitle('Maqraah Progress')
 		.addFields(
 			{
 				name: "Qur'an Progress",
-				value:
-					`Current page: ${currentPage} / ${TOTAL_QURAN_PAGES}\n` +
-					`Next page: ${nextPage}\n` +
-					`Percentage complete: ${percentageComplete.toFixed(2)}%\n` +
-					`Pages remaining: ${pagesRemaining}\n` +
-					`Completed khatmahs: ${completedKhatmahs}\n` +
-					`Estimated completion: ${estimatedCompletion}`,
+				value: `Current page: ${currentPage} / ${TOTAL_QURAN_PAGES}`,
 				inline: true,
 			},
-			{ name: 'Hadith Progress', value: `Current Hadith: ${currentHadith}\nNext Hadith: ${nextHadith}`, inline: true },
+			{ name: 'Hadith Progress', value: `Current Hadith: ${currentHadith}`, inline: true },
 			{ name: 'Next Maqraah', value: nextMaqraah, inline: false },
 			{ name: 'Reminder Channel', value: reminderChannelDisplay.value, inline: true },
 			{ name: 'Reminder Role', value: roleDisplay.value, inline: true },
@@ -93,34 +73,6 @@ export function buildProgressDashboardReply(input: ProgressDashboardInput) {
 		flags: MessageFlags.Ephemeral,
 		allowedMentions: { parse: [] as string[] },
 	};
-}
-
-function formatEstimatedCompletion(
-	currentPage: number,
-	recentQuranProgressHistory: QuranProgressHistoryEntry[],
-	timezone: string | null,
-	now?: Date
-): string {
-	const estimate = estimateKhatmahCompletion(currentPage, recentQuranProgressHistory, now);
-
-	if (estimate === 'completed') {
-		return 'Completed';
-	}
-
-	if (!estimate) {
-		return 'Not enough history yet';
-	}
-
-	if (!timezone) {
-		return 'Not available';
-	}
-
-	return new Intl.DateTimeFormat('en-US', {
-		timeZone: timezone,
-		year: 'numeric',
-		month: 'short',
-		day: 'numeric',
-	}).format(estimate.estimatedCompletionDate);
 }
 
 function formatNextMaqraah(dailyTime: string, timezone: string, now: Date = new Date()): string {

@@ -23,6 +23,12 @@ test('maqraah command keeps attendance subcommands and exposes progress group', 
 		progressGroup.options.map((option: any) => option.name),
 		['update', 'show']
 	);
+
+	const updateSubcommand = progressGroup.options.find((option: any) => option.name === 'update');
+	assert.deepEqual(
+		updateSubcommand.options.map((option: any) => option.name),
+		['page', 'hadith']
+	);
 });
 
 test('cannot-attend preregisters the upcoming maqraah for today before reminder time', { concurrency: false }, async () => {

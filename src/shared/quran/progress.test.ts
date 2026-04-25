@@ -41,10 +41,10 @@ test('quran page corrections moving backward outside the wrap window do not affe
 });
 
 test('progress helpers compute percentage, pages remaining, and completed khatmah counts', () => {
-	assert.equal(calculateProgressPercentage(302).toFixed(2), '50.00');
-	assert.equal(calculatePagesRemaining(302), 302);
-	assert.equal(getCompletedKhatmahCount({ lastPage: 604, khatmahCycleCount: 2 }), 3);
-	assert.equal(getCompletedKhatmahCount({ lastPage: 12, khatmahCycleCount: 2 }), 2);
+	assert.equal(calculateProgressPercentage(303).toFixed(2), '50.00');
+	assert.equal(calculatePagesRemaining(303), 302);
+	assert.equal(getCompletedKhatmahCount({ currentPage: 604, khatmahCycleCount: 2 }), 2);
+	assert.equal(getCompletedKhatmahCount({ currentPage: 12, khatmahCycleCount: 2 }), 2);
 });
 
 test('completion estimate uses recent session pace and handles completed or missing history states', () => {
@@ -60,6 +60,6 @@ test('completion estimate uses recent session pace and handles completed or miss
 
 	assert.equal(estimate.remainingSessions, 16);
 	assert.equal(estimate.estimatedCompletionDate.toISOString(), '2026-05-07T00:00:00.000Z');
-	assert.equal(estimateKhatmahCompletion(604, [], new Date('2026-04-21T00:00:00.000Z')), 'completed');
+	assert.equal(estimateKhatmahCompletion(604, [], new Date('2026-04-21T00:00:00.000Z')), null);
 	assert.equal(estimateKhatmahCompletion(12, [], new Date('2026-04-21T00:00:00.000Z')), null);
 });

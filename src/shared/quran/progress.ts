@@ -19,23 +19,23 @@ export interface KhatmahCompletionEstimate {
 	estimatedCompletionDate: Date;
 }
 
-export function isQuranProgressWrap(previousLastPage: number, newLastPage: number): boolean {
+export function isQuranProgressWrap(previousCurrentPage: number, newCurrentPage: number): boolean {
 	return (
-		previousLastPage > newLastPage &&
-		isWithinRange(previousLastPage, WRAP_START_PAGE, TOTAL_QURAN_PAGES) &&
-		isWithinRange(newLastPage, 1, WRAP_RESET_MAX_PAGE)
+		previousCurrentPage > newCurrentPage &&
+		isWithinRange(previousCurrentPage, WRAP_START_PAGE, TOTAL_QURAN_PAGES) &&
+		isWithinRange(newCurrentPage, 1, WRAP_RESET_MAX_PAGE)
 	);
 }
 
-export function getQuranPageUpdateMetrics(previousLastPage: number, newLastPage: number, previousCycleCount: number): QuranPageUpdateMetrics {
-	const wrapped = isQuranProgressWrap(previousLastPage, newLastPage);
-	const correctedBackward = newLastPage < previousLastPage && !wrapped;
-	const shouldRecordHistory = newLastPage !== previousLastPage && !correctedBackward;
-	const pagesAdvanced = shouldRecordHistory ? calculatePagesAdvanced(previousLastPage, newLastPage, wrapped) : 0;
+export function getQuranPageUpdateMetrics(previousCurrentPage: number, newCurrentPage: number, previousCycleCount: number): QuranPageUpdateMetrics {
+	const wrapped = isQuranProgressWrap(previousCurrentPage, newCurrentPage);
+	const correctedBackward = newCurrentPage < previousCurrentPage && !wrapped;
+	const shouldRecordHistory = newCurrentPage !== previousCurrentPage && !correctedBackward;
+	const pagesAdvanced = shouldRecordHistory ? calculatePagesAdvanced(previousCurrentPage, newCurrentPage, wrapped) : 0;
 
 	return {
 		wrapped,
-		completedKhatmah: previousLastPage < TOTAL_QURAN_PAGES && (newLastPage === TOTAL_QURAN_PAGES || wrapped),
+		completedKhatmah: wrapped,
 		pagesAdvanced,
 		shouldRecordHistory,
 		correctedBackward,
@@ -43,40 +43,32 @@ export function getQuranPageUpdateMetrics(previousLastPage: number, newLastPage:
 	};
 }
 
-export function calculatePagesAdvanced(previousLastPage: number, newLastPage: number, wrapped: boolean): number {
-	if (previousLastPage === 0) {
-		return newLastPage;
-	}
-
+export function calculatePagesAdvanced(previousCurrentPage: number, newCurrentPage: number, wrapped: boolean): number {
 	if (wrapped) {
-		return TOTAL_QURAN_PAGES - previousLastPage + newLastPage;
+		return TOTAL_QURAN_PAGES - previousCurrentPage + newCurrentPage;
 	}
 
-	return Math.max(newLastPage - previousLastPage, 0);
+	return Math.max(newCurrentPage - previousCurrentPage, 0);
 }
 
-export function calculateProgressPercentage(lastPage: number): number {
-	const normalizedLastPage = normalizePage(lastPage);
-	return (normalizedLastPage / TOTAL_QURAN_PAGES) * 100;
+export function calculateProgressPercentage(currentPage: number): number {
+	const normalizedCurrentPage = normalizePage(currentPage);
+	return ((normalizedCurrentPage - 1) / TOTAL_QURAN_PAGES) * 100;
 }
 
-export function calculatePagesRemaining(lastPage: number): number {
-	return Math.max(TOTAL_QURAN_PAGES - normalizePage(lastPage), 0);
+export function calculatePagesRemaining(currentPage: number): number {
+	return Math.max(TOTAL_QURAN_PAGES - normalizePage(currentPage) + 1, 0);
 }
 
-export function getCompletedKhatmahCount(progress: Pick<Progress, 'lastPage' | 'khatmahCycleCount'>): number {
-	return progress.lastPage === TOTAL_QURAN_PAGES ? progress.khatmahCycleCount + 1 : progress.khatmahCycleCount;
+export function getCompletedKhatmahCount(progress: Pick<Progress, 'currentPage' | 'khatmahCycleCount'>): number {
+	return progress.khatmahCycleCount;
 }
 
 export function estimateKhatmahCompletion(
-	lastPage: number,
+	currentPage: number,
 	recentHistory: Array<Pick<QuranProgressHistoryEntry, 'pagesAdvanced'>>,
 	now: Date = new Date()
 ): KhatmahCompletionEstimate | 'completed' | null {
-	if (normalizePage(lastPage) === TOTAL_QURAN_PAGES) {
-		return 'completed';
-	}
-
 	if (recentHistory.length === 0) {
 		return null;
 	}
@@ -87,7 +79,7 @@ export function estimateKhatmahCompletion(
 	}
 
 	const averagePagesPerSession = totalPagesAdvanced / recentHistory.length;
-	const remainingSessions = Math.ceil(calculatePagesRemaining(lastPage) / averagePagesPerSession);
+	const remainingSessions = Math.ceil(calculatePagesRemaining(currentPage) / averagePagesPerSession);
 
 	return {
 		averagePagesPerSession,
@@ -100,10 +92,10 @@ function isWithinRange(value: number, min: number, max: number): boolean {
 	return Number.isInteger(value) && value >= min && value <= max;
 }
 
-function normalizePage(lastPage: number): number {
-	if (!Number.isInteger(lastPage)) {
-		return 0;
+function normalizePage(currentPage: number): number {
+	if (!Number.isInteger(currentPage)) {
+		return 1;
 	}
 
-	return Math.min(Math.max(lastPage, 0), TOTAL_QURAN_PAGES);
+	return Math.min(Math.max(currentPage, 1), TOTAL_QURAN_PAGES);
 }

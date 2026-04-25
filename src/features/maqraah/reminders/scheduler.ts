@@ -3,7 +3,6 @@ import * as cron from 'node-cron';
 import { configurationRepository, notesRepository, progressRepository, reminderEventsRepository } from '../../../storage/sqlite';
 import { logger } from '../../../observability/logging/logger';
 import { normalizeTimeZone, parseTimeToCron } from '../../../shared/time';
-import { getNextPage } from '../../../shared/quran/pages';
 import { announcePendingAttendance } from './attendance';
 import { buildCurrentQuranPageActionRows, buildCurrentQuranPageMessage, buildReminderActionRows } from './components';
 import { buildReminderStageSchedules, reminderStages, ReminderStage, ReminderStageSchedule } from './cadence';
@@ -190,7 +189,7 @@ export async function sendMainReminder(channel: any, configuration: Awaited<Retu
 	const progress = await progressRepository.getProgress();
 	const notes = await notesRepository.getNotesByStatus('pending');
 	const { mainMessage, notesMessages } = buildReminderMessages(configuration, progress, notes);
-	const currentPage = getNextPage(progress.lastPage);
+	const currentPage = progress.currentPage;
 
 	if (notes.length > 0) {
 		logger.info(`Marking ${notes.length} notes as included`, undefined, { additionalData: { noteCount: notes.length } });

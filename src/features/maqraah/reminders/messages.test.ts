@@ -9,8 +9,8 @@ test('main reminder starts with the role mention and keeps reading details', () 
 			roleId: 'daily-role',
 		}),
 		{
-			lastPage: 12,
-			lastHadith: 34,
+			currentPage: 13,
+			currentHadith: 35,
 			khatmahCycleCount: 0,
 		},
 		[]
@@ -18,7 +18,7 @@ test('main reminder starts with the role mention and keeps reading details', () 
 
 	assert.equal(
 		mainMessage,
-		`<@&daily-role> بدأت المقرأة\n\n` + `الصفحة القادمة: [13](https://quran.com/page/13)\n` + `الحديث القادم: **35**\n`
+		`<@&daily-role> بدأت المقرأة\n\n` + `الصفحة الحالية: [13](https://quran.com/page/13)\n` + `الحديث الحالي: **35**\n`
 	);
 	assert.equal(mainMessage.includes('السلام عليكم ورحمة الله وبركاته'), false);
 	assert.equal(mainMessage.includes('وقت المقراة اليومية! 📖'), false);

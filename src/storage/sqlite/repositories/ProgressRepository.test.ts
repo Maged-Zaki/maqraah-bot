@@ -13,16 +13,16 @@ test('quran progress updates record page history for forward progress', async ()
 
 		assert.equal(result.completedKhatmah, false);
 		assert.equal(result.historyRecorded, true);
-		assert.equal(progress.lastPage, 22);
+		assert.equal(progress.currentPage, 22);
 		assert.equal(progress.khatmahCycleCount, 0);
-		assert.deepEqual(history.map((entry) => entry.pagesAdvanced), [22]);
+		assert.deepEqual(history.map((entry) => entry.pagesAdvanced), [21]);
 	} finally {
 		await close(db);
 	}
 });
 
 test('quran progress updates increment khatmah cycles when a wrapped completion is recorded', async () => {
-	const { db, repository } = await createRepository({ lastPage: 600, khatmahCycleCount: 0 });
+	const { db, repository } = await createRepository({ currentPage: 600, khatmahCycleCount: 0 });
 
 	try {
 		const result = await repository.updateQuranProgress(2, '2026-04-21T10:00:00.000Z');
@@ -32,7 +32,7 @@ test('quran progress updates increment khatmah cycles when a wrapped completion 
 		assert.equal(result.wrapped, true);
 		assert.equal(result.completedKhatmah, true);
 		assert.equal(result.pagesAdvanced, 6);
-		assert.equal(progress.lastPage, 2);
+		assert.equal(progress.currentPage, 2);
 		assert.equal(progress.khatmahCycleCount, 1);
 		assert.equal(history[0]?.pagesAdvanced, 6);
 		assert.equal(history[0]?.khatmahCycleCount, 1);
@@ -42,7 +42,7 @@ test('quran progress updates increment khatmah cycles when a wrapped completion 
 });
 
 test('backward page corrections outside the wrap window do not affect cycle count or ETA history', async () => {
-	const { db, repository } = await createRepository({ lastPage: 300, khatmahCycleCount: 2 });
+	const { db, repository } = await createRepository({ currentPage: 300, khatmahCycleCount: 2 });
 
 	try {
 		const result = await repository.updateQuranProgress(250, '2026-04-21T10:00:00.000Z');
@@ -52,7 +52,7 @@ test('backward page corrections outside the wrap window do not affect cycle coun
 		assert.equal(result.completedKhatmah, false);
 		assert.equal(result.correctedBackward, true);
 		assert.equal(result.historyRecorded, false);
-		assert.equal(progress.lastPage, 250);
+		assert.equal(progress.currentPage, 250);
 		assert.equal(progress.khatmahCycleCount, 2);
 		assert.equal(history.length, 0);
 	} finally {
@@ -66,7 +66,7 @@ test('recent Quran progress history returns only the latest five entries', async
 	try {
 		for (let i = 1; i <= 6; i++) {
 			await insertHistory(db, {
-				lastPage: i * 10,
+				currentPage: i * 10,
 				khatmahCycleCount: 0,
 				pagesAdvanced: i,
 				recordedAt: `2026-04-0${i}T10:00:00.000Z`,
@@ -86,8 +86,8 @@ test('recent Quran progress history returns only the latest five entries', async
 
 async function createRepository(
 	initialProgress: Partial<{
-		lastPage: number;
-		lastHadith: number;
+		currentPage: number;
+		currentHadith: number;
 		khatmahCycleCount: number;
 	}> = {}
 ): Promise<{ db: sqlite3.Database; repository: ProgressRepository }> {
@@ -97,8 +97,8 @@ async function createRepository(
 		`
 			CREATE TABLE progress (
 				id INTEGER PRIMARY KEY DEFAULT 1,
-				lastPage INTEGER DEFAULT 0,
-				lastHadith INTEGER DEFAULT 0,
+				currentPage INTEGER DEFAULT 1,
+				currentHadith INTEGER DEFAULT 1,
 				khatmahCycleCount INTEGER DEFAULT 0
 			)
 		`
@@ -108,16 +108,16 @@ async function createRepository(
 		`
 			CREATE TABLE quran_progress_history (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				lastPage INTEGER NOT NULL,
+				currentPage INTEGER NOT NULL,
 				khatmahCycleCount INTEGER NOT NULL DEFAULT 0,
 				pagesAdvanced INTEGER NOT NULL,
 				recordedAt TEXT NOT NULL
 			)
 		`
 	);
-	await run(db, 'INSERT INTO progress (id, lastPage, lastHadith, khatmahCycleCount) VALUES (1, ?, ?, ?)', [
-		initialProgress.lastPage ?? 0,
-		initialProgress.lastHadith ?? 0,
+	await run(db, 'INSERT INTO progress (id, currentPage, currentHadith, khatmahCycleCount) VALUES (1, ?, ?, ?)', [
+		initialProgress.currentPage ?? 1,
+		initialProgress.currentHadith ?? 1,
 		initialProgress.khatmahCycleCount ?? 0,
 	]);
 
@@ -127,7 +127,7 @@ async function createRepository(
 function insertHistory(
 	db: sqlite3.Database,
 	entry: {
-		lastPage: number;
+		currentPage: number;
 		khatmahCycleCount: number;
 		pagesAdvanced: number;
 		recordedAt: string;
@@ -136,10 +136,10 @@ function insertHistory(
 	return run(
 		db,
 		`
-			INSERT INTO quran_progress_history (lastPage, khatmahCycleCount, pagesAdvanced, recordedAt)
+			INSERT INTO quran_progress_history (currentPage, khatmahCycleCount, pagesAdvanced, recordedAt)
 			VALUES (?, ?, ?, ?)
 		`,
-		[entry.lastPage, entry.khatmahCycleCount, entry.pagesAdvanced, entry.recordedAt]
+		[entry.currentPage, entry.khatmahCycleCount, entry.pagesAdvanced, entry.recordedAt]
 	);
 }
 

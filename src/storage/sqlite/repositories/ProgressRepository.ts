@@ -3,14 +3,14 @@ import { logger } from '../../../observability/logging/logger';
 import { getQuranPageUpdateMetrics } from '../../../shared/quran/progress';
 
 export interface Progress {
-	lastPage: number;
-	lastHadith: number;
+	currentPage: number;
+	currentHadith: number;
 	khatmahCycleCount: number;
 }
 
 export interface QuranProgressHistoryEntry {
 	id: number;
-	lastPage: number;
+	currentPage: number;
 	khatmahCycleCount: number;
 	pagesAdvanced: number;
 	recordedAt: string;
@@ -52,7 +52,7 @@ export class ProgressRepository {
 		try {
 			const rows = await this.allRows<any>(
 				`
-					SELECT id, lastPage, khatmahCycleCount, pagesAdvanced, recordedAt
+					SELECT id, currentPage, khatmahCycleCount, pagesAdvanced, recordedAt
 					FROM quran_progress_history
 					ORDER BY recordedAt DESC, id DESC
 					LIMIT ?
@@ -96,28 +96,28 @@ export class ProgressRepository {
 		}
 	}
 
-	async updateQuranProgress(lastPage: number, recordedAt: string = new Date().toISOString()): Promise<QuranProgressUpdateResult> {
+	async updateQuranProgress(currentPage: number, recordedAt: string = new Date().toISOString()): Promise<QuranProgressUpdateResult> {
 		const startTime = Date.now();
 
 		try {
 			await this.run('BEGIN IMMEDIATE TRANSACTION');
 			const previousProgress = normalizeProgress(await this.getRow<any>('SELECT * FROM progress WHERE id = 1'));
-			const metrics = getQuranPageUpdateMetrics(previousProgress.lastPage, lastPage, previousProgress.khatmahCycleCount);
+			const metrics = getQuranPageUpdateMetrics(previousProgress.currentPage, currentPage, previousProgress.khatmahCycleCount);
 			const progress: Progress = {
 				...previousProgress,
-				lastPage,
+				currentPage,
 				khatmahCycleCount: metrics.nextCycleCount,
 			};
 
-			await this.run('UPDATE progress SET lastPage = ?, khatmahCycleCount = ? WHERE id = 1', [progress.lastPage, progress.khatmahCycleCount]);
+			await this.run('UPDATE progress SET currentPage = ?, khatmahCycleCount = ? WHERE id = 1', [progress.currentPage, progress.khatmahCycleCount]);
 
 			if (metrics.shouldRecordHistory) {
 				await this.run(
 					`
-						INSERT INTO quran_progress_history (lastPage, khatmahCycleCount, pagesAdvanced, recordedAt)
+						INSERT INTO quran_progress_history (currentPage, khatmahCycleCount, pagesAdvanced, recordedAt)
 						VALUES (?, ?, ?, ?)
 					`,
-					[progress.lastPage, progress.khatmahCycleCount, metrics.pagesAdvanced, recordedAt]
+					[progress.currentPage, progress.khatmahCycleCount, metrics.pagesAdvanced, recordedAt]
 				);
 			}
 
@@ -196,8 +196,8 @@ export class ProgressRepository {
 
 function normalizeProgress(row: any): Progress {
 	return {
-		lastPage: Number.isInteger(row?.lastPage) ? row.lastPage : 0,
-		lastHadith: Number.isInteger(row?.lastHadith) ? row.lastHadith : 0,
+		currentPage: normalizeCurrentPage(row?.currentPage),
+		currentHadith: normalizeCurrentHadith(row?.currentHadith),
 		khatmahCycleCount: Number.isInteger(row?.khatmahCycleCount) ? row.khatmahCycleCount : 0,
 	};
 }
@@ -205,9 +205,25 @@ function normalizeProgress(row: any): Progress {
 function normalizeHistoryEntry(row: any): QuranProgressHistoryEntry {
 	return {
 		id: Number.isInteger(row?.id) ? row.id : 0,
-		lastPage: Number.isInteger(row?.lastPage) ? row.lastPage : 0,
+		currentPage: normalizeCurrentPage(row?.currentPage),
 		khatmahCycleCount: Number.isInteger(row?.khatmahCycleCount) ? row.khatmahCycleCount : 0,
 		pagesAdvanced: Number.isInteger(row?.pagesAdvanced) ? row.pagesAdvanced : 0,
 		recordedAt: typeof row?.recordedAt === 'string' ? row.recordedAt : '',
 	};
+}
+
+function normalizeCurrentPage(value: unknown): number {
+	if (!Number.isInteger(value)) {
+		return 1;
+	}
+
+	return Math.min(Math.max(value as number, 1), 604);
+}
+
+function normalizeCurrentHadith(value: unknown): number {
+	if (!Number.isInteger(value) || (value as number) <= 0) {
+		return 1;
+	}
+
+	return value as number;
 }

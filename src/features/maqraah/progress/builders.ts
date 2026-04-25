@@ -6,8 +6,8 @@ export const progressSubcommands = {
 } as const;
 
 export const progressOptions = {
-	LAST_QURAN_PAGE_READ: 'last-quran-page-read',
-	LAST_HADITH: 'last-hadith',
+	PAGE: 'page',
+	HADITH: 'hadith',
 } as const;
 
 export function addProgressSubcommands(builder: any): any {
@@ -16,8 +16,8 @@ export function addProgressSubcommands(builder: any): any {
 			subcommand
 				.setName(progressSubcommands.UPDATE)
 				.setDescription('Update maqraah reading progress')
-				.addIntegerOption((option: any) => option.setName(progressOptions.LAST_QURAN_PAGE_READ).setDescription("Last Qur'an page you've read"))
-				.addIntegerOption((option: any) => option.setName(progressOptions.LAST_HADITH).setDescription('Last Hadith read'))
+				.addIntegerOption((option: any) => option.setName(progressOptions.PAGE).setDescription("Current Qur'an page"))
+				.addIntegerOption((option: any) => option.setName(progressOptions.HADITH).setDescription('Current Hadith number'))
 		)
 		.addSubcommand((subcommand: any) => subcommand.setName(progressSubcommands.SHOW).setDescription('Show maqraah progress and setup status'));
 }

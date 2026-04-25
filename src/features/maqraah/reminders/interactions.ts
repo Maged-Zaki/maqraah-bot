@@ -1,7 +1,7 @@
 import { ButtonInteraction, MessageFlags } from 'discord.js';
 import { attendanceRepository, notesRepository, progressRepository } from '../../../storage/sqlite';
 import { logger, DiscordContext } from '../../../observability/logging/logger';
-import { getNextPage } from '../../../shared/quran/pages';
+import { incrementQuranPage } from '../../../shared/quran/pages';
 import { TOTAL_QURAN_PAGES } from '../../../shared/quran/progress';
 import { announceKhatmahCompletion } from '../progress/handler';
 import { announceAttendanceStatus, attendanceStatuses, AttendanceStatus } from './attendance';
@@ -66,18 +66,17 @@ async function handleNextQuranPage(interaction: ButtonInteraction, sessionId: st
 	}
 
 	const progress = await progressRepository.getProgress();
-	const currentPage = getNextPage(progress.lastPage);
-	if (page !== currentPage) {
+	if (page !== progress.currentPage) {
 		await interaction.update({ components: [] });
 		await interaction.followUp({
-			content: `That page is no longer the current maqraah page. Current page is **${currentPage}**.`,
+			content: `That page is no longer the current maqraah page. Current page is **${progress.currentPage}**.`,
 			flags: MessageFlags.Ephemeral,
 		});
 		return;
 	}
 
-	const quranProgressUpdate = await progressRepository.updateQuranProgress(page);
-	const nextPage = getNextPage(quranProgressUpdate.progress.lastPage);
+	const nextPage = incrementQuranPage(page);
+	const quranProgressUpdate = await progressRepository.updateQuranProgress(nextPage);
 
 	await interaction.update({ components: [] });
 

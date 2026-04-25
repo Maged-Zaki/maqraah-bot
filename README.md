@@ -78,8 +78,8 @@ There is no `/configuration set` command in the current bot.
 
 ### `/maqraah progress`
 
-- `/maqraah progress update [last-quran-page-read] [last-hadith]`
-  Updates shared reading progress. Qur'an pages must be between 1 and 604, and Hadith numbers must be positive.
+- `/maqraah progress update [page] [hadith]`
+  Updates shared current reading progress. Qur'an pages must be between 1 and 604, and Hadith numbers must be positive.
 - `/maqraah progress show`
   Shows the current shared reading progress.
 
@@ -144,7 +144,7 @@ The scheduler uses `dailyTime` and `timezone` from the database. By default, it 
 
 If Maqraah time sync is enabled, the bot checks once an hour at minute 7 in the configured timezone. On startup and after relevant configuration changes, it also checks immediately. When the sync changes the configured Maqraah time, it announces the change in the reminder channel with the configured role mention. API failures are logged and retried by the regular checker.
 
-The main reminder includes the next Qur'an page, next Hadith number, and reminder action buttons. Pending notes are sent as separate numbered note messages when present. After a main reminder includes pending notes, those notes are marked `included` and stamped with `lastIncludedDate`; they are not deleted automatically. Use `/notes carry-over-last-notes` to reuse included notes.
+The main reminder includes the current Qur'an page, current Hadith number, and reminder action buttons. Pending notes are sent as separate numbered note messages when present. After a main reminder includes pending notes, those notes are marked `included` and stamped with `lastIncludedDate`; they are not deleted automatically. Use `/notes carry-over-last-notes` to reuse included notes.
 
 Optional subscription reminders are separate from maqraah reminders. They use Discord roles named `تذكيرات الصيام` and `تذكيرات المناسبات الإسلامية`, send to the configured optional-reminder channel, and mention only the target category role through `allowedMentions`. Hijri dates are resolved through AlAdhan's Islamic calendar API and cached for the current and next Gregorian month; send-time checks use the cached calendar and skip Hijri-based reminders if no cached date is available.
 
@@ -184,8 +184,8 @@ Single-row table with `id = 1`.
 | Column | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `id` | `INTEGER PRIMARY KEY` | `1` | Singleton row |
-| `lastPage` | `INTEGER` | `0` | Last Qur'an page read |
-| `lastHadith` | `INTEGER` | `0` | Last Hadith read |
+| `currentPage` | `INTEGER` | `1` | Current Qur'an page |
+| `currentHadith` | `INTEGER` | `1` | Current Hadith number |
 
 ### `notes`
 

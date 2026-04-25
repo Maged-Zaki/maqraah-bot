@@ -57,10 +57,10 @@ async function handleProgressUpdate(interaction: any, discordContext: DiscordCon
 	const updates: any = {};
 	const replyMessages: string[] = [];
 
-	const lastPage = interaction.options.getInteger(progressOptions.LAST_QURAN_PAGE_READ);
-	if (lastPage !== null) {
-		if (lastPage < 1 || lastPage > 604) {
-			logger.warn(`Invalid Quran page number provided: ${lastPage}`, discordContext, {
+	const currentPage = interaction.options.getInteger(progressOptions.PAGE);
+	if (currentPage !== null) {
+		if (currentPage < 1 || currentPage > 604) {
+			logger.warn(`Invalid Quran page number provided: ${currentPage}`, discordContext, {
 				operationType: 'progress_update',
 				operationStatus: 'failure',
 			});
@@ -68,14 +68,14 @@ async function handleProgressUpdate(interaction: any, discordContext: DiscordCon
 			return;
 		}
 
-		updates.lastPage = lastPage;
-		replyMessages.push(`Last Qur'an page set to \`${lastPage}\`.`);
+		updates.currentPage = currentPage;
+		replyMessages.push(`Current Qur'an page set to \`${currentPage}\`.`);
 	}
 
-	const lastHadith = interaction.options.getInteger(progressOptions.LAST_HADITH);
-	if (lastHadith !== null) {
-		if (lastHadith <= 0) {
-			logger.warn(`Invalid Hadith number provided: ${lastHadith}`, discordContext, {
+	const currentHadith = interaction.options.getInteger(progressOptions.HADITH);
+	if (currentHadith !== null) {
+		if (currentHadith <= 0) {
+			logger.warn(`Invalid Hadith number provided: ${currentHadith}`, discordContext, {
 				operationType: 'progress_update',
 				operationStatus: 'failure',
 			});
@@ -83,8 +83,8 @@ async function handleProgressUpdate(interaction: any, discordContext: DiscordCon
 			return;
 		}
 
-		updates.lastHadith = lastHadith;
-		replyMessages.push(`Last Hadith set to \`${lastHadith}\`.`);
+		updates.currentHadith = currentHadith;
+		replyMessages.push(`Current Hadith set to \`${currentHadith}\`.`);
 	}
 
 	if (Object.keys(updates).length === 0) {
@@ -96,8 +96,8 @@ async function handleProgressUpdate(interaction: any, discordContext: DiscordCon
 	logger.info('Updating progress with changes', discordContext, { additionalData: { updates } });
 	let quranProgressUpdate: Awaited<ReturnType<typeof progressRepository.updateQuranProgress>> | null = null;
 
-	if (lastPage !== null) {
-		quranProgressUpdate = await progressRepository.updateQuranProgress(lastPage);
+	if (currentPage !== null) {
+		quranProgressUpdate = await progressRepository.updateQuranProgress(currentPage);
 		if (quranProgressUpdate.completedKhatmah) {
 			const completedKhatmahs = getCompletedKhatmahCount(quranProgressUpdate.progress);
 			replyMessages.push(`Alhamdulillah! Khatmah \`${completedKhatmahs}\` is complete.`);
@@ -105,8 +105,8 @@ async function handleProgressUpdate(interaction: any, discordContext: DiscordCon
 		}
 	}
 
-	if (lastHadith !== null) {
-		await progressRepository.updateProgress({ lastHadith });
+	if (currentHadith !== null) {
+		await progressRepository.updateProgress({ currentHadith });
 	}
 
 	logger.info('Progress updated successfully', discordContext, { operationType: 'progress_update', operationStatus: 'success' });
@@ -114,24 +114,22 @@ async function handleProgressUpdate(interaction: any, discordContext: DiscordCon
 }
 
 async function handleProgressShow(interaction: any, discordContext: DiscordContext, now?: Date): Promise<void> {
-	const [configuration, progress, recentQuranProgressHistory, notes] = await Promise.all([
+	const [configuration, progress, notes] = await Promise.all([
 		configurationRepository.getConfiguration(),
 		progressRepository.getProgress(),
-		progressRepository.getRecentQuranProgressHistory(),
 		notesRepository.getNotesByStatus('pending'),
 	]);
 
 	logger.info('Displaying current maqraah progress dashboard', discordContext, {
 		operationType: 'progress_show',
 		operationStatus: 'success',
-		additionalData: { progress, pendingNoteCount: notes.length, recentQuranHistoryCount: recentQuranProgressHistory.length },
+		additionalData: { progress, pendingNoteCount: notes.length },
 	});
 
 	await interaction.reply(
 		buildProgressDashboardReply({
 			configuration,
 			progress,
-			recentQuranProgressHistory,
 			pendingNoteCount: notes.length,
 			interaction,
 			now,
@@ -139,7 +137,7 @@ async function handleProgressShow(interaction: any, discordContext: DiscordConte
 	);
 }
 
-export async function announceKhatmahCompletion(interaction: any, progress: { lastPage: number; khatmahCycleCount: number }, discordContext: DiscordContext): Promise<void> {
+export async function announceKhatmahCompletion(interaction: any, progress: { currentPage: number; khatmahCycleCount: number }, discordContext: DiscordContext): Promise<void> {
 	const channelId = process.env.CHANNEL_ID;
 	if (!channelId) {
 		logger.warn('Skipping khatmah completion announcement because CHANNEL_ID is not configured', discordContext, {
@@ -161,9 +159,9 @@ export async function announceKhatmahCompletion(interaction: any, progress: { la
 
 	const completedKhatmahs = getCompletedKhatmahCount(progress);
 	const completionMessage =
-		progress.lastPage === 604
+		progress.currentPage === 1
 			? `Alhamdulillah! The maqraah has completed khatmah #${completedKhatmahs}.`
-			: `Alhamdulillah! The maqraah has completed khatmah #${completedKhatmahs} and started the next cycle on page ${progress.lastPage}.`;
+			: `Alhamdulillah! The maqraah has completed khatmah #${completedKhatmahs} and started the next cycle on page ${progress.currentPage}.`;
 
 	try {
 		await channel.send({
@@ -174,7 +172,7 @@ export async function announceKhatmahCompletion(interaction: any, progress: { la
 		logger.error('Failed to announce khatmah completion', error as Error, discordContext, {
 			operationType: 'khatmah_completion_announcement',
 			operationStatus: 'failure',
-			additionalData: { channelId, completedKhatmahs, lastPage: progress.lastPage },
+			additionalData: { channelId, completedKhatmahs, currentPage: progress.currentPage },
 		});
 	}
 }

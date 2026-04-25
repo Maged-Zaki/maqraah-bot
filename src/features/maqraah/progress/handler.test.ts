@@ -2,18 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MessageFlags, PermissionsBitField } from 'discord.js';
 import type { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
-import type {
-	Progress,
-	QuranProgressHistoryEntry,
-	QuranProgressUpdateResult,
-} from '../../../storage/sqlite/repositories/ProgressRepository';
+import type { Progress, QuranProgressUpdateResult } from '../../../storage/sqlite/repositories/ProgressRepository';
 
 process.env.DATABASE_PATH ??= ':memory:';
 
 const { configurationRepository, notesRepository, progressRepository } = require('../../../storage/sqlite') as typeof import('../../../storage/sqlite');
 const { handleProgressCommand } = require('./handler') as typeof import('./handler');
 
-test('maqraah progress show renders current-cycle stats, ETA, and pending note count', { concurrency: false }, async () => {
+test('maqraah progress show renders current reading progress and pending note count', { concurrency: false }, async () => {
 	const previousChannelId = process.env.CHANNEL_ID;
 	process.env.CHANNEL_ID = 'reminder-channel';
 	let replyPayload: any;
@@ -26,13 +22,8 @@ test('maqraah progress show renders current-cycle stats, ETA, and pending note c
 					dailyTime: '7:00 PM',
 					timezone: 'UTC',
 					voiceChannelId: 'voice-channel',
-				}),
-			getProgress: async () => buildProgress({ lastPage: 300, lastHadith: 34, khatmahCycleCount: 2 }),
-			getRecentQuranProgressHistory: async () => [
-				buildHistoryEntry({ id: 1, pagesAdvanced: 20, recordedAt: '2026-04-12T10:00:00.000Z' }),
-				buildHistoryEntry({ id: 2, pagesAdvanced: 10, recordedAt: '2026-04-13T10:00:00.000Z' }),
-				buildHistoryEntry({ id: 3, pagesAdvanced: 30, recordedAt: '2026-04-14T10:00:00.000Z' }),
-			],
+			}),
+			getProgress: async () => buildProgress({ currentPage: 300, currentHadith: 34, khatmahCycleCount: 2 }),
 			getNotesByStatus: async () => [
 				{ id: 1, userId: 'user-1', note: 'First note', dateAdded: '2026-04-15T12:00:00.000Z', status: 'pending' },
 				{ id: 2, userId: 'user-2', note: 'Second note', dateAdded: '2026-04-15T13:00:00.000Z', status: 'pending' },
@@ -58,13 +49,9 @@ test('maqraah progress show renders current-cycle stats, ETA, and pending note c
 	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
 	assert.deepEqual(replyPayload.allowedMentions, { parse: [] });
 	assert.match(fields["Qur'an Progress"], /Current page: 300 \/ 604/);
-	assert.match(fields["Qur'an Progress"], /Next page: 301/);
-	assert.match(fields["Qur'an Progress"], /Percentage complete: 49\.67%/);
-	assert.match(fields["Qur'an Progress"], /Pages remaining: 304/);
-	assert.match(fields["Qur'an Progress"], /Completed khatmahs: 2/);
-	assert.match(fields["Qur'an Progress"], /Estimated completion: May 1, 2026/);
+	assert.doesNotMatch(fields["Qur'an Progress"], /Next page|Percentage complete|Pages remaining|Completed khatmahs|Estimated completion/);
 	assert.match(fields['Hadith Progress'], /Current Hadith: 34/);
-	assert.match(fields['Hadith Progress'], /Next Hadith: 35/);
+	assert.doesNotMatch(fields['Hadith Progress'], /Next Hadith/);
 	assert.match(fields['Next Maqraah'], /2026-04-15 at 7:00 PM \(UTC\)/);
 	assert.equal(fields['Reminder Channel'], '<#reminder-channel>');
 	assert.equal(fields['Reminder Role'], '<@&role-1>');
@@ -81,8 +68,7 @@ test('maqraah progress show handles completed khatmahs without showing note cont
 	await withRepositoryMocks(
 		{
 			getConfiguration: async () => buildConfiguration({ roleId: 'role-1', voiceChannelId: 'voice-channel', timezone: 'UTC' }),
-			getProgress: async () => buildProgress({ lastPage: 604, lastHadith: 1, khatmahCycleCount: 0 }),
-			getRecentQuranProgressHistory: async () => [],
+			getProgress: async () => buildProgress({ currentPage: 604, currentHadith: 1, khatmahCycleCount: 0 }),
 			getNotesByStatus: async () => [],
 		},
 		async () => {
@@ -102,9 +88,8 @@ test('maqraah progress show handles completed khatmahs without showing note cont
 	restoreEnv('CHANNEL_ID', previousChannelId);
 
 	const fields = getEmbedFields(replyPayload);
-	assert.match(fields["Qur'an Progress"], /Next page: 1/);
-	assert.match(fields["Qur'an Progress"], /Completed khatmahs: 1/);
-	assert.match(fields["Qur'an Progress"], /Estimated completion: Completed/);
+	assert.match(fields["Qur'an Progress"], /Current page: 604 \/ 604/);
+	assert.doesNotMatch(fields["Qur'an Progress"], /Next page|Completed khatmahs|Estimated completion/);
 	assert.equal(fields['Pending Notes'], '0 pending notes');
 	assert.doesNotMatch(JSON.stringify(replyPayload), /First note|Second note|secret/i);
 });
@@ -124,8 +109,7 @@ test('maqraah progress show warns about invalid or missing configuration without
 					voiceChannelId: '',
 					mainReminderEnabled: 0,
 				}),
-			getProgress: async () => buildProgress({ lastPage: 10, lastHadith: 20, khatmahCycleCount: 0 }),
-			getRecentQuranProgressHistory: async () => [],
+			getProgress: async () => buildProgress({ currentPage: 10, currentHadith: 20, khatmahCycleCount: 0 }),
 			getNotesByStatus: async () => [],
 		},
 		async () => {
@@ -146,7 +130,7 @@ test('maqraah progress show warns about invalid or missing configuration without
 
 	const fields = getEmbedFields(replyPayload);
 	assert.equal(fields['Next Maqraah'], 'Not available');
-	assert.match(fields["Qur'an Progress"], /Estimated completion: Not enough history yet/);
+	assert.match(fields["Qur'an Progress"], /Current page: 10 \/ 604/);
 	assert.match(fields['Warnings'], /Maqraah time is invalid/);
 	assert.match(fields['Warnings'], /Timezone is invalid/);
 	assert.match(fields['Warnings'], /Maqraah reminders are disabled/);
@@ -162,14 +146,50 @@ test('maqraah progress update persists quran and hadith progress', { concurrency
 
 	await withRepositoryMocks(
 		{
-			updateQuranProgress: async (lastPage: number) => {
-				quranUpdates.push(lastPage);
+			updateQuranProgress: async (currentPage: number) => {
+				quranUpdates.push(currentPage);
 				return buildQuranProgressUpdateResult({
-					progress: buildProgress({ lastPage, lastHadith: 0, khatmahCycleCount: 0 }),
+					progress: buildProgress({ currentPage, currentHadith: 0, khatmahCycleCount: 0 }),
 				});
 			},
 			updateProgress: async (update: Partial<Progress>) => {
 				hadithUpdates.push(update);
+			},
+		},
+		async () => {
+			await handleProgressCommand(
+				buildInteraction({
+					subcommand: 'update',
+					integers: { 'page': 22, 'hadith': 40 },
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+				}) as any,
+				{ commandName: 'maqraah', subcommandGroup: 'progress' }
+			);
+		}
+	);
+
+	assert.deepEqual(quranUpdates, [22]);
+	assert.deepEqual(hadithUpdates, [{ currentHadith: 40 }]);
+	assert.match(replyPayload, /Current Qur'an page set to `22`\./);
+	assert.match(replyPayload, /Current Hadith set to `40`\./);
+	assert.doesNotMatch(replyPayload, /Khatmah/);
+});
+
+test('maqraah progress update ignores removed legacy option names', { concurrency: false }, async () => {
+	let quranUpdateCalls = 0;
+	let hadithUpdateCalls = 0;
+	let replyPayload: any;
+
+	await withRepositoryMocks(
+		{
+			updateQuranProgress: async () => {
+				quranUpdateCalls++;
+				return buildQuranProgressUpdateResult({});
+			},
+			updateProgress: async () => {
+				hadithUpdateCalls++;
 			},
 		},
 		async () => {
@@ -186,11 +206,9 @@ test('maqraah progress update persists quran and hadith progress', { concurrency
 		}
 	);
 
-	assert.deepEqual(quranUpdates, [22]);
-	assert.deepEqual(hadithUpdates, [{ lastHadith: 40 }]);
-	assert.match(replyPayload, /Last Qur'an page set to `22`\./);
-	assert.match(replyPayload, /Last Hadith set to `40`\./);
-	assert.doesNotMatch(replyPayload, /Khatmah/);
+	assert.equal(quranUpdateCalls, 0);
+	assert.equal(hadithUpdateCalls, 0);
+	assert.deepEqual(replyPayload, { content: 'No options provided.', flags: MessageFlags.Ephemeral });
 });
 
 test('maqraah progress update announces khatmah completion immediately', { concurrency: false }, async () => {
@@ -203,7 +221,7 @@ test('maqraah progress update announces khatmah completion immediately', { concu
 		{
 			updateQuranProgress: async () =>
 				buildQuranProgressUpdateResult({
-					progress: buildProgress({ lastPage: 604, lastHadith: 0, khatmahCycleCount: 0 }),
+					progress: buildProgress({ currentPage: 1, currentHadith: 1, khatmahCycleCount: 1 }),
 					completedKhatmah: true,
 				}),
 		},
@@ -211,7 +229,7 @@ test('maqraah progress update announces khatmah completion immediately', { concu
 			await handleProgressCommand(
 				buildInteraction({
 					subcommand: 'update',
-					integers: { 'last-quran-page-read': 604 },
+					integers: { page: 1 },
 					reply: (payload) => {
 						replyPayload = payload;
 					},
@@ -226,7 +244,7 @@ test('maqraah progress update announces khatmah completion immediately', { concu
 
 	const reminderChannel = client.channels.cache.get('reminder-channel');
 	assert.ok(reminderChannel);
-	assert.match(replyPayload, /Last Qur'an page set to `604`\./);
+	assert.match(replyPayload, /Current Qur'an page set to `1`\./);
 	assert.match(replyPayload, /Khatmah `1` is complete\./);
 	assert.equal(reminderChannel.sentMessages.length, 1);
 	assert.equal(reminderChannel.sentMessages[0].content, 'Alhamdulillah! The maqraah has completed khatmah #1.');
@@ -250,7 +268,7 @@ test('maqraah progress update for hadith only does not touch quran page tracking
 			await handleProgressCommand(
 				buildInteraction({
 					subcommand: 'update',
-					integers: { 'last-hadith': 12 },
+					integers: { 'hadith': 12 },
 					reply: () => undefined,
 				}) as any,
 				{ commandName: 'maqraah', subcommandGroup: 'progress' }
@@ -259,13 +277,12 @@ test('maqraah progress update for hadith only does not touch quran page tracking
 	);
 
 	assert.equal(quranUpdateCalls, 0);
-	assert.deepEqual(hadithUpdates, [{ lastHadith: 12 }]);
+	assert.deepEqual(hadithUpdates, [{ currentHadith: 12 }]);
 });
 
 async function withRepositoryMocks(overrides: any, callback: () => Promise<void>): Promise<void> {
 	const originalGetConfiguration = configurationRepository.getConfiguration;
 	const originalGetProgress = progressRepository.getProgress;
-	const originalGetRecentQuranProgressHistory = progressRepository.getRecentQuranProgressHistory;
 	const originalUpdateProgress = progressRepository.updateProgress;
 	const originalUpdateQuranProgress = progressRepository.updateQuranProgress;
 	const originalGetNotesByStatus = notesRepository.getNotesByStatus;
@@ -276,10 +293,6 @@ async function withRepositoryMocks(overrides: any, callback: () => Promise<void>
 
 	if (overrides.getProgress) {
 		progressRepository.getProgress = overrides.getProgress;
-	}
-
-	if (overrides.getRecentQuranProgressHistory) {
-		progressRepository.getRecentQuranProgressHistory = overrides.getRecentQuranProgressHistory;
 	}
 
 	if (overrides.updateProgress) {
@@ -299,7 +312,6 @@ async function withRepositoryMocks(overrides: any, callback: () => Promise<void>
 	} finally {
 		configurationRepository.getConfiguration = originalGetConfiguration;
 		progressRepository.getProgress = originalGetProgress;
-		progressRepository.getRecentQuranProgressHistory = originalGetRecentQuranProgressHistory;
 		progressRepository.updateProgress = originalUpdateProgress;
 		progressRepository.updateQuranProgress = originalUpdateQuranProgress;
 		notesRepository.getNotesByStatus = originalGetNotesByStatus;
@@ -410,21 +422,10 @@ function buildConfiguration(configuration: Partial<Configuration>): Configuratio
 
 function buildProgress(progress: Partial<Progress>): Progress {
 	return {
-		lastPage: 0,
-		lastHadith: 0,
+		currentPage: 1,
+		currentHadith: 1,
 		khatmahCycleCount: 0,
 		...progress,
-	};
-}
-
-function buildHistoryEntry(entry: Partial<QuranProgressHistoryEntry>): QuranProgressHistoryEntry {
-	return {
-		id: 1,
-		lastPage: 0,
-		khatmahCycleCount: 0,
-		pagesAdvanced: 0,
-		recordedAt: '2026-04-15T10:00:00.000Z',
-		...entry,
 	};
 }
 

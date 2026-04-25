@@ -1,7 +1,7 @@
-export function getNextPage(lastPage: number): number {
-	if (lastPage >= 604) {
+export function incrementQuranPage(currentPage: number): number {
+	if (currentPage >= 604) {
 		return 1;
 	}
 
-	return lastPage + 1;
+	return currentPage + 1;
 }

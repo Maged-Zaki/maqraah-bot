@@ -1,5 +1,5 @@
 # Maqraah Bot Agents Guide
-<!-- hash: sha256:f41ea6db2a3355212cd1180833a310a503fb7bbe0bd8998fbba6e47c81d9fdfa -->
+<!-- hash: sha256:aad9989824f5e06595a3853fca5788358b75bb460dc1478c31f181c87c33926d -->
 
 ## 1. Project Identity
 
@@ -116,7 +116,7 @@ Modules with the highest downstream blast radius:
 | `/maqraah cannot-attend-upcoming-maqraah` | Preregister unable to attend upcoming maqraah | none | No command permission enforced | Guild | `src/features/maqraah/command.ts` |
 | `/maqraah will-be-late-upcoming-maqraah` | Preregister arriving late | none | No command permission enforced | Guild | `src/features/maqraah/command.ts` |
 | `/maqraah clear-upcoming-maqraah-status` | Clear preregistered attendance status | none | No command permission enforced | Guild | `src/features/maqraah/command.ts` |
-| `/maqraah progress update` | Update shared reading progress | `last-quran-page-read:integer:no`, `last-hadith:integer:no` | No command permission enforced | Guild | `src/features/maqraah/command.ts`, `src/features/maqraah/progress/handler.ts` |
+| `/maqraah progress update` | Update shared reading progress | `page:integer:no`, `hadith:integer:no` | No command permission enforced | Guild | `src/features/maqraah/command.ts`, `src/features/maqraah/progress/handler.ts` |
 | `/maqraah progress show` | Show maqraah progress and setup status | none | No command permission enforced | Guild | `src/features/maqraah/command.ts`, `src/features/maqraah/progress/handler.ts` |
 | `/change-upcoming-maqraah-time` | Change the next maqraah reminder time once | `time:string:yes` | No command permission enforced | Guild | `src/features/maqraah/reminders/changeUpcomingMaqraahTimeCommand.ts` |
 | `/notes create` | Add a pending note | `text:string:yes` | No command permission enforced | Guild | `src/features/notes/command.ts` |
@@ -237,10 +237,10 @@ Purpose: singleton shared reading progress row. Write frequency: per `/maqraah p
 | Column | Type | Nullable | Default | Index |
 | --- | --- | --- | --- | --- |
 | `id` | INTEGER PRIMARY KEY | no | `1` inserted | PK |
-| `lastPage` | INTEGER | yes | `0` | none |
-| `lastHadith` | INTEGER | yes | `0` | none |
+| `currentPage` | INTEGER | yes | `1` | none |
+| `currentHadith` | INTEGER | yes | `1` | none |
 
-Example record: `{ id: 1, lastPage: 42, lastHadith: 12 }`.
+Example record: `{ id: 1, currentPage: 43, currentHadith: 13 }`.
 
 ### `notes`
 

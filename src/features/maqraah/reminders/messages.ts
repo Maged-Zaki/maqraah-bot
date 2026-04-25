@@ -2,7 +2,6 @@ import { Configuration } from '../../../storage/sqlite/repositories/Configuratio
 import { Note } from '../../../storage/sqlite/repositories/NotesRepository';
 import { Progress } from '../../../storage/sqlite/repositories/ProgressRepository';
 import { chunkContent } from '../../../shared/content/chunkContent';
-import { getNextPage } from '../../../shared/quran/pages';
 import { defaultReminderCadence, getReminderOffset } from './cadence';
 
 export interface ReminderMessages {
@@ -23,12 +22,9 @@ export function buildPreReminderMessage(configuration: Configuration): string {
 }
 
 function buildMainReminderMessage(configuration: Configuration, progress: Progress): string {
-	const nextPage = getNextPage(progress.lastPage);
-	const nextHadith = progress.lastHadith + 1;
-
 	let message = `<@&${configuration.roleId}> بدأت المقرأة\n\n`;
-	message += `الصفحة القادمة: [${nextPage}](https://quran.com/page/${nextPage})\n`;
-	message += `الحديث القادم: **${nextHadith}**\n`;
+	message += `الصفحة الحالية: [${progress.currentPage}](https://quran.com/page/${progress.currentPage})\n`;
+	message += `الحديث الحالي: **${progress.currentHadith}**\n`;
 
 	return message;
 }

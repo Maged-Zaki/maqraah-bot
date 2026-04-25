@@ -102,19 +102,19 @@ test('next quran page button updates progress, removes the old button, and sends
 
 	await withProgressRepositoryMocks(
 		{
-			getProgress: async () => buildProgress({ lastPage: 12 }),
-			updateQuranProgress: async (lastPage: number) => {
-				quranUpdates.push(lastPage);
+			getProgress: async () => buildProgress({ currentPage: 12 }),
+			updateQuranProgress: async (currentPage: number) => {
+				quranUpdates.push(currentPage);
 				return buildQuranProgressUpdateResult({
-					previousProgress: buildProgress({ lastPage: 12 }),
-					progress: buildProgress({ lastPage }),
+					previousProgress: buildProgress({ currentPage: 12 }),
+					progress: buildProgress({ currentPage }),
 				});
 			},
 		},
 		async () => {
 			const handled = await handleReminderButtonInteraction(
 				buildInteraction({
-					customId: buildNextQuranPageActionCustomId('2026-04-15', 13),
+					customId: buildNextQuranPageActionCustomId('2026-04-15', 12),
 					onUpdate: (payload) => {
 						updatePayloads.push(payload);
 					},
@@ -130,12 +130,12 @@ test('next quran page button updates progress, removes the old button, and sends
 
 	assert.deepEqual(quranUpdates, [13]);
 	assert.deepEqual(updatePayloads, [{ components: [] }]);
-	assert.equal(sentPayloads[0]?.content, 'Current page: **14**');
+	assert.equal(sentPayloads[0]?.content, 'Current page: **13**');
 	const row = sentPayloads[0]?.components?.[0].toJSON() as any;
 	assert.deepEqual(parseReminderActionCustomId(row.components[0].custom_id), {
 		action: reminderActions.NEXT_QURAN_PAGE,
 		sessionId: '2026-04-15',
-		page: 14,
+		page: 13,
 	});
 });
 
@@ -147,12 +147,12 @@ test('stale next quran page buttons do not move progress backward', { concurrenc
 
 	await withProgressRepositoryMocks(
 		{
-			getProgress: async () => buildProgress({ lastPage: 14 }),
-			updateQuranProgress: async (lastPage: number) => {
-				quranUpdates.push(lastPage);
+			getProgress: async () => buildProgress({ currentPage: 14 }),
+			updateQuranProgress: async (currentPage: number) => {
+				quranUpdates.push(currentPage);
 				return buildQuranProgressUpdateResult({
-					previousProgress: buildProgress({ lastPage: 14 }),
-					progress: buildProgress({ lastPage }),
+					previousProgress: buildProgress({ currentPage: 14 }),
+					progress: buildProgress({ currentPage }),
 				});
 			},
 		},
@@ -179,20 +179,27 @@ test('stale next quran page buttons do not move progress backward', { concurrenc
 	assert.deepEqual(quranUpdates, []);
 	assert.deepEqual(updatePayloads, [{ components: [] }]);
 	assert.deepEqual(sentPayloads, []);
-	assert.match(followUpPayloads[0]?.content, /Current page is \*\*15\*\*/);
+	assert.match(followUpPayloads[0]?.content, /Current page is \*\*14\*\*/);
 });
 
 test('next quran page button wraps the prompt to page one after page 604', { concurrency: false }, async () => {
+	const previousChannelId = process.env.CHANNEL_ID;
+	process.env.CHANNEL_ID = 'reminder-channel';
+	const client = createClient();
+	const quranUpdates: number[] = [];
 	const sentPayloads: any[] = [];
 
 	await withProgressRepositoryMocks(
 		{
-			getProgress: async () => buildProgress({ lastPage: 603 }),
-			updateQuranProgress: async (lastPage: number) =>
-				buildQuranProgressUpdateResult({
-					previousProgress: buildProgress({ lastPage: 603 }),
-					progress: buildProgress({ lastPage }),
-				}),
+			getProgress: async () => buildProgress({ currentPage: 604 }),
+			updateQuranProgress: async (currentPage: number) => {
+				quranUpdates.push(currentPage);
+				return buildQuranProgressUpdateResult({
+					previousProgress: buildProgress({ currentPage: 604 }),
+					progress: buildProgress({ currentPage, khatmahCycleCount: 1 }),
+					completedKhatmah: true,
+				});
+			},
 		},
 		async () => {
 			const handled = await handleReminderButtonInteraction(
@@ -201,6 +208,7 @@ test('next quran page button wraps the prompt to page one after page 604', { con
 					onSend: (payload) => {
 						sentPayloads.push(payload);
 					},
+					client,
 				}) as any
 			);
 
@@ -208,6 +216,9 @@ test('next quran page button wraps the prompt to page one after page 604', { con
 		}
 	);
 
+	restoreEnv('CHANNEL_ID', previousChannelId);
+
+	assert.deepEqual(quranUpdates, [1]);
 	assert.equal(sentPayloads[0]?.content, 'Current page: **1**');
 	const row = sentPayloads[0]?.components?.[0].toJSON() as any;
 	assert.deepEqual(parseReminderActionCustomId(row.components[0].custom_id), {
@@ -215,6 +226,8 @@ test('next quran page button wraps the prompt to page one after page 604', { con
 		sessionId: '2026-04-15',
 		page: 1,
 	});
+	const reminderChannel = client.channels.cache.get('reminder-channel');
+	assert.equal(reminderChannel?.sentMessages[0]?.content, 'Alhamdulillah! The maqraah has completed khatmah #1.');
 });
 
 async function withAttendanceRepositoryMocks(
@@ -283,8 +296,8 @@ function buildAttendance(attendance: Partial<Attendance>): Attendance {
 
 function buildProgress(progress: Partial<Progress>): Progress {
 	return {
-		lastPage: 0,
-		lastHadith: 0,
+		currentPage: 1,
+		currentHadith: 1,
 		khatmahCycleCount: 0,
 		...progress,
 	};
@@ -305,6 +318,7 @@ function buildQuranProgressUpdateResult(result: Partial<QuranProgressUpdateResul
 
 function buildInteraction(options: {
 	customId: string;
+	client?: any;
 	onDeferUpdate?: () => void;
 	onFollowUp?: (payload: any) => void;
 	onSend?: (payload: any) => void;
@@ -318,6 +332,7 @@ function buildInteraction(options: {
 		},
 		guildId: 'guild-1',
 		channelId: 'channel-1',
+		client: options.client,
 		message: {
 			channel: {
 				isSendable: () => true,
@@ -339,4 +354,27 @@ function buildInteraction(options: {
 		replied: false,
 		deferred: false,
 	};
+}
+
+function createClient() {
+	const reminderChannel = {
+		sentMessages: [] as any[],
+		send: async (payload: any) => {
+			reminderChannel.sentMessages.push(payload);
+		},
+	};
+
+	return {
+		channels: {
+			cache: new Map([['reminder-channel', reminderChannel]]),
+		},
+	};
+}
+
+function restoreEnv(name: string, value: string | undefined): void {
+	if (value === undefined) {
+		delete process.env[name];
+	} else {
+		process.env[name] = value;
+	}
 }

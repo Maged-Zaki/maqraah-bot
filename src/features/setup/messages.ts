@@ -26,7 +26,7 @@ export function buildSetupGuideMessage(commandReferences: SetupGuideCommandRefer
 		"Hello! I am the Maqraah bot. I help your group track daily Qur'an and Hadith reading.",
 		'',
 		`Start with ${configurationUpdate} to choose the reminder role, maqraah time, timezone, and voice channel.`,
-		`Use ${progressUpdate} to record the current Qur'an page and Hadith number.`,
+		`Use ${progressUpdate} to record the current Qur'an page and current Hadith number.`,
 		`Use ${help} any time you need the command list.`,
 		'',
 		"Once setup is ready, I will send the daily Maqraah reminders here, insha'Allah.",

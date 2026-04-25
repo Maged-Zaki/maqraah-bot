@@ -92,7 +92,7 @@ test('main reminder sends the current quran page prompt after notes', { concurre
 
 	await withMainReminderRepositoryMocks(
 		{
-			getProgress: async () => buildProgress({ lastPage: 12, lastHadith: 34 }),
+			getProgress: async () => buildProgress({ currentPage: 13, currentHadith: 35 }),
 			getNotesByStatus: async () => [buildNote({ id: 7, note: 'Review tajweed point' })],
 			updateNotesStatusWithDate: async (noteIds: number[]) => {
 				includedNoteIds.push(noteIds);
@@ -112,7 +112,8 @@ test('main reminder sends the current quran page prompt after notes', { concurre
 	);
 
 	assert.deepEqual(includedNoteIds, [[7]]);
-	assert.match(sentPayloads[0]?.content, /الصفحة القادمة: \[13\]/);
+	assert.match(sentPayloads[0]?.content, /الصفحة الحالية: \[13\]/);
+	assert.match(sentPayloads[0]?.content, /الحديث الحالي: \*\*35\*\*/);
 	assert.equal(sentPayloads[1]?.content, 'ملاحظات اليوم:\n1. Review tajweed point\n');
 	assert.equal(sentPayloads[2]?.content, 'Current page: **13**');
 	const row = (sentPayloads[2]?.components?.[0] as any).toJSON();
@@ -189,8 +190,8 @@ function buildAttendance(attendance: Partial<Attendance>): Attendance {
 
 function buildProgress(progress: Partial<Progress>): Progress {
 	return {
-		lastPage: 0,
-		lastHadith: 0,
+		currentPage: 1,
+		currentHadith: 1,
 		khatmahCycleCount: 0,
 		...progress,
 	};

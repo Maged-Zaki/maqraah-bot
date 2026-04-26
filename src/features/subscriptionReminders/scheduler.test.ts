@@ -13,7 +13,7 @@ test('scheduler sends reminders at the configured time', async () => {
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T18:00:00.000Z'), {
 		getConfiguration: async () => ({ timezone: 'UTC' } as any),
-		getSettings: async () => buildSettings({ daysBefore: 1, sendTime: '6:00 PM' }),
+		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
@@ -23,7 +23,9 @@ test('scheduler sends reminders at the configured time', async () => {
 	assert.equal(sentPayloads.length, 1);
 	assert.match(sentPayloads[0].content, /<@&role-fasting>/);
 	assert.match(sentPayloads[0].content, /صيام يوم الاثنين/);
+	assert.match(sentPayloads[0].content, /الحديث:/);
 	assert.match(sentPayloads[0].content, /جامع الترمذي 747/);
+	assert.doesNotMatch(sentPayloads[0].content, /الموعد/);
 	assert.deepEqual(sentPayloads[0].allowedMentions, { parse: [], roles: ['role-fasting'] });
 });
 
@@ -32,7 +34,7 @@ test('scheduler skips runs outside the configured time', async () => {
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T17:59:00.000Z'), {
 		getConfiguration: async () => ({ timezone: 'UTC' } as any),
-		getSettings: async () => buildSettings({ daysBefore: 1, sendTime: '6:00 PM' }),
+		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
@@ -42,7 +44,7 @@ test('scheduler skips runs outside the configured time', async () => {
 	assert.equal(sentPayloads.length, 0);
 });
 
-test('scheduler respects the configured days-before value', async () => {
+test('scheduler ignores the legacy days-before value and uses hard-coded event lead days', async () => {
 	const sentPayloads: any[] = [];
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T18:00:00.000Z'), {
@@ -54,7 +56,8 @@ test('scheduler respects the configured days-before value', async () => {
 		ensureCategoryRole: async () => ({ id: 'role-fasting', name: 'تذكيرات الصيام' }),
 	});
 
-	assert.equal(sentPayloads.length, 0);
+	assert.equal(sentPayloads.length, 1);
+	assert.match(sentPayloads[0].content, /غدا صيام يوم الاثنين/);
 });
 
 test('scheduler does not resend an already recorded reminder', async () => {
@@ -62,7 +65,7 @@ test('scheduler does not resend an already recorded reminder', async () => {
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T18:00:00.000Z'), {
 		getConfiguration: async () => ({ timezone: 'UTC' } as any),
-		getSettings: async () => buildSettings({ daysBefore: 1, sendTime: '6:00 PM' }),
+		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => true,
 		recordEventSent: async () => {
@@ -74,14 +77,18 @@ test('scheduler does not resend an already recorded reminder', async () => {
 	assert.equal(sentPayloads.length, 0);
 });
 
-test('scheduler uses cached Hijri calendar data for Hijri-based reminders', async () => {
+test('scheduler sends the six Shawwal reminder once on Eid day for fasting from tomorrow', async () => {
 	const sentPayloads: any[] = [];
 	const recordedEvents: string[] = [];
+	const cachedDateLookups: string[] = [];
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-20T18:00:00.000Z'), {
 		getConfiguration: async () => ({ timezone: 'UTC' } as any),
-		getSettings: async () => buildSettings({ daysBefore: 1, sendTime: '6:00 PM' }),
-		getCachedHijriDate: async () => buildHijriDate({ gregorianDate: '2026-04-21', hijriMonth: 10, hijriDay: 2, hijriMonthNameAr: 'شوال' }),
+		getSettings: async () => buildSettings({ daysBefore: 0, sendTime: '6:00 PM' }),
+		getCachedHijriDate: async (dateKey) => {
+			cachedDateLookups.push(dateKey);
+			return buildHijriDate({ gregorianDate: dateKey, hijriMonth: 10, hijriDay: 2, hijriMonthNameAr: 'شوال' });
+		},
 		hasEvent: async () => false,
 		recordEventSent: async (event) => {
 			recordedEvents.push(event.eventKey);
@@ -92,7 +99,9 @@ test('scheduler uses cached Hijri calendar data for Hijri-based reminders', asyn
 
 	assert.equal(sentPayloads.length, 1);
 	assert.match(sentPayloads[0].content, /الست من شوال/);
+	assert.match(sentPayloads[0].content, /من غد/);
 	assert.match(sentPayloads[0].content, /صحيح مسلم 1164a/);
+	assert.deepEqual(cachedDateLookups, ['2026-04-21']);
 	assert.deepEqual(recordedEvents, ['six-shawwal:2026-04-21:days-before-1']);
 });
 
@@ -101,7 +110,7 @@ test('scheduler skips Hijri-based reminders when provider and cache data are una
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-20T18:00:00.000Z'), {
 		getConfiguration: async () => ({ timezone: 'UTC' } as any),
-		getSettings: async () => buildSettings({ daysBefore: 1, sendTime: '6:00 PM' }),
+		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
@@ -117,7 +126,7 @@ test('scheduler recovers missing category roles before sending', async () => {
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T18:00:00.000Z'), {
 		getConfiguration: async () => ({ timezone: 'UTC' } as any),
-		getSettings: async () => buildSettings({ daysBefore: 1, sendTime: '6:00 PM' }),
+		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
 		recordEventSent: async () => true,

@@ -1,6 +1,5 @@
 import type { HijriCalendarCacheEntry } from '../../storage/sqlite/repositories/HijriCalendarCacheRepository';
 import type { SubscriptionReminderEventDefinition } from './catalog';
-import { formatArabicDateLabel } from './dateUtils';
 
 export interface ReminderMessageInput {
 	roleId: string;
@@ -12,55 +11,41 @@ export interface ReminderMessageInput {
 export function buildSubscriptionReminderMessage(input: ReminderMessageInput): string {
 	const lines = [
 		`<@&${input.roleId}>`,
-		buildTemplateLine(input.event, input.targetGregorianDate, input.hijriDate),
-		`الموعد: ${formatArabicDateLabel(input.targetGregorianDate)}${formatHijriLabel(input.hijriDate)}`,
+		buildTemplateLine(input.event, input.hijriDate),
+		`الحديث: ${input.event.hadith.text}`,
+		`المصدر: ${input.event.hadith.source.label}: ${input.event.hadith.source.url}`,
 	];
-
-	if (input.event.sources.length > 0) {
-		lines.push('المراجع:');
-		for (const source of input.event.sources) {
-			lines.push(`${source.label}: ${source.url}`);
-		}
-	}
 
 	return lines.join('\n');
 }
 
-function buildTemplateLine(event: SubscriptionReminderEventDefinition, targetGregorianDate: string, hijriDate: HijriCalendarCacheEntry | null): string {
+function buildTemplateLine(event: SubscriptionReminderEventDefinition, hijriDate: HijriCalendarCacheEntry | null): string {
 	switch (event.messageKey) {
 		case 'fasting-monday':
-			return 'تذكير: صيام يوم الاثنين.';
+			return 'غدا صيام يوم الاثنين.';
 		case 'fasting-thursday':
-			return 'تذكير: صيام يوم الخميس.';
+			return 'غدا صيام يوم الخميس.';
 		case 'white-days':
-			return `تذكير: صيام اليوم الأبيض ${hijriDate?.hijriDay ?? ''} من ${getHijriMonthName(hijriDate)}.`;
+			return `غدا صيام اليوم الأبيض ${hijriDate?.hijriDay ?? ''} من ${getHijriMonthName(hijriDate)}.`;
 		case 'six-shawwal':
-			return 'تذكير: من أيام صيام الست من شوال.';
+			return 'من غد يبدأ صيام الست من شوال، وصمها قبل نهاية شوال.';
 		case 'arafah':
-			return 'تذكير: صيام يوم عرفة.';
+			return 'غدا صيام يوم عرفة.';
 		case 'tasua':
-			return 'تذكير: صيام تاسوعاء.';
+			return 'غدا صيام تاسوعاء.';
 		case 'ashura':
-			return 'تذكير: صيام عاشوراء.';
+			return 'غدا صيام عاشوراء.';
 		case 'ramadan-start':
-			return 'تذكير: بداية شهر رمضان.';
+			return 'غدا يبدأ شهر رمضان.';
 		case 'eid-fitr':
-			return 'تذكير: عيد الفطر.';
+			return 'غدا عيد الفطر.';
 		case 'dhul-hijjah-ten':
-			return 'تذكير: بداية الأيام العشر من ذي الحجة.';
+			return 'غدا تبدأ العشر من ذي الحجة.';
 		case 'eid-adha':
-			return 'تذكير: عيد الأضحى.';
+			return 'غدا عيد الأضحى.';
 		default:
-			return `تذكير بتاريخ ${targetGregorianDate}.`;
+			return 'تذكير بسيط.';
 	}
-}
-
-function formatHijriLabel(hijriDate: HijriCalendarCacheEntry | null): string {
-	if (!hijriDate) {
-		return '';
-	}
-
-	return ` / ${hijriDate.hijriDay} ${getHijriMonthName(hijriDate)} ${hijriDate.hijriYear} هـ`;
 }
 
 function getHijriMonthName(hijriDate: HijriCalendarCacheEntry | null): string {

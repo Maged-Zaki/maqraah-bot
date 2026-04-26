@@ -7,7 +7,6 @@ import {
 	subscriptionReminderEventsRepository,
 } from '../../storage/sqlite';
 import type { HijriCalendarCacheEntry } from '../../storage/sqlite/repositories/HijriCalendarCacheRepository';
-import type { ReminderSettings } from '../../storage/sqlite/repositories/ReminderSettingsRepository';
 import { logger } from '../../observability/logging/logger';
 import { normalizeTimeZone, parseReminderTime } from '../../shared/time';
 import { subscriptionReminderEvents, type SubscriptionReminderEventDefinition } from './catalog';
@@ -142,19 +141,9 @@ export async function executeSubscriptionReminderRun(
 	}
 
 	const sendDate = formatLocalDateKey(now, timezone);
-	const targetDate = addDaysToDateKey(sendDate, settings.daysBefore);
-	const hijriDate = await getCachedHijriDate(targetDate);
-	if (!hijriDate) {
-		logger.warn('No cached Hijri calendar date available; skipping Hijri-based subscription reminders', undefined, {
-			operationType: 'subscription_reminder_execution',
-			operationStatus: 'partial',
-			additionalData: { targetDate },
-		});
-	}
-
-	const dueEvents = getDueSubscriptionReminderEvents(targetDate, hijriDate);
-	for (const event of dueEvents) {
-		const occurrenceKey = buildOccurrenceEventKey(event, targetDate, settings);
+	const dueEvents = await getDueSubscriptionReminderEventsForSendDate(sendDate, getCachedHijriDate);
+	for (const { event, targetDate, hijriDate } of dueEvents) {
+		const occurrenceKey = buildOccurrenceEventKey(event, targetDate);
 		if (await hasEvent(occurrenceKey)) {
 			continue;
 		}
@@ -204,6 +193,59 @@ export async function executeSubscriptionReminderRun(
 	}
 }
 
+interface DueSubscriptionReminderEvent {
+	event: SubscriptionReminderEventDefinition;
+	targetDate: string;
+	hijriDate: HijriCalendarCacheEntry | null;
+}
+
+async function getDueSubscriptionReminderEventsForSendDate(
+	sendDate: string,
+	getCachedHijriDate: typeof hijriCalendarCacheRepository.getByGregorianDate
+): Promise<DueSubscriptionReminderEvent[]> {
+	const dueEvents: DueSubscriptionReminderEvent[] = [];
+	const hijriDateCache = new Map<string, HijriCalendarCacheEntry | null>();
+	const missingHijriWarnings = new Set<string>();
+
+	for (const event of subscriptionReminderEvents) {
+		const targetDate = addDaysToDateKey(sendDate, event.leadDays);
+
+		if (event.matcher.type === 'gregorian-weekday') {
+			if (event.matcher.weekday === getWeekdayFromDateKey(targetDate)) {
+				dueEvents.push({ event, targetDate, hijriDate: null });
+			}
+
+			continue;
+		}
+
+		let hijriDate = hijriDateCache.get(targetDate);
+		if (hijriDate === undefined) {
+			hijriDate = await getCachedHijriDate(targetDate);
+			hijriDateCache.set(targetDate, hijriDate);
+		}
+
+		if (!hijriDate) {
+			if (!missingHijriWarnings.has(targetDate)) {
+				logger.warn('No cached Hijri calendar date available; skipping Hijri-based subscription reminders', undefined, {
+					operationType: 'subscription_reminder_execution',
+					operationStatus: 'partial',
+					additionalData: { targetDate },
+				});
+				missingHijriWarnings.add(targetDate);
+			}
+
+			continue;
+		}
+
+		const monthMatches = event.matcher.month === 0 || event.matcher.month === hijriDate.hijriMonth;
+		if (monthMatches && event.matcher.days.includes(hijriDate.hijriDay)) {
+			dueEvents.push({ event, targetDate, hijriDate });
+		}
+	}
+
+	return dueEvents;
+}
+
 export function getDueSubscriptionReminderEvents(
 	targetDate: string,
 	hijriDate: HijriCalendarCacheEntry | null
@@ -224,8 +266,8 @@ export function getDueSubscriptionReminderEvents(
 	});
 }
 
-function buildOccurrenceEventKey(event: SubscriptionReminderEventDefinition, targetDate: string, settings: ReminderSettings): string {
-	return `${event.key}:${targetDate}:days-before-${settings.daysBefore}`;
+function buildOccurrenceEventKey(event: SubscriptionReminderEventDefinition, targetDate: string): string {
+	return `${event.key}:${targetDate}:days-before-${event.leadDays}`;
 }
 
 function getConfiguredGuild(client: any): any | null {

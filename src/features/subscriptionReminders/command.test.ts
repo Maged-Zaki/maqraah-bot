@@ -72,9 +72,23 @@ test('/reminders configuration show displays global configuration', { concurrenc
 
 	assert.equal(replies[0].flags, MessageFlags.Ephemeral);
 	assert.equal(replies[0].embeds[0].data.title, 'Reminder Configuration');
-	assert.equal(replies[0].embeds[0].data.fields[0].value, '2');
-	assert.equal(replies[0].embeds[0].data.fields[1].value, '7:30 PM');
-	assert.equal(replies[0].embeds[0].data.fields[2].value, '<#custom-channel>');
+	assert.deepEqual(
+		replies[0].embeds[0].data.fields.map((field: any) => field.name),
+		['Send time', 'Channel']
+	);
+	assert.equal(replies[0].embeds[0].data.fields[0].value, '7:30 PM');
+	assert.equal(replies[0].embeds[0].data.fields[1].value, '<#custom-channel>');
+});
+
+test('/reminders configuration update does not expose days-before', () => {
+	const commandJson = command.data.toJSON() as any;
+	const configurationGroup = commandJson.options.find((option: any) => option.name === 'configuration');
+	const updateSubcommand = configurationGroup.options.find((option: any) => option.name === 'update');
+
+	assert.deepEqual(
+		updateSubcommand.options.map((option: any) => option.name),
+		['time', 'channel']
+	);
 });
 
 test('/reminders configuration update validates and saves global configuration with channel selection', { concurrency: false }, async () => {
@@ -108,10 +122,10 @@ test('/reminders configuration update validates and saves global configuration w
 
 	assert.equal(replies[0].flags, MessageFlags.Ephemeral);
 	assert.match(replies[0].content, /Reminder configuration updated/);
-	assert.match(replies[0].content, /Days before: 3/);
+	assert.doesNotMatch(replies[0].content, /Days before/);
 	assert.match(replies[0].content, /Send time: 8:05 PM/);
 	assert.match(replies[0].content, /Channel: <#custom-channel>/);
-	assert.deepEqual(savedUpdates, [{ daysBefore: 3, sendTime: '8:05 PM', channelId: 'custom-channel' }]);
+	assert.deepEqual(savedUpdates, [{ sendTime: '8:05 PM', channelId: 'custom-channel' }]);
 	assert.deepEqual(rescheduledClients, ['client']);
 });
 
@@ -145,10 +159,6 @@ test('/reminders configuration update supports partial updates', { concurrency: 
 });
 
 test('/reminders configuration update rejects invalid values', { concurrency: false }, async () => {
-	const invalidDaysReplies: any[] = [];
-	await command.execute(createInteraction({ group: 'configuration', subcommand: 'update', replies: invalidDaysReplies, daysBefore: -1 }));
-	assert.match(invalidDaysReplies[0].content, /Invalid days-before/);
-
 	const invalidTimeReplies: any[] = [];
 	await command.execute(createInteraction({ group: 'configuration', subcommand: 'update', replies: invalidTimeReplies, time: '25:00 PM' }));
 	assert.match(invalidTimeReplies[0].content, /Invalid time/);

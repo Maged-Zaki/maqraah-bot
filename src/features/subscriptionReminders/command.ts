@@ -29,7 +29,6 @@ const configurationSubcommands = {
 
 const options = {
 	CATEGORY: 'category',
-	DAYS_BEFORE: 'days-before',
 	TIME: 'time',
 	CHANNEL: 'channel',
 } as const;
@@ -81,13 +80,6 @@ export const data = new SlashCommandBuilder()
 				subcommand
 					.setName(configurationSubcommands.UPDATE)
 					.setDescription('Update global reminder configuration')
-					.addIntegerOption((option) =>
-						option
-							.setName(options.DAYS_BEFORE)
-							.setDescription('Days before each event to send the reminder')
-							.setMinValue(0)
-							.setMaxValue(30)
-					)
 					.addStringOption((option) =>
 						option.setName(options.TIME).setDescription('Time of day, e.g. 6:00 PM')
 					)
@@ -207,7 +199,6 @@ async function handleConfigurationShow(interaction: any): Promise<void> {
 	const embed = new EmbedBuilder()
 		.setTitle('Reminder Configuration')
 		.addFields(
-			{ name: 'Days before', value: settings.daysBefore.toString(), inline: true },
 			{ name: 'Send time', value: settings.sendTime, inline: true },
 			{ name: 'Channel', value: settings.channelId ? `<#${settings.channelId}>` : 'Not set', inline: true }
 		)
@@ -217,18 +208,9 @@ async function handleConfigurationShow(interaction: any): Promise<void> {
 }
 
 async function handleConfigurationUpdate(interaction: any): Promise<void> {
-	const daysBefore = interaction.options.getInteger(options.DAYS_BEFORE);
 	const time = interaction.options.getString(options.TIME);
 	const channel = interaction.options.getChannel(options.CHANNEL);
-	const updates: { daysBefore?: number; sendTime?: string; channelId?: string } = {};
-
-	if (daysBefore !== null) {
-		if (!Number.isInteger(daysBefore) || daysBefore < 0 || daysBefore > 30) {
-			await interaction.reply({ content: 'Invalid days-before. Please provide a whole number from 0 to 30.', flags: MessageFlags.Ephemeral });
-			return;
-		}
-		updates.daysBefore = daysBefore;
-	}
+	const updates: { sendTime?: string; channelId?: string } = {};
 
 	if (time !== null) {
 		const parsedTime = parseReminderTime(time);
@@ -256,7 +238,7 @@ async function handleConfigurationUpdate(interaction: any): Promise<void> {
 	await subscriptionReminderScheduler.scheduleSubscriptionReminders(interaction.client);
 
 	await interaction.reply({
-		content: [`Reminder configuration updated.`, `Days before: ${settings.daysBefore}`, `Send time: ${settings.sendTime}`, `Channel: <#${settings.channelId}>`].join(
+		content: [`Reminder configuration updated.`, `Send time: ${settings.sendTime}`, `Channel: <#${settings.channelId}>`].join(
 			'\n'
 		),
 		flags: MessageFlags.Ephemeral,

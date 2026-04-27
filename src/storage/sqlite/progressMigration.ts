@@ -10,10 +10,6 @@ export function migrateLegacyLastPageToCurrentPage(lastPage: number | null | und
 	return lastPage + 1;
 }
 
-export function shouldIncrementKhatmahForLegacyLastPage(lastPage: number | null | undefined): boolean {
-	return typeof lastPage === 'number' && Number.isInteger(lastPage) && lastPage >= 604;
-}
-
 export function migrateLegacyLastHadithToCurrentHadith(lastHadith: number | null | undefined): number {
 	if (typeof lastHadith !== 'number' || !Number.isInteger(lastHadith) || lastHadith <= 0) {
 		return 1;

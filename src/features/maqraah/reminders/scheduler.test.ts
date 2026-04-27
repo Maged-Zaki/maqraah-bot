@@ -118,6 +118,11 @@ test('main reminder sends the current quran page prompt after notes', { concurre
 	assert.equal(sentPayloads[2]?.content, 'Current page: **13**');
 	const row = (sentPayloads[2]?.components?.[0] as any).toJSON();
 	assert.deepEqual(parseReminderActionCustomId(row.components[0].custom_id), {
+		action: reminderActions.PREVIOUS_QURAN_PAGE,
+		sessionId: '2026-04-15',
+		page: 13,
+	});
+	assert.deepEqual(parseReminderActionCustomId(row.components[1].custom_id), {
 		action: reminderActions.NEXT_QURAN_PAGE,
 		sessionId: '2026-04-15',
 		page: 13,
@@ -192,7 +197,6 @@ function buildProgress(progress: Partial<Progress>): Progress {
 	return {
 		currentPage: 1,
 		currentHadith: 1,
-		khatmahCycleCount: 0,
 		...progress,
 	};
 }

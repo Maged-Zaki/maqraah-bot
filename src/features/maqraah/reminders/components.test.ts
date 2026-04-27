@@ -23,11 +23,18 @@ test('notes carry-over button targets a reminder session', () => {
 test('current quran page button targets a page within a reminder session', () => {
 	const rows = buildCurrentQuranPageActionRows('2026-04-15', 13);
 	const row = rows[0].toJSON() as any;
-	const button = row.components[0];
+	const previousButton = row.components[0];
+	const nextButton = row.components[1];
 
 	assert.equal(buildCurrentQuranPageMessage(13), 'Current page: **13**');
-	assert.equal(button.label, 'Next page');
-	assert.deepEqual(parseReminderActionCustomId(button.custom_id), {
+	assert.equal(previousButton.label, 'Previous Page');
+	assert.deepEqual(parseReminderActionCustomId(previousButton.custom_id), {
+		action: reminderActions.PREVIOUS_QURAN_PAGE,
+		sessionId: '2026-04-15',
+		page: 13,
+	});
+	assert.equal(nextButton.label, 'Next Page');
+	assert.deepEqual(parseReminderActionCustomId(nextButton.custom_id), {
 		action: reminderActions.NEXT_QURAN_PAGE,
 		sessionId: '2026-04-15',
 		page: 13,

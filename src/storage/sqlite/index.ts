@@ -61,8 +61,7 @@ db.serialize(() => {
 	   CREATE TABLE IF NOT EXISTS progress (
 	     id INTEGER PRIMARY KEY DEFAULT 1,
 	     currentPage INTEGER DEFAULT 1,
-	     currentHadith INTEGER DEFAULT 1,
-	     khatmahCycleCount INTEGER DEFAULT 0
+	     currentHadith INTEGER DEFAULT 1
 	   )
 	 `,
 		(err) => {
@@ -78,13 +77,7 @@ db.serialize(() => {
 		}
 	});
 
-	addColumnIfMissing('progress', 'khatmahCycleCount INTEGER DEFAULT 0');
 	renameColumnIfPresent('progress', 'lastPage', 'currentPage', () => {
-		db.run(`UPDATE progress SET khatmahCycleCount = COALESCE(khatmahCycleCount, 0) + 1 WHERE currentPage >= 604`, (err) => {
-			if (err) {
-				logger.error('Failed to preserve legacy completed khatmah count during progress migration', err);
-			}
-		});
 		db.run(
 			`
 				UPDATE progress
@@ -101,6 +94,7 @@ db.serialize(() => {
 			}
 		);
 	});
+	dropColumnIfPresent('progress', 'khatmahCycleCount');
 	renameColumnIfPresent('progress', 'lastHadith', 'currentHadith', () => {
 		db.run(
 			`
@@ -118,44 +112,7 @@ db.serialize(() => {
 		);
 	});
 
-	db.run(
-		`
-	   CREATE TABLE IF NOT EXISTS quran_progress_history (
-	     id INTEGER PRIMARY KEY AUTOINCREMENT,
-	     currentPage INTEGER NOT NULL,
-	     khatmahCycleCount INTEGER NOT NULL DEFAULT 0,
-	     pagesAdvanced INTEGER NOT NULL,
-	     recordedAt TEXT NOT NULL
-	   )
-	 `,
-		(err) => {
-			if (err) {
-				logger.error('Failed to create quran_progress_history table', err);
-			}
-		}
-	);
-	renameColumnIfPresent('quran_progress_history', 'lastPage', 'currentPage', () => {
-		db.run(`UPDATE quran_progress_history SET khatmahCycleCount = COALESCE(khatmahCycleCount, 0) + 1 WHERE currentPage >= 604`, (err) => {
-			if (err) {
-				logger.error('Failed to preserve legacy history khatmah counts during progress migration', err);
-			}
-		});
-		db.run(
-			`
-				UPDATE quran_progress_history
-				SET currentPage = CASE
-					WHEN currentPage <= 0 THEN 1
-					WHEN currentPage >= 604 THEN 1
-					ELSE currentPage + 1
-				END
-			`,
-			(err) => {
-				if (err) {
-					logger.error('Failed to migrate legacy quran_progress_history lastPage values to currentPage', err);
-				}
-			}
-		);
-	});
+	dropTableIfExists('quran_progress_history');
 
 	db.run(
 		`
@@ -363,6 +320,22 @@ function addColumnIfMissing(tableName: string, columnDefinition: string): void {
 	db.run(`ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`, (err) => {
 		if (err && !err.message.includes('duplicate column name')) {
 			logger.error(`Failed to add ${columnDefinition} to ${tableName}`, err);
+		}
+	});
+}
+
+function dropColumnIfPresent(tableName: string, columnName: string): void {
+	db.run(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`, (err) => {
+		if (err && !err.message.includes('no such column')) {
+			logger.error(`Failed to drop ${columnName} from ${tableName}`, err);
+		}
+	});
+}
+
+function dropTableIfExists(tableName: string): void {
+	db.run(`DROP TABLE IF EXISTS ${tableName}`, (err) => {
+		if (err) {
+			logger.error(`Failed to drop ${tableName}`, err);
 		}
 	});
 }

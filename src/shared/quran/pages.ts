@@ -5,3 +5,11 @@ export function incrementQuranPage(currentPage: number): number {
 
 	return currentPage + 1;
 }
+
+export function decrementQuranPage(currentPage: number): number {
+	if (currentPage <= 1) {
+		return 604;
+	}
+
+	return currentPage - 1;
+}

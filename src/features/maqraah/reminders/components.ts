@@ -7,26 +7,32 @@ export const reminderActions = {
 	JOINING_SHORTLY: 'joining-shortly',
 	CANNOT_MAKE_IT: 'cannot-make-it',
 	CARRY_OVER_NOTES: 'carry-over-notes',
+	PREVIOUS_QURAN_PAGE: 'previous-quran-page',
 	NEXT_QURAN_PAGE: 'next-quran-page',
 } as const;
 
 export type ReminderAction = (typeof reminderActions)[keyof typeof reminderActions];
+type QuranPageAction = typeof reminderActions.PREVIOUS_QURAN_PAGE | typeof reminderActions.NEXT_QURAN_PAGE;
 
 export interface BaseReminderActionCustomId {
-	action: Exclude<ReminderAction, typeof reminderActions.NEXT_QURAN_PAGE>;
+	action: Exclude<ReminderAction, QuranPageAction>;
 	sessionId: string;
 }
 
-export interface NextQuranPageActionCustomId {
-	action: typeof reminderActions.NEXT_QURAN_PAGE;
+export interface QuranPageActionCustomId {
+	action: QuranPageAction;
 	sessionId: string;
 	page: number;
 }
 
-export type ReminderActionCustomId = BaseReminderActionCustomId | NextQuranPageActionCustomId;
+export type ReminderActionCustomId = BaseReminderActionCustomId | QuranPageActionCustomId;
 
-export function buildReminderActionCustomId(action: Exclude<ReminderAction, typeof reminderActions.NEXT_QURAN_PAGE>, sessionId: string = getReminderSessionId()): string {
+export function buildReminderActionCustomId(action: Exclude<ReminderAction, QuranPageAction>, sessionId: string = getReminderSessionId()): string {
 	return `${REMINDER_CUSTOM_ID_PREFIX}:${action}:${sessionId}`;
+}
+
+export function buildPreviousQuranPageActionCustomId(sessionId: string, page: number): string {
+	return `${REMINDER_CUSTOM_ID_PREFIX}:${reminderActions.PREVIOUS_QURAN_PAGE}:${sessionId}:${page}`;
 }
 
 export function buildNextQuranPageActionCustomId(sessionId: string, page: number): string {
@@ -40,7 +46,7 @@ export function parseReminderActionCustomId(customId: string): ReminderActionCus
 		return null;
 	}
 
-	if (action === reminderActions.NEXT_QURAN_PAGE) {
+	if (isQuranPageAction(action)) {
 		if (!pageValue || extraParts.length > 0 || !/^\d+$/.test(pageValue)) {
 			return null;
 		}
@@ -92,14 +98,23 @@ export function buildCurrentQuranPageMessage(page: number): string {
 }
 
 export function buildCurrentQuranPageActionRows(sessionId: string, page: number): ActionRowBuilder<ButtonBuilder>[] {
+	const previousPageButton = new ButtonBuilder()
+		.setCustomId(buildPreviousQuranPageActionCustomId(sessionId, page))
+		.setLabel('Previous Page')
+		.setStyle(ButtonStyle.Secondary);
+
 	const nextPageButton = new ButtonBuilder()
 		.setCustomId(buildNextQuranPageActionCustomId(sessionId, page))
-		.setLabel('Next page')
+		.setLabel('Next Page')
 		.setStyle(ButtonStyle.Primary);
 
-	return [new ActionRowBuilder<ButtonBuilder>().addComponents(nextPageButton)];
+	return [new ActionRowBuilder<ButtonBuilder>().addComponents(previousPageButton, nextPageButton)];
 }
 
 function isReminderAction(action: string | undefined): action is ReminderAction {
 	return Object.values(reminderActions).includes(action as ReminderAction);
+}
+
+function isQuranPageAction(action: ReminderAction): action is QuranPageAction {
+	return action === reminderActions.PREVIOUS_QURAN_PAGE || action === reminderActions.NEXT_QURAN_PAGE;
 }

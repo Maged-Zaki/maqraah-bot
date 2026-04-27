@@ -1,7 +1,6 @@
 import { MessageFlags } from 'discord.js';
 import { configurationRepository, notesRepository, progressRepository } from '../../../storage/sqlite';
 import { logger, DiscordContext } from '../../../observability/logging/logger';
-import { getCompletedKhatmahCount } from '../../../shared/quran/progress';
 import { buildProgressDashboardReply } from './dashboard';
 import { progressOptions, progressSubcommands } from './builders';
 
@@ -94,15 +93,9 @@ async function handleProgressUpdate(interaction: any, discordContext: DiscordCon
 	}
 
 	logger.info('Updating progress with changes', discordContext, { additionalData: { updates } });
-	let quranProgressUpdate: Awaited<ReturnType<typeof progressRepository.updateQuranProgress>> | null = null;
 
 	if (currentPage !== null) {
-		quranProgressUpdate = await progressRepository.updateQuranProgress(currentPage);
-		if (quranProgressUpdate.completedKhatmah) {
-			const completedKhatmahs = getCompletedKhatmahCount(quranProgressUpdate.progress);
-			replyMessages.push(`Alhamdulillah! Khatmah \`${completedKhatmahs}\` is complete.`);
-			await announceKhatmahCompletion(interaction, quranProgressUpdate.progress, discordContext);
-		}
+		await progressRepository.updateQuranProgress(currentPage);
 	}
 
 	if (currentHadith !== null) {
@@ -135,44 +128,4 @@ async function handleProgressShow(interaction: any, discordContext: DiscordConte
 			now,
 		})
 	);
-}
-
-export async function announceKhatmahCompletion(interaction: any, progress: { currentPage: number; khatmahCycleCount: number }, discordContext: DiscordContext): Promise<void> {
-	const channelId = process.env.CHANNEL_ID;
-	if (!channelId) {
-		logger.warn('Skipping khatmah completion announcement because CHANNEL_ID is not configured', discordContext, {
-			operationType: 'khatmah_completion_announcement',
-			operationStatus: 'failure',
-		});
-		return;
-	}
-
-	const channel = interaction.client?.channels?.cache?.get(channelId);
-	if (!channel || typeof channel.send !== 'function') {
-		logger.warn('Skipping khatmah completion announcement because the reminder channel is unavailable', discordContext, {
-			operationType: 'khatmah_completion_announcement',
-			operationStatus: 'failure',
-			additionalData: { channelId },
-		});
-		return;
-	}
-
-	const completedKhatmahs = getCompletedKhatmahCount(progress);
-	const completionMessage =
-		progress.currentPage === 1
-			? `Alhamdulillah! The maqraah has completed khatmah #${completedKhatmahs}.`
-			: `Alhamdulillah! The maqraah has completed khatmah #${completedKhatmahs} and started the next cycle on page ${progress.currentPage}.`;
-
-	try {
-		await channel.send({
-			content: completionMessage,
-			allowedMentions: { parse: [] as string[] },
-		});
-	} catch (error) {
-		logger.error('Failed to announce khatmah completion', error as Error, discordContext, {
-			operationType: 'khatmah_completion_announcement',
-			operationStatus: 'failure',
-			additionalData: { channelId, completedKhatmahs, currentPage: progress.currentPage },
-		});
-	}
 }

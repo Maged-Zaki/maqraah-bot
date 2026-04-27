@@ -1,9 +1,8 @@
 import { ButtonInteraction, MessageFlags } from 'discord.js';
 import { attendanceRepository, notesRepository, progressRepository } from '../../../storage/sqlite';
 import { logger, DiscordContext } from '../../../observability/logging/logger';
-import { incrementQuranPage } from '../../../shared/quran/pages';
+import { decrementQuranPage, incrementQuranPage } from '../../../shared/quran/pages';
 import { TOTAL_QURAN_PAGES } from '../../../shared/quran/progress';
-import { announceKhatmahCompletion } from '../progress/handler';
 import { announceAttendanceStatus, attendanceStatuses, AttendanceStatus } from './attendance';
 import {
 	buildCurrentQuranPageActionRows,
@@ -32,8 +31,11 @@ export async function handleReminderButtonInteraction(interaction: ButtonInterac
 			case reminderActions.CARRY_OVER_NOTES:
 				await carryOverReminderNotes(interaction, parsedCustomId.sessionId);
 				break;
+			case reminderActions.PREVIOUS_QURAN_PAGE:
+				await handleQuranPageChange(interaction, parsedCustomId.sessionId, parsedCustomId.page, decrementQuranPage);
+				break;
 			case reminderActions.NEXT_QURAN_PAGE:
-				await handleNextQuranPage(interaction, parsedCustomId.sessionId, parsedCustomId.page, discordContext);
+				await handleQuranPageChange(interaction, parsedCustomId.sessionId, parsedCustomId.page, incrementQuranPage);
 				break;
 		}
 
@@ -54,7 +56,7 @@ export async function handleReminderButtonInteraction(interaction: ButtonInterac
 	return true;
 }
 
-async function handleNextQuranPage(interaction: ButtonInteraction, sessionId: string, page: number, discordContext: DiscordContext): Promise<void> {
+async function handleQuranPageChange(interaction: ButtonInteraction, sessionId: string, page: number, getUpdatedPage: (page: number) => number): Promise<void> {
 	if (page < 1 || page > TOTAL_QURAN_PAGES) {
 		await interaction.reply({ content: 'Quran page must be between 1 and 604.', flags: MessageFlags.Ephemeral });
 		return;
@@ -75,18 +77,14 @@ async function handleNextQuranPage(interaction: ButtonInteraction, sessionId: st
 		return;
 	}
 
-	const nextPage = incrementQuranPage(page);
-	const quranProgressUpdate = await progressRepository.updateQuranProgress(nextPage);
+	const updatedPage = getUpdatedPage(page);
+	await progressRepository.updateQuranProgress(updatedPage);
 
 	await interaction.update({ components: [] });
 
-	if (quranProgressUpdate.completedKhatmah) {
-		await announceKhatmahCompletion(interaction, quranProgressUpdate.progress, discordContext);
-	}
-
 	await channel.send({
-		content: buildCurrentQuranPageMessage(nextPage),
-		components: buildCurrentQuranPageActionRows(sessionId, nextPage),
+		content: buildCurrentQuranPageMessage(updatedPage),
+		components: buildCurrentQuranPageActionRows(sessionId, updatedPage),
 	});
 }
 

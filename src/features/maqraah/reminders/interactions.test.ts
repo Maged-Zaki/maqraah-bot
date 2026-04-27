@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Attendance } from '../../../storage/sqlite/repositories/AttendanceRepository';
-import type { Progress, QuranProgressUpdateResult } from '../../../storage/sqlite/repositories/ProgressRepository';
+import type { Progress } from '../../../storage/sqlite/repositories/ProgressRepository';
 
 process.env.DATABASE_PATH ??= ':memory:';
 
 const { attendanceRepository, progressRepository } = require('../../../storage/sqlite') as typeof import('../../../storage/sqlite');
 const {
 	buildNextQuranPageActionCustomId,
+	buildPreviousQuranPageActionCustomId,
 	buildReminderActionCustomId,
 	parseReminderActionCustomId,
 	reminderActions,
@@ -105,10 +106,6 @@ test('next quran page button updates progress, removes the old button, and sends
 			getProgress: async () => buildProgress({ currentPage: 12 }),
 			updateQuranProgress: async (currentPage: number) => {
 				quranUpdates.push(currentPage);
-				return buildQuranProgressUpdateResult({
-					previousProgress: buildProgress({ currentPage: 12 }),
-					progress: buildProgress({ currentPage }),
-				});
 			},
 		},
 		async () => {
@@ -132,11 +129,43 @@ test('next quran page button updates progress, removes the old button, and sends
 	assert.deepEqual(updatePayloads, [{ components: [] }]);
 	assert.equal(sentPayloads[0]?.content, 'Current page: **13**');
 	const row = sentPayloads[0]?.components?.[0].toJSON() as any;
-	assert.deepEqual(parseReminderActionCustomId(row.components[0].custom_id), {
-		action: reminderActions.NEXT_QURAN_PAGE,
-		sessionId: '2026-04-15',
-		page: 13,
-	});
+	assertCurrentPageButtons(row, '2026-04-15', 13);
+});
+
+test('previous quran page button updates progress, removes the old button, and sends the previous current page', { concurrency: false }, async () => {
+	const quranUpdates: number[] = [];
+	const updatePayloads: any[] = [];
+	const sentPayloads: any[] = [];
+
+	await withProgressRepositoryMocks(
+		{
+			getProgress: async () => buildProgress({ currentPage: 13 }),
+			updateQuranProgress: async (currentPage: number) => {
+				quranUpdates.push(currentPage);
+			},
+		},
+		async () => {
+			const handled = await handleReminderButtonInteraction(
+				buildInteraction({
+					customId: buildPreviousQuranPageActionCustomId('2026-04-15', 13),
+					onUpdate: (payload) => {
+						updatePayloads.push(payload);
+					},
+					onSend: (payload) => {
+						sentPayloads.push(payload);
+					},
+				}) as any
+			);
+
+			assert.equal(handled, true);
+		}
+	);
+
+	assert.deepEqual(quranUpdates, [12]);
+	assert.deepEqual(updatePayloads, [{ components: [] }]);
+	assert.equal(sentPayloads[0]?.content, 'Current page: **12**');
+	const row = sentPayloads[0]?.components?.[0].toJSON() as any;
+	assertCurrentPageButtons(row, '2026-04-15', 12);
 });
 
 test('stale next quran page buttons do not move progress backward', { concurrency: false }, async () => {
@@ -150,10 +179,6 @@ test('stale next quran page buttons do not move progress backward', { concurrenc
 			getProgress: async () => buildProgress({ currentPage: 14 }),
 			updateQuranProgress: async (currentPage: number) => {
 				quranUpdates.push(currentPage);
-				return buildQuranProgressUpdateResult({
-					previousProgress: buildProgress({ currentPage: 14 }),
-					progress: buildProgress({ currentPage }),
-				});
 			},
 		},
 		async () => {
@@ -182,10 +207,46 @@ test('stale next quran page buttons do not move progress backward', { concurrenc
 	assert.match(followUpPayloads[0]?.content, /Current page is \*\*14\*\*/);
 });
 
+test('stale previous quran page buttons do not move progress backward', { concurrency: false }, async () => {
+	const quranUpdates: number[] = [];
+	const updatePayloads: any[] = [];
+	const followUpPayloads: any[] = [];
+	const sentPayloads: any[] = [];
+
+	await withProgressRepositoryMocks(
+		{
+			getProgress: async () => buildProgress({ currentPage: 14 }),
+			updateQuranProgress: async (currentPage: number) => {
+				quranUpdates.push(currentPage);
+			},
+		},
+		async () => {
+			const handled = await handleReminderButtonInteraction(
+				buildInteraction({
+					customId: buildPreviousQuranPageActionCustomId('2026-04-15', 13),
+					onUpdate: (payload) => {
+						updatePayloads.push(payload);
+					},
+					onFollowUp: (payload) => {
+						followUpPayloads.push(payload);
+					},
+					onSend: (payload) => {
+						sentPayloads.push(payload);
+					},
+				}) as any
+			);
+
+			assert.equal(handled, true);
+		}
+	);
+
+	assert.deepEqual(quranUpdates, []);
+	assert.deepEqual(updatePayloads, [{ components: [] }]);
+	assert.deepEqual(sentPayloads, []);
+	assert.match(followUpPayloads[0]?.content, /Current page is \*\*14\*\*/);
+});
+
 test('next quran page button wraps the prompt to page one after page 604', { concurrency: false }, async () => {
-	const previousChannelId = process.env.CHANNEL_ID;
-	process.env.CHANNEL_ID = 'reminder-channel';
-	const client = createClient();
 	const quranUpdates: number[] = [];
 	const sentPayloads: any[] = [];
 
@@ -194,11 +255,6 @@ test('next quran page button wraps the prompt to page one after page 604', { con
 			getProgress: async () => buildProgress({ currentPage: 604 }),
 			updateQuranProgress: async (currentPage: number) => {
 				quranUpdates.push(currentPage);
-				return buildQuranProgressUpdateResult({
-					previousProgress: buildProgress({ currentPage: 604 }),
-					progress: buildProgress({ currentPage, khatmahCycleCount: 1 }),
-					completedKhatmah: true,
-				});
 			},
 		},
 		async () => {
@@ -208,7 +264,6 @@ test('next quran page button wraps the prompt to page one after page 604', { con
 					onSend: (payload) => {
 						sentPayloads.push(payload);
 					},
-					client,
 				}) as any
 			);
 
@@ -216,18 +271,41 @@ test('next quran page button wraps the prompt to page one after page 604', { con
 		}
 	);
 
-	restoreEnv('CHANNEL_ID', previousChannelId);
-
 	assert.deepEqual(quranUpdates, [1]);
 	assert.equal(sentPayloads[0]?.content, 'Current page: **1**');
 	const row = sentPayloads[0]?.components?.[0].toJSON() as any;
-	assert.deepEqual(parseReminderActionCustomId(row.components[0].custom_id), {
-		action: reminderActions.NEXT_QURAN_PAGE,
-		sessionId: '2026-04-15',
-		page: 1,
-	});
-	const reminderChannel = client.channels.cache.get('reminder-channel');
-	assert.equal(reminderChannel?.sentMessages[0]?.content, 'Alhamdulillah! The maqraah has completed khatmah #1.');
+	assertCurrentPageButtons(row, '2026-04-15', 1);
+});
+
+test('previous quran page button wraps the prompt to page 604 before page one', { concurrency: false }, async () => {
+	const quranUpdates: number[] = [];
+	const sentPayloads: any[] = [];
+
+	await withProgressRepositoryMocks(
+		{
+			getProgress: async () => buildProgress({ currentPage: 1 }),
+			updateQuranProgress: async (currentPage: number) => {
+				quranUpdates.push(currentPage);
+			},
+		},
+		async () => {
+			const handled = await handleReminderButtonInteraction(
+				buildInteraction({
+					customId: buildPreviousQuranPageActionCustomId('2026-04-15', 1),
+					onSend: (payload) => {
+						sentPayloads.push(payload);
+					},
+				}) as any
+			);
+
+			assert.equal(handled, true);
+		}
+	);
+
+	assert.deepEqual(quranUpdates, [604]);
+	assert.equal(sentPayloads[0]?.content, 'Current page: **604**');
+	const row = sentPayloads[0]?.components?.[0].toJSON() as any;
+	assertCurrentPageButtons(row, '2026-04-15', 604);
 });
 
 async function withAttendanceRepositoryMocks(
@@ -298,22 +376,21 @@ function buildProgress(progress: Partial<Progress>): Progress {
 	return {
 		currentPage: 1,
 		currentHadith: 1,
-		khatmahCycleCount: 0,
 		...progress,
 	};
 }
 
-function buildQuranProgressUpdateResult(result: Partial<QuranProgressUpdateResult>): QuranProgressUpdateResult {
-	return {
-		previousProgress: buildProgress({}),
-		progress: buildProgress({}),
-		wrapped: false,
-		completedKhatmah: false,
-		pagesAdvanced: 0,
-		historyRecorded: false,
-		correctedBackward: false,
-		...result,
-	};
+function assertCurrentPageButtons(row: any, sessionId: string, page: number): void {
+	assert.deepEqual(parseReminderActionCustomId(row.components[0].custom_id), {
+		action: reminderActions.PREVIOUS_QURAN_PAGE,
+		sessionId,
+		page,
+	});
+	assert.deepEqual(parseReminderActionCustomId(row.components[1].custom_id), {
+		action: reminderActions.NEXT_QURAN_PAGE,
+		sessionId,
+		page,
+	});
 }
 
 function buildInteraction(options: {
@@ -354,27 +431,4 @@ function buildInteraction(options: {
 		replied: false,
 		deferred: false,
 	};
-}
-
-function createClient() {
-	const reminderChannel = {
-		sentMessages: [] as any[],
-		send: async (payload: any) => {
-			reminderChannel.sentMessages.push(payload);
-		},
-	};
-
-	return {
-		channels: {
-			cache: new Map([['reminder-channel', reminderChannel]]),
-		},
-	};
-}
-
-function restoreEnv(name: string, value: string | undefined): void {
-	if (value === undefined) {
-		delete process.env[name];
-	} else {
-		process.env[name] = value;
-	}
 }

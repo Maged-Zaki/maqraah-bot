@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MessageFlags, PermissionsBitField } from 'discord.js';
 import type { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
-import type { Progress, QuranProgressUpdateResult } from '../../../storage/sqlite/repositories/ProgressRepository';
+import type { Progress } from '../../../storage/sqlite/repositories/ProgressRepository';
 
 process.env.DATABASE_PATH ??= ':memory:';
 
@@ -23,7 +23,7 @@ test('maqraah progress show renders current reading progress and pending note co
 					timezone: 'UTC',
 					voiceChannelId: 'voice-channel',
 			}),
-			getProgress: async () => buildProgress({ currentPage: 300, currentHadith: 34, khatmahCycleCount: 2 }),
+			getProgress: async () => buildProgress({ currentPage: 300, currentHadith: 34 }),
 			getNotesByStatus: async () => [
 				{ id: 1, userId: 'user-1', note: 'First note', dateAdded: '2026-04-15T12:00:00.000Z', status: 'pending' },
 				{ id: 2, userId: 'user-2', note: 'Second note', dateAdded: '2026-04-15T13:00:00.000Z', status: 'pending' },
@@ -49,7 +49,7 @@ test('maqraah progress show renders current reading progress and pending note co
 	assert.equal(replyPayload.flags, MessageFlags.Ephemeral);
 	assert.deepEqual(replyPayload.allowedMentions, { parse: [] });
 	assert.match(fields["Qur'an Progress"], /Current page: 300 \/ 604/);
-	assert.doesNotMatch(fields["Qur'an Progress"], /Next page|Percentage complete|Pages remaining|Completed khatmahs|Estimated completion/);
+	assert.doesNotMatch(fields["Qur'an Progress"], /Next Page|Percentage complete|Pages remaining|Estimated completion/);
 	assert.match(fields['Hadith Progress'], /Current Hadith: 34/);
 	assert.doesNotMatch(fields['Hadith Progress'], /Next Hadith/);
 	assert.match(fields['Next Maqraah'], /2026-04-15 at 7:00 PM \(UTC\)/);
@@ -60,7 +60,7 @@ test('maqraah progress show renders current reading progress and pending note co
 	assert.equal(fields['Warnings'], 'None');
 });
 
-test('maqraah progress show handles completed khatmahs without showing note content', { concurrency: false }, async () => {
+test('maqraah progress show handles page 604 without showing note content', { concurrency: false }, async () => {
 	const previousChannelId = process.env.CHANNEL_ID;
 	process.env.CHANNEL_ID = 'reminder-channel';
 	let replyPayload: any;
@@ -68,7 +68,7 @@ test('maqraah progress show handles completed khatmahs without showing note cont
 	await withRepositoryMocks(
 		{
 			getConfiguration: async () => buildConfiguration({ roleId: 'role-1', voiceChannelId: 'voice-channel', timezone: 'UTC' }),
-			getProgress: async () => buildProgress({ currentPage: 604, currentHadith: 1, khatmahCycleCount: 0 }),
+			getProgress: async () => buildProgress({ currentPage: 604, currentHadith: 1 }),
 			getNotesByStatus: async () => [],
 		},
 		async () => {
@@ -89,7 +89,7 @@ test('maqraah progress show handles completed khatmahs without showing note cont
 
 	const fields = getEmbedFields(replyPayload);
 	assert.match(fields["Qur'an Progress"], /Current page: 604 \/ 604/);
-	assert.doesNotMatch(fields["Qur'an Progress"], /Next page|Completed khatmahs|Estimated completion/);
+	assert.doesNotMatch(fields["Qur'an Progress"], /Next Page|Estimated completion/);
 	assert.equal(fields['Pending Notes'], '0 pending notes');
 	assert.doesNotMatch(JSON.stringify(replyPayload), /First note|Second note|secret/i);
 });
@@ -109,7 +109,7 @@ test('maqraah progress show warns about invalid or missing configuration without
 					voiceChannelId: '',
 					mainReminderEnabled: 0,
 				}),
-			getProgress: async () => buildProgress({ currentPage: 10, currentHadith: 20, khatmahCycleCount: 0 }),
+			getProgress: async () => buildProgress({ currentPage: 10, currentHadith: 20 }),
 			getNotesByStatus: async () => [],
 		},
 		async () => {
@@ -148,9 +148,6 @@ test('maqraah progress update persists quran and hadith progress', { concurrency
 		{
 			updateQuranProgress: async (currentPage: number) => {
 				quranUpdates.push(currentPage);
-				return buildQuranProgressUpdateResult({
-					progress: buildProgress({ currentPage, currentHadith: 0, khatmahCycleCount: 0 }),
-				});
 			},
 			updateProgress: async (update: Partial<Progress>) => {
 				hadithUpdates.push(update);
@@ -186,7 +183,6 @@ test('maqraah progress update ignores removed legacy option names', { concurrenc
 		{
 			updateQuranProgress: async () => {
 				quranUpdateCalls++;
-				return buildQuranProgressUpdateResult({});
 			},
 			updateProgress: async () => {
 				hadithUpdateCalls++;
@@ -211,45 +207,6 @@ test('maqraah progress update ignores removed legacy option names', { concurrenc
 	assert.deepEqual(replyPayload, { content: 'No options provided.', flags: MessageFlags.Ephemeral });
 });
 
-test('maqraah progress update announces khatmah completion immediately', { concurrency: false }, async () => {
-	const previousChannelId = process.env.CHANNEL_ID;
-	process.env.CHANNEL_ID = 'reminder-channel';
-	let replyPayload: any;
-	const client = createClient();
-
-	await withRepositoryMocks(
-		{
-			updateQuranProgress: async () =>
-				buildQuranProgressUpdateResult({
-					progress: buildProgress({ currentPage: 1, currentHadith: 1, khatmahCycleCount: 1 }),
-					completedKhatmah: true,
-				}),
-		},
-		async () => {
-			await handleProgressCommand(
-				buildInteraction({
-					subcommand: 'update',
-					integers: { page: 1 },
-					reply: (payload) => {
-						replyPayload = payload;
-					},
-					client,
-				}) as any,
-				{ commandName: 'maqraah', subcommandGroup: 'progress' }
-			);
-		}
-	);
-
-	restoreEnv('CHANNEL_ID', previousChannelId);
-
-	const reminderChannel = client.channels.cache.get('reminder-channel');
-	assert.ok(reminderChannel);
-	assert.match(replyPayload, /Current Qur'an page set to `1`\./);
-	assert.match(replyPayload, /Khatmah `1` is complete\./);
-	assert.equal(reminderChannel.sentMessages.length, 1);
-	assert.equal(reminderChannel.sentMessages[0].content, 'Alhamdulillah! The maqraah has completed khatmah #1.');
-});
-
 test('maqraah progress update for hadith only does not touch quran page tracking', { concurrency: false }, async () => {
 	let quranUpdateCalls = 0;
 	const hadithUpdates: Array<Partial<Progress>> = [];
@@ -258,7 +215,6 @@ test('maqraah progress update for hadith only does not touch quran page tracking
 		{
 			updateQuranProgress: async () => {
 				quranUpdateCalls++;
-				return buildQuranProgressUpdateResult({});
 			},
 			updateProgress: async (update: Partial<Progress>) => {
 				hadithUpdates.push(update);
@@ -424,21 +380,7 @@ function buildProgress(progress: Partial<Progress>): Progress {
 	return {
 		currentPage: 1,
 		currentHadith: 1,
-		khatmahCycleCount: 0,
 		...progress,
-	};
-}
-
-function buildQuranProgressUpdateResult(result: Partial<QuranProgressUpdateResult>): QuranProgressUpdateResult {
-	return {
-		previousProgress: buildProgress({}),
-		progress: buildProgress({}),
-		wrapped: false,
-		completedKhatmah: false,
-		pagesAdvanced: 0,
-		historyRecorded: false,
-		correctedBackward: false,
-		...result,
 	};
 }
 

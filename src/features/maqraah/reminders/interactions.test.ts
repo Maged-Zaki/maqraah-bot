@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { MessageFlags } from 'discord.js';
 import { Attendance } from '../../../storage/sqlite/repositories/AttendanceRepository';
 import type { Progress } from '../../../storage/sqlite/repositories/ProgressRepository';
 
@@ -15,6 +14,7 @@ const {
 	reminderActions,
 } = require('./components') as typeof import('./components');
 const { handleReminderButtonInteraction } = require('./interactions') as typeof import('./interactions');
+const { buildQuranPageImageUrl, buildQuranPageReadUrl } = require('../../../shared/quran/pageImages') as typeof import('../../../shared/quran/pageImages');
 
 test('same attendance status does not post a duplicate message once it was already announced', { concurrency: false }, async () => {
 	const sentMessages: string[] = [];
@@ -128,10 +128,7 @@ test('next quran page button updates progress, removes the old button, and sends
 
 	assert.deepEqual(quranUpdates, [13]);
 	assert.deepEqual(updatePayloads, [{ components: [] }]);
-	assert.equal(sentPayloads[0]?.content, 'Current page: [13](https://quran.com/page/13)');
-	assert.equal(sentPayloads[0]?.flags, MessageFlags.SuppressEmbeds);
-	const row = sentPayloads[0]?.components?.[0].toJSON() as any;
-	assertCurrentPageButtons(row, '2026-04-15', 13);
+	assertCurrentPagePrompt(sentPayloads[0], '2026-04-15', 13);
 });
 
 test('previous quran page button updates progress, removes the old button, and sends the previous current page', { concurrency: false }, async () => {
@@ -165,10 +162,7 @@ test('previous quran page button updates progress, removes the old button, and s
 
 	assert.deepEqual(quranUpdates, [12]);
 	assert.deepEqual(updatePayloads, [{ components: [] }]);
-	assert.equal(sentPayloads[0]?.content, 'Current page: [12](https://quran.com/page/12)');
-	assert.equal(sentPayloads[0]?.flags, MessageFlags.SuppressEmbeds);
-	const row = sentPayloads[0]?.components?.[0].toJSON() as any;
-	assertCurrentPageButtons(row, '2026-04-15', 12);
+	assertCurrentPagePrompt(sentPayloads[0], '2026-04-15', 12);
 });
 
 test('stale next quran page buttons do not move progress backward', { concurrency: false }, async () => {
@@ -275,10 +269,7 @@ test('next quran page button wraps the prompt to page one after page 604', { con
 	);
 
 	assert.deepEqual(quranUpdates, [1]);
-	assert.equal(sentPayloads[0]?.content, 'Current page: [1](https://quran.com/page/1)');
-	assert.equal(sentPayloads[0]?.flags, MessageFlags.SuppressEmbeds);
-	const row = sentPayloads[0]?.components?.[0].toJSON() as any;
-	assertCurrentPageButtons(row, '2026-04-15', 1);
+	assertCurrentPagePrompt(sentPayloads[0], '2026-04-15', 1);
 });
 
 test('previous quran page button wraps the prompt to page 604 before page one', { concurrency: false }, async () => {
@@ -307,10 +298,7 @@ test('previous quran page button wraps the prompt to page 604 before page one', 
 	);
 
 	assert.deepEqual(quranUpdates, [604]);
-	assert.equal(sentPayloads[0]?.content, 'Current page: [604](https://quran.com/page/604)');
-	assert.equal(sentPayloads[0]?.flags, MessageFlags.SuppressEmbeds);
-	const row = sentPayloads[0]?.components?.[0].toJSON() as any;
-	assertCurrentPageButtons(row, '2026-04-15', 604);
+	assertCurrentPagePrompt(sentPayloads[0], '2026-04-15', 604);
 });
 
 async function withAttendanceRepositoryMocks(
@@ -396,6 +384,18 @@ function assertCurrentPageButtons(row: any, sessionId: string, page: number): vo
 		sessionId,
 		page,
 	});
+}
+
+function assertCurrentPagePrompt(payload: any, sessionId: string, page: number): void {
+	assert.equal(payload.content, `Current page: ${page}`);
+	assert.equal(payload.flags, undefined);
+	const embed = payload.embeds?.[0].toJSON() as any;
+	assert.equal(embed.title, `Read page ${page}`);
+	assert.equal(embed.url, buildQuranPageReadUrl(page));
+	assert.equal(embed.image.url, buildQuranPageImageUrl(page));
+	assert.equal(embed.footer.text, 'Image source: QuranHub');
+	const row = payload.components?.[0].toJSON() as any;
+	assertCurrentPageButtons(row, sessionId, page);
 }
 
 function buildInteraction(options: {

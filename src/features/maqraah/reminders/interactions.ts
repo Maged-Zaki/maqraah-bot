@@ -5,8 +5,7 @@ import { decrementQuranPage, incrementQuranPage } from '../../../shared/quran/pa
 import { TOTAL_QURAN_PAGES } from '../../../shared/quran/progress';
 import { announceAttendanceStatus, attendanceStatuses, AttendanceStatus } from './attendance';
 import {
-	buildCurrentQuranPageActionRows,
-	buildCurrentQuranPageMessage,
+	buildCurrentQuranPagePrompt,
 	buildNotesCarryOverActionRows,
 	parseReminderActionCustomId,
 	reminderActions,
@@ -82,11 +81,7 @@ async function handleQuranPageChange(interaction: ButtonInteraction, sessionId: 
 
 	await interaction.update({ components: [] });
 
-	await channel.send({
-		content: buildCurrentQuranPageMessage(updatedPage),
-		components: buildCurrentQuranPageActionRows(sessionId, updatedPage),
-		flags: MessageFlags.SuppressEmbeds,
-	});
+	await channel.send(buildCurrentQuranPagePrompt(sessionId, updatedPage));
 }
 
 async function handleAttendanceSelection(interaction: ButtonInteraction, sessionId: string, status: AttendanceStatus): Promise<void> {

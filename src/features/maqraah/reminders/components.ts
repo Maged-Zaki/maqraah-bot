@@ -1,4 +1,5 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
+import { buildQuranPageImageUrl, buildQuranPageReadUrl, quranPageImageSource } from '../../../shared/quran/pageImages';
 import { getReminderSessionId } from './sessionId';
 
 export const REMINDER_CUSTOM_ID_PREFIX = 'reminder';
@@ -94,7 +95,19 @@ export function buildNotesCarryOverActionRows(sessionId: string = getReminderSes
 }
 
 export function buildCurrentQuranPageMessage(page: number): string {
-	return `Current page: [${page}](https://quran.com/page/${page})`;
+	return `Current page: ${page}`;
+}
+
+export function buildCurrentQuranPagePrompt(sessionId: string, page: number): {
+	content: string;
+	embeds: EmbedBuilder[];
+	components: ActionRowBuilder<ButtonBuilder>[];
+} {
+	return {
+		content: buildCurrentQuranPageMessage(page),
+		embeds: [buildCurrentQuranPageEmbed(page)],
+		components: buildCurrentQuranPageActionRows(sessionId, page),
+	};
 }
 
 export function buildCurrentQuranPageActionRows(sessionId: string, page: number): ActionRowBuilder<ButtonBuilder>[] {
@@ -111,6 +124,15 @@ export function buildCurrentQuranPageActionRows(sessionId: string, page: number)
 		.setStyle(ButtonStyle.Primary);
 
 	return [new ActionRowBuilder<ButtonBuilder>().addComponents(previousPageButton, nextPageButton)];
+}
+
+function buildCurrentQuranPageEmbed(page: number): EmbedBuilder {
+	return new EmbedBuilder()
+		.setTitle(`Read page ${page}`)
+		.setURL(buildQuranPageReadUrl(page))
+		.setImage(buildQuranPageImageUrl(page))
+		.setColor(0x0099ff)
+		.setFooter({ text: `Image source: ${quranPageImageSource.name}` });
 }
 
 function isReminderAction(action: string | undefined): action is ReminderAction {

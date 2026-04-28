@@ -1,10 +1,10 @@
-import { Client, MessageFlags } from 'discord.js';
+import { Client } from 'discord.js';
 import * as cron from 'node-cron';
 import { configurationRepository, notesRepository, progressRepository, reminderEventsRepository } from '../../../storage/sqlite';
 import { logger } from '../../../observability/logging/logger';
 import { normalizeTimeZone, parseTimeToCron } from '../../../shared/time';
 import { announcePendingAttendance } from './attendance';
-import { buildCurrentQuranPageActionRows, buildCurrentQuranPageMessage, buildReminderActionRows } from './components';
+import { buildCurrentQuranPagePrompt, buildReminderActionRows } from './components';
 import { buildReminderStageSchedules, reminderStages, ReminderStage, ReminderStageSchedule } from './cadence';
 import { buildPreReminderMessage, buildReminderMessages } from './messages';
 import { getReminderSessionId } from './sessionId';
@@ -214,11 +214,7 @@ export async function sendMainReminder(channel: any, configuration: Awaited<Retu
 		});
 	}
 
-	await channel.send({
-		content: buildCurrentQuranPageMessage(currentPage),
-		components: buildCurrentQuranPageActionRows(sessionId, currentPage),
-		flags: MessageFlags.SuppressEmbeds,
-	});
+	await channel.send(buildCurrentQuranPagePrompt(sessionId, currentPage));
 
 	logger.recordReminderSentEvent(process.env.GUILD_ID!, process.env.CHANNEL_ID!, notes.length, true);
 }

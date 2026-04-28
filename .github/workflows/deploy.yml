@@ -47,7 +47,7 @@ jobs:
           test -f deploy-package/dist/index.js
 
       - name: Upload runtime package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: runtime-package
           path: deploy-package/
@@ -61,7 +61,7 @@ jobs:
 
     steps:
       - name: Download runtime package
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: runtime-package
           path: deploy-package

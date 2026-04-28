@@ -1,7 +1,7 @@
 import { TOTAL_QURAN_PAGES } from './progress';
 
 const quranPageReadBaseUrl = 'https://quran.com/page';
-const quranPageImageBaseUrl = 'https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/kfgqpc/hafs-wasat';
+const quranPageImageBaseUrl = 'https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/easyquran.com/hafs-tajweed';
 
 export const quranPageImageSource = {
 	name: 'QuranHub',

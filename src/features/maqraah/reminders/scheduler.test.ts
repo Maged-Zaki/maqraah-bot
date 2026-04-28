@@ -119,7 +119,7 @@ test('main reminder sends the current quran page prompt after notes', { concurre
 	const embed = (sentPayloads[2]?.embeds?.[0] as any).toJSON();
 	assert.equal(embed.title, 'Read page 13');
 	assert.equal(embed.url, 'https://quran.com/page/13');
-	assert.equal(embed.image.url, 'https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/kfgqpc/hafs-wasat/13.jpg');
+	assert.equal(embed.image.url, 'https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/easyquran.com/hafs-tajweed/13.jpg');
 	assert.equal(embed.footer.text, 'Image source: QuranHub');
 	const row = (sentPayloads[2]?.components?.[0] as any).toJSON();
 	assert.deepEqual(parseReminderActionCustomId(row.components[0].custom_id), {

@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
 	buildCurrentQuranPageActionRows,
-	buildCurrentQuranPageMessage,
 	buildCurrentQuranPagePrompt,
 	buildNotesCarryOverActionRows,
 	parseReminderActionCustomId,
@@ -29,8 +28,7 @@ test('current quran page button targets a page within a reminder session', () =>
 	const prompt = buildCurrentQuranPagePrompt('2026-04-15', 13);
 	const embed = prompt.embeds[0].toJSON() as any;
 
-	assert.equal(buildCurrentQuranPageMessage(13), 'Current page: 13');
-	assert.equal(prompt.content, 'Current page: 13');
+	assert.equal('content' in prompt, false);
 	assert.equal(embed.title, 'Read page 13');
 	assert.equal(embed.url, 'https://quran.com/page/13');
 	assert.equal(embed.image.url, 'https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/easyquran.com/hafs-tajweed/13.jpg');

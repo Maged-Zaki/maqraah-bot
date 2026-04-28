@@ -87,7 +87,7 @@ test('pre reminder keeps announcing later rows when one preregistered send fails
 });
 
 test('main reminder sends the current quran page prompt after notes', { concurrency: false }, async () => {
-	const sentPayloads: Array<{ content: string; components?: unknown[]; embeds?: unknown[] }> = [];
+	const sentPayloads: Array<{ content?: string; components?: unknown[]; embeds?: unknown[] }> = [];
 	const includedNoteIds: number[][] = [];
 
 	await withMainReminderRepositoryMocks(
@@ -101,7 +101,7 @@ test('main reminder sends the current quran page prompt after notes', { concurre
 		async () => {
 			await sendMainReminder(
 				{
-					send: async (payload: { content: string; components?: unknown[]; embeds?: unknown[] }) => {
+					send: async (payload: { content?: string; components?: unknown[]; embeds?: unknown[] }) => {
 						sentPayloads.push(payload);
 					},
 				},
@@ -112,10 +112,10 @@ test('main reminder sends the current quran page prompt after notes', { concurre
 	);
 
 	assert.deepEqual(includedNoteIds, [[7]]);
-	assert.match(sentPayloads[0]?.content, /الصفحة الحالية: \[13\]/);
-	assert.match(sentPayloads[0]?.content, /الحديث الحالي: \*\*35\*\*/);
+	assert.match(sentPayloads[0]?.content ?? '', /الصفحة الحالية: \[13\]/);
+	assert.match(sentPayloads[0]?.content ?? '', /الحديث الحالي: \*\*35\*\*/);
 	assert.equal(sentPayloads[1]?.content, 'ملاحظات اليوم:\n1. Review tajweed point\n');
-	assert.equal(sentPayloads[2]?.content, 'Current page: 13');
+	assert.equal('content' in (sentPayloads[2] ?? {}), false);
 	const embed = (sentPayloads[2]?.embeds?.[0] as any).toJSON();
 	assert.equal(embed.title, 'Read page 13');
 	assert.equal(embed.url, 'https://quran.com/page/13');

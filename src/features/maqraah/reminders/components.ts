@@ -94,17 +94,11 @@ export function buildNotesCarryOverActionRows(sessionId: string = getReminderSes
 	return [new ActionRowBuilder<ButtonBuilder>().addComponents(carryOverNotesButton)];
 }
 
-export function buildCurrentQuranPageMessage(page: number): string {
-	return `Current page: ${page}`;
-}
-
 export function buildCurrentQuranPagePrompt(sessionId: string, page: number): {
-	content: string;
 	embeds: EmbedBuilder[];
 	components: ActionRowBuilder<ButtonBuilder>[];
 } {
 	return {
-		content: buildCurrentQuranPageMessage(page),
 		embeds: [buildCurrentQuranPageEmbed(page)],
 		components: buildCurrentQuranPageActionRows(sessionId, page),
 	};

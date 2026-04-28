@@ -387,7 +387,7 @@ function assertCurrentPageButtons(row: any, sessionId: string, page: number): vo
 }
 
 function assertCurrentPagePrompt(payload: any, sessionId: string, page: number): void {
-	assert.equal(payload.content, `Current page: ${page}`);
+	assert.equal('content' in payload, false);
 	assert.equal(payload.flags, undefined);
 	const embed = payload.embeds?.[0].toJSON() as any;
 	assert.equal(embed.title, `Read page ${page}`);

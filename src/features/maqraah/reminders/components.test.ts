@@ -27,14 +27,14 @@ test('current quran page button targets a page within a reminder session', () =>
 	const nextButton = row.components[1];
 
 	assert.equal(buildCurrentQuranPageMessage(13), 'Current page: [13](https://quran.com/page/13)');
-	assert.equal(previousButton.label, 'Previous Page <');
+	assert.equal(previousButton.label, 'Previous <');
 	assert.equal(previousButton.emoji, undefined);
 	assert.deepEqual(parseReminderActionCustomId(previousButton.custom_id), {
 		action: reminderActions.PREVIOUS_QURAN_PAGE,
 		sessionId: '2026-04-15',
 		page: 13,
 	});
-	assert.equal(nextButton.label, 'Next Page >');
+	assert.equal(nextButton.label, 'Next >');
 	assert.equal(nextButton.emoji, undefined);
 	assert.deepEqual(parseReminderActionCustomId(nextButton.custom_id), {
 		action: reminderActions.NEXT_QURAN_PAGE,

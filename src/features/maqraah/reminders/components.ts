@@ -101,11 +101,13 @@ export function buildCurrentQuranPageActionRows(sessionId: string, page: number)
 	const previousPageButton = new ButtonBuilder()
 		.setCustomId(buildPreviousQuranPageActionCustomId(sessionId, page))
 		.setLabel('Previous Page')
+		.setEmoji('⬅️')
 		.setStyle(ButtonStyle.Secondary);
 
 	const nextPageButton = new ButtonBuilder()
 		.setCustomId(buildNextQuranPageActionCustomId(sessionId, page))
 		.setLabel('Next Page')
+		.setEmoji('➡️')
 		.setStyle(ButtonStyle.Primary);
 
 	return [new ActionRowBuilder<ButtonBuilder>().addComponents(previousPageButton, nextPageButton)];

@@ -85,6 +85,7 @@ async function handleQuranPageChange(interaction: ButtonInteraction, sessionId: 
 	await channel.send({
 		content: buildCurrentQuranPageMessage(updatedPage),
 		components: buildCurrentQuranPageActionRows(sessionId, updatedPage),
+		flags: MessageFlags.SuppressEmbeds,
 	});
 }
 

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { MessageFlags } from 'discord.js';
 import { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
 import { Attendance } from '../../../storage/sqlite/repositories/AttendanceRepository';
 import type { Note } from '../../../storage/sqlite/repositories/NotesRepository';
@@ -87,7 +88,7 @@ test('pre reminder keeps announcing later rows when one preregistered send fails
 });
 
 test('main reminder sends the current quran page prompt after notes', { concurrency: false }, async () => {
-	const sentPayloads: Array<{ content: string; components?: unknown[] }> = [];
+	const sentPayloads: Array<{ content: string; components?: unknown[]; flags?: MessageFlags }> = [];
 	const includedNoteIds: number[][] = [];
 
 	await withMainReminderRepositoryMocks(
@@ -101,7 +102,7 @@ test('main reminder sends the current quran page prompt after notes', { concurre
 		async () => {
 			await sendMainReminder(
 				{
-					send: async (payload: { content: string; components?: unknown[] }) => {
+					send: async (payload: { content: string; components?: unknown[]; flags?: MessageFlags }) => {
 						sentPayloads.push(payload);
 					},
 				},
@@ -115,7 +116,8 @@ test('main reminder sends the current quran page prompt after notes', { concurre
 	assert.match(sentPayloads[0]?.content, /الصفحة الحالية: \[13\]/);
 	assert.match(sentPayloads[0]?.content, /الحديث الحالي: \*\*35\*\*/);
 	assert.equal(sentPayloads[1]?.content, 'ملاحظات اليوم:\n1. Review tajweed point\n');
-	assert.equal(sentPayloads[2]?.content, 'Current page: **13**');
+	assert.equal(sentPayloads[2]?.content, 'Current page: [13](https://quran.com/page/13)');
+	assert.equal(sentPayloads[2]?.flags, MessageFlags.SuppressEmbeds);
 	const row = (sentPayloads[2]?.components?.[0] as any).toJSON();
 	assert.deepEqual(parseReminderActionCustomId(row.components[0].custom_id), {
 		action: reminderActions.PREVIOUS_QURAN_PAGE,

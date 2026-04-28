@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { MessageFlags } from 'discord.js';
 import { Attendance } from '../../../storage/sqlite/repositories/AttendanceRepository';
 import type { Progress } from '../../../storage/sqlite/repositories/ProgressRepository';
 
@@ -127,7 +128,8 @@ test('next quran page button updates progress, removes the old button, and sends
 
 	assert.deepEqual(quranUpdates, [13]);
 	assert.deepEqual(updatePayloads, [{ components: [] }]);
-	assert.equal(sentPayloads[0]?.content, 'Current page: **13**');
+	assert.equal(sentPayloads[0]?.content, 'Current page: [13](https://quran.com/page/13)');
+	assert.equal(sentPayloads[0]?.flags, MessageFlags.SuppressEmbeds);
 	const row = sentPayloads[0]?.components?.[0].toJSON() as any;
 	assertCurrentPageButtons(row, '2026-04-15', 13);
 });
@@ -163,7 +165,8 @@ test('previous quran page button updates progress, removes the old button, and s
 
 	assert.deepEqual(quranUpdates, [12]);
 	assert.deepEqual(updatePayloads, [{ components: [] }]);
-	assert.equal(sentPayloads[0]?.content, 'Current page: **12**');
+	assert.equal(sentPayloads[0]?.content, 'Current page: [12](https://quran.com/page/12)');
+	assert.equal(sentPayloads[0]?.flags, MessageFlags.SuppressEmbeds);
 	const row = sentPayloads[0]?.components?.[0].toJSON() as any;
 	assertCurrentPageButtons(row, '2026-04-15', 12);
 });
@@ -272,7 +275,8 @@ test('next quran page button wraps the prompt to page one after page 604', { con
 	);
 
 	assert.deepEqual(quranUpdates, [1]);
-	assert.equal(sentPayloads[0]?.content, 'Current page: **1**');
+	assert.equal(sentPayloads[0]?.content, 'Current page: [1](https://quran.com/page/1)');
+	assert.equal(sentPayloads[0]?.flags, MessageFlags.SuppressEmbeds);
 	const row = sentPayloads[0]?.components?.[0].toJSON() as any;
 	assertCurrentPageButtons(row, '2026-04-15', 1);
 });
@@ -303,7 +307,8 @@ test('previous quran page button wraps the prompt to page 604 before page one', 
 	);
 
 	assert.deepEqual(quranUpdates, [604]);
-	assert.equal(sentPayloads[0]?.content, 'Current page: **604**');
+	assert.equal(sentPayloads[0]?.content, 'Current page: [604](https://quran.com/page/604)');
+	assert.equal(sentPayloads[0]?.flags, MessageFlags.SuppressEmbeds);
 	const row = sentPayloads[0]?.components?.[0].toJSON() as any;
 	assertCurrentPageButtons(row, '2026-04-15', 604);
 });

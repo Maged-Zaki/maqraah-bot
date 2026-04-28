@@ -1,4 +1,4 @@
-import { Client } from 'discord.js';
+import { Client, MessageFlags } from 'discord.js';
 import * as cron from 'node-cron';
 import { configurationRepository, notesRepository, progressRepository, reminderEventsRepository } from '../../../storage/sqlite';
 import { logger } from '../../../observability/logging/logger';
@@ -217,6 +217,7 @@ export async function sendMainReminder(channel: any, configuration: Awaited<Retu
 	await channel.send({
 		content: buildCurrentQuranPageMessage(currentPage),
 		components: buildCurrentQuranPageActionRows(sessionId, currentPage),
+		flags: MessageFlags.SuppressEmbeds,
 	});
 
 	logger.recordReminderSentEvent(process.env.GUILD_ID!, process.env.CHANNEL_ID!, notes.length, true);

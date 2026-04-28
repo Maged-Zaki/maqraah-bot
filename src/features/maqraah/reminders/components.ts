@@ -94,7 +94,7 @@ export function buildNotesCarryOverActionRows(sessionId: string = getReminderSes
 }
 
 export function buildCurrentQuranPageMessage(page: number): string {
-	return `Current page: **${page}**`;
+	return `Current page: [${page}](https://quran.com/page/${page})`;
 }
 
 export function buildCurrentQuranPageActionRows(sessionId: string, page: number): ActionRowBuilder<ButtonBuilder>[] {

@@ -26,7 +26,7 @@ test('current quran page button targets a page within a reminder session', () =>
 	const previousButton = row.components[0];
 	const nextButton = row.components[1];
 
-	assert.equal(buildCurrentQuranPageMessage(13), 'Current page: **13**');
+	assert.equal(buildCurrentQuranPageMessage(13), 'Current page: [13](https://quran.com/page/13)');
 	assert.equal(previousButton.label, 'Previous Page');
 	assert.equal(previousButton.emoji.name, '⬅️');
 	assert.deepEqual(parseReminderActionCustomId(previousButton.custom_id), {

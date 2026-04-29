@@ -97,10 +97,12 @@ test('changing attendance status posts the new public message and marks it annou
 	assert.deepEqual(markedAttendance, [{ sessionId: '2026-04-15', userId: 'user-1' }]);
 });
 
-test('next quran page button updates progress, removes the old button, and sends the next current page', { concurrency: false }, async () => {
+test('next quran page button updates progress, deletes the old message, and sends the next current page', { concurrency: false }, async () => {
 	const quranUpdates: number[] = [];
 	const updatePayloads: any[] = [];
 	const sentPayloads: any[] = [];
+	let deferred = false;
+	let deleted = false;
 
 	await withProgressRepositoryMocks(
 		{
@@ -113,6 +115,12 @@ test('next quran page button updates progress, removes the old button, and sends
 			const handled = await handleReminderButtonInteraction(
 				buildInteraction({
 					customId: buildNextQuranPageActionCustomId('2026-04-15', 12),
+					onDeferUpdate: () => {
+						deferred = true;
+					},
+					onDelete: () => {
+						deleted = true;
+					},
 					onUpdate: (payload) => {
 						updatePayloads.push(payload);
 					},
@@ -127,14 +135,19 @@ test('next quran page button updates progress, removes the old button, and sends
 	);
 
 	assert.deepEqual(quranUpdates, [13]);
-	assert.deepEqual(updatePayloads, [{ components: [] }]);
+	assert.equal(deferred, true);
+	assert.equal(deleted, true);
+	assert.deepEqual(updatePayloads, []);
+	assert.equal(sentPayloads.length, 1);
 	assertCurrentPagePrompt(sentPayloads[0], '2026-04-15', 13);
 });
 
-test('previous quran page button updates progress, removes the old button, and sends the previous current page', { concurrency: false }, async () => {
+test('previous quran page button updates progress, deletes the old message, and sends the previous current page', { concurrency: false }, async () => {
 	const quranUpdates: number[] = [];
 	const updatePayloads: any[] = [];
 	const sentPayloads: any[] = [];
+	let deferred = false;
+	let deleted = false;
 
 	await withProgressRepositoryMocks(
 		{
@@ -147,6 +160,12 @@ test('previous quran page button updates progress, removes the old button, and s
 			const handled = await handleReminderButtonInteraction(
 				buildInteraction({
 					customId: buildPreviousQuranPageActionCustomId('2026-04-15', 13),
+					onDeferUpdate: () => {
+						deferred = true;
+					},
+					onDelete: () => {
+						deleted = true;
+					},
 					onUpdate: (payload) => {
 						updatePayloads.push(payload);
 					},
@@ -161,7 +180,10 @@ test('previous quran page button updates progress, removes the old button, and s
 	);
 
 	assert.deepEqual(quranUpdates, [12]);
-	assert.deepEqual(updatePayloads, [{ components: [] }]);
+	assert.equal(deferred, true);
+	assert.equal(deleted, true);
+	assert.deepEqual(updatePayloads, []);
+	assert.equal(sentPayloads.length, 1);
 	assertCurrentPagePrompt(sentPayloads[0], '2026-04-15', 12);
 });
 
@@ -170,6 +192,8 @@ test('stale next quran page buttons do not move progress backward', { concurrenc
 	const updatePayloads: any[] = [];
 	const followUpPayloads: any[] = [];
 	const sentPayloads: any[] = [];
+	let deferred = false;
+	let deleted = false;
 
 	await withProgressRepositoryMocks(
 		{
@@ -182,6 +206,12 @@ test('stale next quran page buttons do not move progress backward', { concurrenc
 			const handled = await handleReminderButtonInteraction(
 				buildInteraction({
 					customId: buildNextQuranPageActionCustomId('2026-04-15', 13),
+					onDeferUpdate: () => {
+						deferred = true;
+					},
+					onDelete: () => {
+						deleted = true;
+					},
 					onUpdate: (payload) => {
 						updatePayloads.push(payload);
 					},
@@ -199,7 +229,9 @@ test('stale next quran page buttons do not move progress backward', { concurrenc
 	);
 
 	assert.deepEqual(quranUpdates, []);
-	assert.deepEqual(updatePayloads, [{ components: [] }]);
+	assert.equal(deferred, true);
+	assert.equal(deleted, true);
+	assert.deepEqual(updatePayloads, []);
 	assert.deepEqual(sentPayloads, []);
 	assert.match(followUpPayloads[0]?.content, /Current page is \*\*14\*\*/);
 });
@@ -209,6 +241,8 @@ test('stale previous quran page buttons do not move progress backward', { concur
 	const updatePayloads: any[] = [];
 	const followUpPayloads: any[] = [];
 	const sentPayloads: any[] = [];
+	let deferred = false;
+	let deleted = false;
 
 	await withProgressRepositoryMocks(
 		{
@@ -221,6 +255,12 @@ test('stale previous quran page buttons do not move progress backward', { concur
 			const handled = await handleReminderButtonInteraction(
 				buildInteraction({
 					customId: buildPreviousQuranPageActionCustomId('2026-04-15', 13),
+					onDeferUpdate: () => {
+						deferred = true;
+					},
+					onDelete: () => {
+						deleted = true;
+					},
 					onUpdate: (payload) => {
 						updatePayloads.push(payload);
 					},
@@ -238,7 +278,9 @@ test('stale previous quran page buttons do not move progress backward', { concur
 	);
 
 	assert.deepEqual(quranUpdates, []);
-	assert.deepEqual(updatePayloads, [{ components: [] }]);
+	assert.equal(deferred, true);
+	assert.equal(deleted, true);
+	assert.deepEqual(updatePayloads, []);
 	assert.deepEqual(sentPayloads, []);
 	assert.match(followUpPayloads[0]?.content, /Current page is \*\*14\*\*/);
 });
@@ -246,6 +288,7 @@ test('stale previous quran page buttons do not move progress backward', { concur
 test('next quran page button wraps the prompt to page one after page 604', { concurrency: false }, async () => {
 	const quranUpdates: number[] = [];
 	const sentPayloads: any[] = [];
+	let deleted = false;
 
 	await withProgressRepositoryMocks(
 		{
@@ -258,6 +301,9 @@ test('next quran page button wraps the prompt to page one after page 604', { con
 			const handled = await handleReminderButtonInteraction(
 				buildInteraction({
 					customId: buildNextQuranPageActionCustomId('2026-04-15', 604),
+					onDelete: () => {
+						deleted = true;
+					},
 					onSend: (payload) => {
 						sentPayloads.push(payload);
 					},
@@ -269,12 +315,14 @@ test('next quran page button wraps the prompt to page one after page 604', { con
 	);
 
 	assert.deepEqual(quranUpdates, [1]);
+	assert.equal(deleted, true);
 	assertCurrentPagePrompt(sentPayloads[0], '2026-04-15', 1);
 });
 
 test('previous quran page button wraps the prompt to page 604 before page one', { concurrency: false }, async () => {
 	const quranUpdates: number[] = [];
 	const sentPayloads: any[] = [];
+	let deleted = false;
 
 	await withProgressRepositoryMocks(
 		{
@@ -287,6 +335,9 @@ test('previous quran page button wraps the prompt to page 604 before page one', 
 			const handled = await handleReminderButtonInteraction(
 				buildInteraction({
 					customId: buildPreviousQuranPageActionCustomId('2026-04-15', 1),
+					onDelete: () => {
+						deleted = true;
+					},
 					onSend: (payload) => {
 						sentPayloads.push(payload);
 					},
@@ -298,6 +349,7 @@ test('previous quran page button wraps the prompt to page 604 before page one', 
 	);
 
 	assert.deepEqual(quranUpdates, [604]);
+	assert.equal(deleted, true);
 	assertCurrentPagePrompt(sentPayloads[0], '2026-04-15', 604);
 });
 
@@ -402,6 +454,7 @@ function buildInteraction(options: {
 	customId: string;
 	client?: any;
 	onDeferUpdate?: () => void;
+	onDelete?: () => void;
 	onFollowUp?: (payload: any) => void;
 	onSend?: (payload: any) => void;
 	onUpdate?: (payload: any) => void;
@@ -421,6 +474,9 @@ function buildInteraction(options: {
 				send: async (payload: any) => {
 					options.onSend?.(payload);
 				},
+			},
+			delete: async () => {
+				options.onDelete?.();
 			},
 		},
 		deferUpdate: async () => {

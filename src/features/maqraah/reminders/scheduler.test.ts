@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { MessageFlags } from 'discord.js';
 import { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
 import { Attendance } from '../../../storage/sqlite/repositories/AttendanceRepository';
 import type { Note } from '../../../storage/sqlite/repositories/NotesRepository';
@@ -86,8 +87,8 @@ test('pre reminder keeps announcing later rows when one preregistered send fails
 	assert.deepEqual(markedAttendance, ['user-2']);
 });
 
-test('main reminder sends the current quran page prompt after notes', { concurrency: false }, async () => {
-	const sentPayloads: Array<{ content?: string; components?: unknown[]; embeds?: unknown[] }> = [];
+test('main reminder suppresses link embeds and sends the current quran page prompt after notes', { concurrency: false }, async () => {
+	const sentPayloads: Array<{ content?: string; components?: unknown[]; embeds?: unknown[]; flags?: MessageFlags }> = [];
 	const includedNoteIds: number[][] = [];
 
 	await withMainReminderRepositoryMocks(
@@ -101,7 +102,7 @@ test('main reminder sends the current quran page prompt after notes', { concurre
 		async () => {
 			await sendMainReminder(
 				{
-					send: async (payload: { content?: string; components?: unknown[]; embeds?: unknown[] }) => {
+					send: async (payload: { content?: string; components?: unknown[]; embeds?: unknown[]; flags?: MessageFlags }) => {
 						sentPayloads.push(payload);
 					},
 				},
@@ -114,6 +115,7 @@ test('main reminder sends the current quran page prompt after notes', { concurre
 	assert.deepEqual(includedNoteIds, [[7]]);
 	assert.match(sentPayloads[0]?.content ?? '', /الصفحة الحالية: \[13\]/);
 	assert.match(sentPayloads[0]?.content ?? '', /الحديث الحالي: \*\*35\*\*/);
+	assert.equal(sentPayloads[0]?.flags, MessageFlags.SuppressEmbeds);
 	assert.equal(sentPayloads[1]?.content, 'ملاحظات اليوم:\n1. Review tajweed point\n');
 	assert.equal('content' in (sentPayloads[2] ?? {}), false);
 	const embed = (sentPayloads[2]?.embeds?.[0] as any).toJSON();

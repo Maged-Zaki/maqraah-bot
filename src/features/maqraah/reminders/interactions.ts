@@ -66,9 +66,11 @@ async function handleQuranPageChange(interaction: ButtonInteraction, sessionId: 
 		throw new Error('Reminder action channel is not sendable.');
 	}
 
+	await interaction.deferUpdate();
+
 	const progress = await progressRepository.getProgress();
 	if (page !== progress.currentPage) {
-		await interaction.update({ components: [] });
+		await interaction.message.delete();
 		await interaction.followUp({
 			content: `That page is no longer the current maqraah page. Current page is **${progress.currentPage}**.`,
 			flags: MessageFlags.Ephemeral,
@@ -79,7 +81,7 @@ async function handleQuranPageChange(interaction: ButtonInteraction, sessionId: 
 	const updatedPage = getUpdatedPage(page);
 	await progressRepository.updateQuranProgress(updatedPage);
 
-	await interaction.update({ components: [] });
+	await interaction.message.delete();
 
 	await channel.send(buildCurrentQuranPagePrompt(sessionId, updatedPage));
 }

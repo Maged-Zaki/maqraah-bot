@@ -1,4 +1,4 @@
-import { Client } from 'discord.js';
+import { Client, MessageFlags } from 'discord.js';
 import * as cron from 'node-cron';
 import { configurationRepository, notesRepository, progressRepository, reminderEventsRepository } from '../../../storage/sqlite';
 import { logger } from '../../../observability/logging/logger';
@@ -206,7 +206,7 @@ export async function sendMainReminder(channel: any, configuration: Awaited<Retu
 		});
 	}
 
-	await channel.send({ content: mainMessage });
+	await channel.send({ content: mainMessage, flags: MessageFlags.SuppressEmbeds });
 
 	for (let i = 0; i < notesMessages.length; i++) {
 		await channel.send({

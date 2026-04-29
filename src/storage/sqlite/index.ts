@@ -53,8 +53,6 @@ db.serialize(() => {
 			logger.error('Failed to insert default configuration', err);
 		}
 	});
-
-	addColumnIfMissing('configuration', 'welcomeSentAt TEXT');
 	
 	db.run(
 		`
@@ -77,43 +75,6 @@ db.serialize(() => {
 		}
 	});
 
-	renameColumnIfPresent('progress', 'lastPage', 'currentPage', () => {
-		db.run(
-			`
-				UPDATE progress
-				SET currentPage = CASE
-					WHEN currentPage <= 0 THEN 1
-					WHEN currentPage >= 604 THEN 1
-					ELSE currentPage + 1
-				END
-			`,
-			(err) => {
-				if (err) {
-					logger.error('Failed to migrate legacy lastPage values to currentPage', err);
-				}
-			}
-		);
-	});
-	dropColumnIfPresent('progress', 'khatmahCycleCount');
-	renameColumnIfPresent('progress', 'lastHadith', 'currentHadith', () => {
-		db.run(
-			`
-				UPDATE progress
-				SET currentHadith = CASE
-					WHEN currentHadith <= 0 THEN 1
-					ELSE currentHadith + 1
-				END
-			`,
-			(err) => {
-				if (err) {
-					logger.error('Failed to migrate legacy lastHadith values to currentHadith', err);
-				}
-			}
-		);
-	});
-
-	dropTableIfExists('quran_progress_history');
-
 	db.run(
 		`
 	   CREATE TABLE IF NOT EXISTS notes (
@@ -134,9 +95,6 @@ db.serialize(() => {
 		}
 	);
 
-	addColumnIfMissing('notes', 'isAnonymous INTEGER DEFAULT 0');
-	addColumnIfMissing('notes', 'lastIncludedSessionId TEXT');
-
 	db.run(
 		`
 	   CREATE TABLE IF NOT EXISTS attendance (
@@ -155,8 +113,6 @@ db.serialize(() => {
 			}
 		}
 	);
-
-	addColumnIfMissing('attendance', 'announcedAt TEXT');
 
 	db.run(
 		`
@@ -202,8 +158,6 @@ db.serialize(() => {
 		}
 	);
 
-	addColumnIfMissing('schedules', "mentionUserIds TEXT NOT NULL DEFAULT ''");
-
 	db.run(`CREATE INDEX IF NOT EXISTS idx_schedules_status ON schedules(status)`, (err) => {
 		if (err) {
 			logger.error('Failed to create schedules status index', err);
@@ -245,9 +199,6 @@ db.serialize(() => {
 			}
 		}
 	);
-
-	addColumnIfMissing('reminder_settings', `sendTimeMode TEXT NOT NULL DEFAULT '${subscriptionReminderSettingsDefaults.sendTimeMode}'`);
-	addColumnIfMissing('reminder_settings', 'sendPrayer TEXT');
 
 	db.run(
 		`INSERT OR IGNORE INTO reminder_settings (id, channelId, daysBefore, sendTime, sendTimeMode, sendPrayer, updatedAt) VALUES (1, ?, ?, ?, ?, ?, ?)`,

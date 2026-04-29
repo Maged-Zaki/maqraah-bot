@@ -1,11 +1,21 @@
 import sqlite3 from 'sqlite3';
 import { logger } from '../../../observability/logging/logger';
+import { normalizePrayerName, type PrayerName } from '../../../shared/prayers';
+
+export const reminderSendTimeModes = {
+	FIXED: 'fixed',
+	PRAYER: 'prayer',
+} as const;
+
+export type ReminderSendTimeMode = (typeof reminderSendTimeModes)[keyof typeof reminderSendTimeModes];
 
 export interface ReminderSettings {
 	id: number;
 	channelId: string;
 	daysBefore: number;
 	sendTime: string;
+	sendTimeMode: ReminderSendTimeMode;
+	sendPrayer: PrayerName | null;
 	updatedAt: string;
 }
 
@@ -13,17 +23,23 @@ export interface UpdateReminderSettingsInput {
 	channelId?: string;
 	daysBefore?: number;
 	sendTime?: string;
+	sendTimeMode?: ReminderSendTimeMode;
+	sendPrayer?: PrayerName | null;
 }
 
 export const subscriptionReminderSettingsDefaults = {
 	daysBefore: 1,
 	sendTime: '6:00 PM',
+	sendTimeMode: reminderSendTimeModes.FIXED,
+	sendPrayer: null,
 } as const;
 
 export class ReminderSettingsRepository {
 	constructor(private db: sqlite3.Database) {}
 
 	async getSettings(defaultChannelId: string = process.env.CHANNEL_ID ?? ''): Promise<ReminderSettings> {
+		await this.ensureSettingsRow(defaultChannelId);
+
 		const startTime = Date.now();
 
 		const row = await new Promise<ReminderSettings | undefined>((resolve, reject) => {
@@ -45,68 +61,39 @@ export class ReminderSettingsRepository {
 		});
 
 		if (row) {
+			const sendPrayer = normalizePrayerName(row.sendPrayer);
+			const sendTimeMode = normalizeSendTimeMode(row.sendTimeMode, sendPrayer);
+
 			return {
 				...row,
 				channelId: row.channelId || defaultChannelId,
 				daysBefore: normalizeDaysBefore(row.daysBefore),
 				sendTime: row.sendTime || subscriptionReminderSettingsDefaults.sendTime,
+				sendTimeMode,
+				sendPrayer: sendTimeMode === reminderSendTimeModes.PRAYER ? sendPrayer : null,
 			};
 		}
 
-		const now = new Date().toISOString();
-		const settings: ReminderSettings = {
-			id: 1,
-			channelId: defaultChannelId,
-			daysBefore: subscriptionReminderSettingsDefaults.daysBefore,
-			sendTime: subscriptionReminderSettingsDefaults.sendTime,
-			updatedAt: now,
-		};
-
-		await this.updateSettings({
-			channelId: settings.channelId,
-			daysBefore: settings.daysBefore,
-			sendTime: settings.sendTime,
-		});
-
-		return settings;
+		throw new Error('Reminder settings row was not initialized.');
 	}
 
 	async updateSettings(updates: UpdateReminderSettingsInput): Promise<ReminderSettings> {
-		const fields = Object.keys(updates) as (keyof UpdateReminderSettingsInput)[];
+		await this.ensureSettingsRow();
+
+		const fields = (Object.keys(updates) as (keyof UpdateReminderSettingsInput)[]).filter((field) => updates[field] !== undefined);
 		if (fields.length === 0) {
 			return this.getSettings();
 		}
 
 		const now = new Date().toISOString();
 		const startTime = Date.now();
-		const values = [
-			updates.channelId ?? null,
-			updates.daysBefore ?? null,
-			updates.sendTime ?? null,
-			now,
-			updates.channelId ?? null,
-			updates.daysBefore ?? null,
-			updates.sendTime ?? null,
-			now,
-		];
+		const values = fields.map((field) => updates[field] ?? null);
+		values.push(now);
+		const setClause = fields.map((field) => `${field} = ?`).join(', ');
 
 		await new Promise<void>((resolve, reject) => {
 			this.db.run(
-				`
-					INSERT INTO reminder_settings (id, channelId, daysBefore, sendTime, updatedAt)
-					VALUES (
-						1,
-						COALESCE(?, ''),
-						COALESCE(?, ${subscriptionReminderSettingsDefaults.daysBefore}),
-						COALESCE(?, '${subscriptionReminderSettingsDefaults.sendTime}'),
-						?
-					)
-					ON CONFLICT(id) DO UPDATE SET
-						channelId = COALESCE(?, reminder_settings.channelId),
-						daysBefore = COALESCE(?, reminder_settings.daysBefore),
-						sendTime = COALESCE(?, reminder_settings.sendTime),
-						updatedAt = ?
-				`,
+				`UPDATE reminder_settings SET ${setClause}, updatedAt = ? WHERE id = 1`,
 				values,
 				(err) => {
 					const duration = Date.now() - startTime;
@@ -128,6 +115,35 @@ export class ReminderSettingsRepository {
 
 		return this.getSettings();
 	}
+
+	private async ensureSettingsRow(defaultChannelId: string = process.env.CHANNEL_ID ?? ''): Promise<void> {
+		const now = new Date().toISOString();
+
+		await new Promise<void>((resolve, reject) => {
+			this.db.run(
+				`
+					INSERT OR IGNORE INTO reminder_settings (id, channelId, daysBefore, sendTime, sendTimeMode, sendPrayer, updatedAt)
+					VALUES (?, ?, ?, ?, ?, ?, ?)
+				`,
+				[
+					1,
+					defaultChannelId,
+					subscriptionReminderSettingsDefaults.daysBefore,
+					subscriptionReminderSettingsDefaults.sendTime,
+					subscriptionReminderSettingsDefaults.sendTimeMode,
+					subscriptionReminderSettingsDefaults.sendPrayer,
+					now,
+				],
+				(err) => {
+					if (err) {
+						reject(err);
+					} else {
+						resolve();
+					}
+				}
+			);
+		});
+	}
 }
 
 function normalizeDaysBefore(value: number): number {
@@ -136,4 +152,12 @@ function normalizeDaysBefore(value: number): number {
 	}
 
 	return value;
+}
+
+function normalizeSendTimeMode(value: string | null | undefined, sendPrayer: PrayerName | null): ReminderSendTimeMode {
+	if (value === reminderSendTimeModes.PRAYER && sendPrayer) {
+		return reminderSendTimeModes.PRAYER;
+	}
+
+	return reminderSendTimeModes.FIXED;
 }

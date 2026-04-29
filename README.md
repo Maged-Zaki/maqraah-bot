@@ -122,7 +122,7 @@ There is no `/notes add`, `/add-note`, `/notes remove-my`, or `/notes remove-all
 - `/reminders configuration show`
   Shows the global optional-reminder configuration, including the channel where reminders are sent.
 - `/reminders configuration update [time] [channel]`
-  Updates the optional-reminder send time or channel. Event lead times are hard-coded in the bot.
+  Updates the optional-reminder send time or channel. `time` accepts `H:MM AM/PM`, such as `6:00 PM`, or `sync-to-<name>`, such as `sync-to-isha`. Supported sync names are `fajr`, `sunrise`, `dhuhr`, `asr`, `maghrib`, and `isha`. Event lead times are hard-coded in the bot.
 
 ### Help
 
@@ -146,7 +146,7 @@ If Maqraah time sync is enabled, the bot checks once an hour at minute 7 in the 
 
 The main reminder includes the current Qur'an page, current Hadith number, and reminder action buttons. Pending notes are sent as separate numbered note messages when present. After a main reminder includes pending notes, those notes are marked `included` and stamped with `lastIncludedDate`; they are not deleted automatically. Use `/notes carry-over-last-notes` to reuse included notes.
 
-Optional subscription reminders are separate from maqraah reminders. They use Discord roles named `تذكيرات الصيام` and `تذكيرات المناسبات الإسلامية`, send to the configured optional-reminder channel, and mention only the target category role through `allowedMentions`. Each reminder has a hard-coded lead time; for example Monday/Thursday fasting reminders are sent one day before, and the six Shawwal reminder is sent once on Eid al-Fitr day for fasting from the next day. Hijri dates are resolved through AlAdhan's Islamic calendar API and cached for the current and next Gregorian month; send-time checks use the cached calendar and skip Hijri-based reminders if no cached date is available.
+Optional subscription reminders are separate from maqraah reminders. They use Discord roles named `تذكيرات الصيام` and `تذكيرات المناسبات الإسلامية`, send to the configured optional-reminder channel, and mention only the target category role through `allowedMentions`. They can send at a fixed clock time or sync to a configured daily prayer time through AlAdhan using the global timezone, latitude, longitude, and calculation method. Each reminder has a hard-coded lead time; for example Monday/Thursday fasting reminders are sent one day before, and the six Shawwal reminder is sent once on Eid al-Fitr day for fasting from the next day. Hijri dates are resolved through AlAdhan's Islamic calendar API and cached for the current and next Gregorian month; send-time checks use the cached calendar and skip Hijri-based reminders if no cached date is available.
 
 Reminder buttons record attendance in SQLite:
 
@@ -239,7 +239,9 @@ Single-row table with `id = 1`.
 | `id` | `INTEGER PRIMARY KEY` | Singleton row |
 | `channelId` | `TEXT NOT NULL` | Channel for optional reminders |
 | `daysBefore` | `INTEGER NOT NULL` | Legacy unused column; per-event lead times are hard-coded |
-| `sendTime` | `TEXT NOT NULL` | Daily send time |
+| `sendTime` | `TEXT NOT NULL` | Fixed daily send time retained for fixed mode |
+| `sendTimeMode` | `TEXT NOT NULL` | `fixed` or `prayer` |
+| `sendPrayer` | `TEXT` | Prayer name for prayer-sync mode |
 | `updatedAt` | `TEXT NOT NULL` | ISO update timestamp |
 
 ### `hijri_calendar_cache`

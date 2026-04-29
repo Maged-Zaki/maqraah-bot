@@ -234,6 +234,8 @@ db.serialize(() => {
 	     channelId TEXT NOT NULL DEFAULT '',
 	     daysBefore INTEGER NOT NULL DEFAULT ${subscriptionReminderSettingsDefaults.daysBefore},
 	     sendTime TEXT NOT NULL DEFAULT '${subscriptionReminderSettingsDefaults.sendTime}',
+	     sendTimeMode TEXT NOT NULL DEFAULT '${subscriptionReminderSettingsDefaults.sendTimeMode}',
+	     sendPrayer TEXT,
 	     updatedAt TEXT NOT NULL
 	   )
 	 `,
@@ -244,12 +246,17 @@ db.serialize(() => {
 		}
 	);
 
+	addColumnIfMissing('reminder_settings', `sendTimeMode TEXT NOT NULL DEFAULT '${subscriptionReminderSettingsDefaults.sendTimeMode}'`);
+	addColumnIfMissing('reminder_settings', 'sendPrayer TEXT');
+
 	db.run(
-		`INSERT OR IGNORE INTO reminder_settings (id, channelId, daysBefore, sendTime, updatedAt) VALUES (1, ?, ?, ?, ?)`,
+		`INSERT OR IGNORE INTO reminder_settings (id, channelId, daysBefore, sendTime, sendTimeMode, sendPrayer, updatedAt) VALUES (1, ?, ?, ?, ?, ?, ?)`,
 		[
 			process.env.CHANNEL_ID ?? '',
 			subscriptionReminderSettingsDefaults.daysBefore,
 			subscriptionReminderSettingsDefaults.sendTime,
+			subscriptionReminderSettingsDefaults.sendTimeMode,
+			subscriptionReminderSettingsDefaults.sendPrayer,
 			new Date().toISOString(),
 		],
 		(err) => {

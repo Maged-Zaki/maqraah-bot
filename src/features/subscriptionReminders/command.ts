@@ -1,6 +1,6 @@
 import { ChannelType, EmbedBuilder, MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { reminderSettingsRepository } from '../../storage/sqlite';
-import { parseReminderTime } from '../../shared/time';
+import type { UpdateReminderSettingsInput } from '../../storage/sqlite/repositories/ReminderSettingsRepository';
 import { logger, type DiscordContext } from '../../observability/logging/logger';
 import {
 	getSubscriptionReminderCategory,
@@ -11,6 +11,11 @@ import {
 import { isSendableTextChannel } from './channel';
 import { ensureCategoryRole, memberHasRole, subscribeMemberToCategory, unsubscribeMemberFromCategory } from './roleManager';
 import * as subscriptionReminderScheduler from './scheduler';
+import {
+	buildSendTimeUpdates,
+	formatSubscriptionReminderSendTime,
+	parseSubscriptionReminderSendTime,
+} from './sendTime';
 
 const subcommands = {
 	SUBSCRIBE: 'subscribe',
@@ -81,7 +86,7 @@ export const data = new SlashCommandBuilder()
 					.setName(configurationSubcommands.UPDATE)
 					.setDescription('Update global reminder configuration')
 					.addStringOption((option) =>
-						option.setName(options.TIME).setDescription('Time of day, e.g. 6:00 PM')
+						option.setName(options.TIME).setDescription('Time, e.g. 6:00 PM or sync-to-fajr/sunrise/dhuhr/asr/maghrib/isha')
 					)
 					.addChannelOption((option) =>
 						option
@@ -199,7 +204,7 @@ async function handleConfigurationShow(interaction: any): Promise<void> {
 	const embed = new EmbedBuilder()
 		.setTitle('Reminder Configuration')
 		.addFields(
-			{ name: 'Send time', value: settings.sendTime, inline: true },
+			{ name: 'Send time', value: formatSubscriptionReminderSendTime(settings), inline: true },
 			{ name: 'Channel', value: settings.channelId ? `<#${settings.channelId}>` : 'Not set', inline: true }
 		)
 		.setColor(0x0099ff);
@@ -210,15 +215,19 @@ async function handleConfigurationShow(interaction: any): Promise<void> {
 async function handleConfigurationUpdate(interaction: any): Promise<void> {
 	const time = interaction.options.getString(options.TIME);
 	const channel = interaction.options.getChannel(options.CHANNEL);
-	const updates: { sendTime?: string; channelId?: string } = {};
+	const updates: UpdateReminderSettingsInput = {};
 
 	if (time !== null) {
-		const parsedTime = parseReminderTime(time);
-		if (!parsedTime) {
-			await interaction.reply({ content: 'Invalid time. Please use `H:MM AM/PM`, such as `6:00 PM`.', flags: MessageFlags.Ephemeral });
+		const parsedSendTime = parseSubscriptionReminderSendTime(time);
+		if (!parsedSendTime) {
+			await interaction.reply({
+				content:
+					'Invalid time. Please use `H:MM AM/PM`, such as `6:00 PM`, or `sync-to-<name>` with one of: `fajr`, `sunrise`, `dhuhr`, `asr`, `maghrib`, `isha`.',
+				flags: MessageFlags.Ephemeral,
+			});
 			return;
 		}
-		updates.sendTime = parsedTime.displayTime;
+		Object.assign(updates, buildSendTimeUpdates(parsedSendTime));
 	}
 
 	if (channel !== null) {
@@ -238,7 +247,7 @@ async function handleConfigurationUpdate(interaction: any): Promise<void> {
 	await subscriptionReminderScheduler.scheduleSubscriptionReminders(interaction.client);
 
 	await interaction.reply({
-		content: [`Reminder configuration updated.`, `Send time: ${settings.sendTime}`, `Channel: <#${settings.channelId}>`].join(
+		content: [`Reminder configuration updated.`, `Send time: ${formatSubscriptionReminderSendTime(settings)}`, `Channel: <#${settings.channelId}>`].join(
 			'\n'
 		),
 		flags: MessageFlags.Ephemeral,

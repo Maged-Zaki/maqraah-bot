@@ -6,9 +6,13 @@ import {
 	reminderSettingsRepository,
 	subscriptionReminderEventsRepository,
 } from '../../storage/sqlite';
+import type { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
 import type { HijriCalendarCacheEntry } from '../../storage/sqlite/repositories/HijriCalendarCacheRepository';
+import { reminderSendTimeModes, type ReminderSettings } from '../../storage/sqlite/repositories/ReminderSettingsRepository';
 import { logger } from '../../observability/logging/logger';
 import { normalizeTimeZone, parseReminderTime } from '../../shared/time';
+import type { PrayerName } from '../../shared/prayers';
+import { fetchPrayerTiming as fetchPrayerTimingFromAlAdhan } from '../maqraah/reminders/prayerTimes';
 import { subscriptionReminderEvents, type SubscriptionReminderEventDefinition } from './catalog';
 import { getReminderChannel, isSendableTextChannel } from './channel';
 import { addDaysToDateKey, formatLocalDateKey, getWeekdayFromDateKey, isSameLocalHourAndMinute } from './dateUtils';
@@ -18,6 +22,13 @@ import { refreshHijriCalendarCache } from './calendarCache';
 
 export let scheduledSubscriptionReminderJobs: cron.ScheduledTask[] = [];
 
+interface CachedSubscriptionPrayerTime {
+	key: string;
+	minutesSinceMidnight: number;
+}
+
+let cachedSubscriptionPrayerTime: CachedSubscriptionPrayerTime | null = null;
+
 export interface SubscriptionReminderSchedulerDependencies {
 	getConfiguration?: typeof configurationRepository.getConfiguration;
 	getSettings?: typeof reminderSettingsRepository.getSettings;
@@ -25,6 +36,7 @@ export interface SubscriptionReminderSchedulerDependencies {
 	hasEvent?: typeof subscriptionReminderEventsRepository.hasEvent;
 	recordEventSent?: typeof subscriptionReminderEventsRepository.recordEventSent;
 	ensureCategoryRole?: typeof ensureCategoryRole;
+	fetchPrayerTiming?: typeof fetchPrayerTimingFromAlAdhan;
 }
 
 export async function scheduleSubscriptionReminders(client: Client): Promise<void> {
@@ -42,12 +54,12 @@ export async function scheduleSubscriptionReminders(client: Client): Promise<voi
 	}
 
 	const settings = await reminderSettingsRepository.getSettings();
-	const parsedTime = parseReminderTime(settings.sendTime);
-	if (!parsedTime) {
+	const cronTime = getSubscriptionReminderCronTime(settings);
+	if (!cronTime) {
 		logger.warn(`Invalid subscription reminder send time configured: ${settings.sendTime}`, undefined, {
 			operationType: 'subscription_reminder_schedule',
 			operationStatus: 'failure',
-			additionalData: { sendTime: settings.sendTime },
+			additionalData: { sendTime: settings.sendTime, sendTimeMode: settings.sendTimeMode, sendPrayer: settings.sendPrayer },
 		});
 		return;
 	}
@@ -55,7 +67,7 @@ export async function scheduleSubscriptionReminders(client: Client): Promise<voi
 	await refreshHijriCalendarCache({ timezone });
 
 	const sendJob = cron.schedule(
-		parsedTime.cronTime,
+		cronTime,
 		async () => {
 			await executeSubscriptionReminderRun(client);
 		},
@@ -72,7 +84,7 @@ export async function scheduleSubscriptionReminders(client: Client): Promise<voi
 
 	scheduledSubscriptionReminderJobs.push(sendJob, cacheRefreshJob);
 	logger.recordSchedulerEvent('scheduled', {
-		cronTime: parsedTime.cronTime,
+		cronTime,
 		timezone,
 		stage: 'subscription_reminders',
 	});
@@ -90,6 +102,10 @@ export function stopSubscriptionReminderJobs(): void {
 	scheduledSubscriptionReminderJobs = [];
 }
 
+export function clearSubscriptionReminderPrayerTimeCache(): void {
+	cachedSubscriptionPrayerTime = null;
+}
+
 export async function executeSubscriptionReminderRun(
 	client: any,
 	now: Date = new Date(),
@@ -102,6 +118,7 @@ export async function executeSubscriptionReminderRun(
 	const recordEventSent =
 		dependencies.recordEventSent ?? subscriptionReminderEventsRepository.recordEventSent.bind(subscriptionReminderEventsRepository);
 	const resolveCategoryRole = dependencies.ensureCategoryRole ?? ensureCategoryRole;
+	const fetchPrayerTiming = dependencies.fetchPrayerTiming ?? fetchPrayerTimingFromAlAdhan;
 
 	const configuration = await getConfiguration();
 	const timezone = normalizeTimeZone(configuration.timezone);
@@ -115,8 +132,8 @@ export async function executeSubscriptionReminderRun(
 	}
 
 	const settings = await getSettings();
-	const parsedTime = parseReminderTime(settings.sendTime);
-	if (!parsedTime || !isSameLocalHourAndMinute(now, timezone, parsedTime.minutesSinceMidnight)) {
+	const sendMinutes = await resolveSubscriptionReminderSendMinutes(settings, configuration, timezone, now, fetchPrayerTiming);
+	if (sendMinutes === null || !isSameLocalHourAndMinute(now, timezone, sendMinutes)) {
 		return;
 	}
 
@@ -191,6 +208,72 @@ export async function executeSubscriptionReminderRun(
 			});
 		}
 	}
+}
+
+function getSubscriptionReminderCronTime(settings: ReminderSettings): string | null {
+	if (isPrayerSyncedSendTime(settings)) {
+		return '* * * * *';
+	}
+
+	return parseReminderTime(settings.sendTime)?.cronTime ?? null;
+}
+
+async function resolveSubscriptionReminderSendMinutes(
+	settings: ReminderSettings,
+	configuration: Configuration,
+	timezone: string,
+	now: Date,
+	fetchPrayerTiming: typeof fetchPrayerTimingFromAlAdhan
+): Promise<number | null> {
+	if (!isPrayerSyncedSendTime(settings)) {
+		return parseReminderTime(settings.sendTime)?.minutesSinceMidnight ?? null;
+	}
+
+	return resolveSyncedPrayerSendMinutes(configuration, settings.sendPrayer, timezone, now, fetchPrayerTiming);
+}
+
+async function resolveSyncedPrayerSendMinutes(
+	configuration: Configuration,
+	prayer: PrayerName,
+	timezone: string,
+	now: Date,
+	fetchPrayerTiming: typeof fetchPrayerTimingFromAlAdhan
+): Promise<number | null> {
+	const cacheKey = buildPrayerTimeCacheKey(configuration, prayer, timezone, now);
+	if (cachedSubscriptionPrayerTime?.key === cacheKey) {
+		return cachedSubscriptionPrayerTime.minutesSinceMidnight;
+	}
+
+	try {
+		const timing = await fetchPrayerTiming(configuration, prayer, now);
+		cachedSubscriptionPrayerTime = {
+			key: cacheKey,
+			minutesSinceMidnight: timing.minutesSinceMidnight,
+		};
+		return timing.minutesSinceMidnight;
+	} catch (error) {
+		logger.error('Failed to resolve subscription reminder prayer time', error as Error, undefined, {
+			operationType: 'subscription_reminder_prayer_time',
+			operationStatus: 'failure',
+			additionalData: { prayer, timezone, date: formatLocalDateKey(now, timezone) },
+		});
+		return null;
+	}
+}
+
+function isPrayerSyncedSendTime(settings: ReminderSettings): settings is ReminderSettings & { sendPrayer: PrayerName } {
+	return settings.sendTimeMode === reminderSendTimeModes.PRAYER && settings.sendPrayer !== null;
+}
+
+function buildPrayerTimeCacheKey(configuration: Configuration, prayer: PrayerName, timezone: string, now: Date): string {
+	return [
+		formatLocalDateKey(now, timezone),
+		timezone,
+		prayer,
+		configuration.maqraahTimeSyncLatitude,
+		configuration.maqraahTimeSyncLongitude,
+		configuration.maqraahTimeSyncCalculationMethod,
+	].join('|');
 }
 
 interface DueSubscriptionReminderEvent {

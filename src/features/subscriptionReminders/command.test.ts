@@ -6,6 +6,7 @@ process.env.DATABASE_PATH ??= ':memory:';
 process.env.CHANNEL_ID ??= 'reminder-channel';
 
 const { reminderSettingsRepository } = require('../../storage/sqlite') as typeof import('../../storage/sqlite');
+const { reminderSendTimeModes } = require('../../storage/sqlite/repositories/ReminderSettingsRepository') as typeof import('../../storage/sqlite/repositories/ReminderSettingsRepository');
 const command = require('./command') as typeof import('./command');
 const roleManager = require('./roleManager') as typeof import('./roleManager');
 const scheduler = require('./scheduler') as typeof import('./scheduler');
@@ -76,8 +77,23 @@ test('/reminders configuration show displays global configuration', { concurrenc
 		replies[0].embeds[0].data.fields.map((field: any) => field.name),
 		['Send time', 'Channel']
 	);
-	assert.equal(replies[0].embeds[0].data.fields[0].value, '7:30 PM');
+	assert.equal(replies[0].embeds[0].data.fields[0].value, 'Fixed time: 7:30 PM');
 	assert.equal(replies[0].embeds[0].data.fields[1].value, '<#custom-channel>');
+});
+
+test('/reminders configuration show displays prayer-synced configuration', { concurrency: false }, async () => {
+	const replies: any[] = [];
+
+	await withCommandMocks(
+		{
+			getSettings: async () => buildSettings({ sendTimeMode: reminderSendTimeModes.PRAYER, sendPrayer: 'isha' }),
+		},
+		async () => {
+			await command.execute(createInteraction({ group: 'configuration', subcommand: 'show', replies }));
+		}
+	);
+
+	assert.equal(replies[0].embeds[0].data.fields[0].value, 'Synced to Isha prayer');
 });
 
 test('/reminders configuration update does not expose days-before', () => {
@@ -123,10 +139,49 @@ test('/reminders configuration update validates and saves global configuration w
 	assert.equal(replies[0].flags, MessageFlags.Ephemeral);
 	assert.match(replies[0].content, /Reminder configuration updated/);
 	assert.doesNotMatch(replies[0].content, /Days before/);
-	assert.match(replies[0].content, /Send time: 8:05 PM/);
+	assert.match(replies[0].content, /Send time: Fixed time: 8:05 PM/);
 	assert.match(replies[0].content, /Channel: <#custom-channel>/);
-	assert.deepEqual(savedUpdates, [{ sendTime: '8:05 PM', channelId: 'custom-channel' }]);
+	assert.deepEqual(savedUpdates, [
+		{
+			sendTime: '8:05 PM',
+			sendTimeMode: reminderSendTimeModes.FIXED,
+			sendPrayer: null,
+			channelId: 'custom-channel',
+		},
+	]);
 	assert.deepEqual(rescheduledClients, ['client']);
+});
+
+test('/reminders configuration update accepts prayer sync keywords', { concurrency: false }, async () => {
+	const cases = [
+		['sync-to-fajr', 'fajr', 'Fajr'],
+		['sync-to-sunrise', 'sunrise', 'Sunrise'],
+		['sync-to-dhuhr', 'dhuhr', 'Dhuhr'],
+		['sync-to-asr', 'asr', 'Asr'],
+		['sync-to-maghrib', 'maghrib', 'Maghrib'],
+		[' Sync-To-Isha ', 'isha', 'Isha'],
+	] as const;
+
+	for (const [input, expectedPrayer, expectedLabel] of cases) {
+		const replies: any[] = [];
+		const savedUpdates: any[] = [];
+
+		await withCommandMocks(
+			{
+				updateSettings: async (updates: any) => {
+					savedUpdates.push(updates);
+					return buildSettings({ ...updates });
+				},
+				scheduleSubscriptionReminders: async () => undefined,
+			},
+			async () => {
+				await command.execute(createInteraction({ group: 'configuration', subcommand: 'update', replies, time: input }));
+			}
+		);
+
+		assert.match(replies[0].content, new RegExp(`Send time: Synced to ${expectedLabel} prayer`));
+		assert.deepEqual(savedUpdates, [{ sendTimeMode: reminderSendTimeModes.PRAYER, sendPrayer: expectedPrayer }]);
+	}
 });
 
 test('/reminders configuration update supports partial updates', { concurrency: false }, async () => {
@@ -162,6 +217,8 @@ test('/reminders configuration update rejects invalid values', { concurrency: fa
 	const invalidTimeReplies: any[] = [];
 	await command.execute(createInteraction({ group: 'configuration', subcommand: 'update', replies: invalidTimeReplies, time: '25:00 PM' }));
 	assert.match(invalidTimeReplies[0].content, /Invalid time/);
+	assert.match(invalidTimeReplies[0].content, /sync-to-<name>/);
+	assert.match(invalidTimeReplies[0].content, /sunrise/);
 
 	const invalidChannelReplies: any[] = [];
 	await command.execute(
@@ -267,6 +324,8 @@ function buildSettings(overrides: any = {}) {
 		channelId: 'reminder-channel',
 		daysBefore: 1,
 		sendTime: '6:00 PM',
+		sendTimeMode: reminderSendTimeModes.FIXED,
+		sendPrayer: null,
 		updatedAt: '2026-04-20T12:00:00.000Z',
 		...overrides,
 	};

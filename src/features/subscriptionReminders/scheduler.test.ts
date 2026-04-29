@@ -6,7 +6,8 @@ import type { ReminderSettings } from '../../storage/sqlite/repositories/Reminde
 process.env.DATABASE_PATH ??= ':memory:';
 process.env.GUILD_ID = 'guild-1';
 
-const { executeSubscriptionReminderRun } = require('./scheduler') as typeof import('./scheduler');
+const { reminderSendTimeModes } = require('../../storage/sqlite/repositories/ReminderSettingsRepository') as typeof import('../../storage/sqlite/repositories/ReminderSettingsRepository');
+const { clearSubscriptionReminderPrayerTimeCache, executeSubscriptionReminderRun } = require('./scheduler') as typeof import('./scheduler');
 
 test('scheduler sends reminders at the configured time', async () => {
 	const sentPayloads: any[] = [];
@@ -42,6 +43,88 @@ test('scheduler skips runs outside the configured time', async () => {
 	});
 
 	assert.equal(sentPayloads.length, 0);
+});
+
+test('scheduler sends prayer-synced reminders at the exact prayer minute', async () => {
+	clearSubscriptionReminderPrayerTimeCache();
+	const sentPayloads: any[] = [];
+	const requestedPrayers: string[] = [];
+
+	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T20:17:00.000Z'), {
+		getConfiguration: async () => buildConfiguration({ timezone: 'UTC' }),
+		getSettings: async () => buildSettings({ sendTimeMode: reminderSendTimeModes.PRAYER, sendPrayer: 'isha' }),
+		getCachedHijriDate: async () => null,
+		hasEvent: async () => false,
+		recordEventSent: async () => true,
+		ensureCategoryRole: async () => ({ id: 'role-fasting', name: 'تذكيرات الصيام' }),
+		fetchPrayerTiming: async (_configuration, prayer) => {
+			requestedPrayers.push(prayer);
+			return buildPrayerTiming({ prayer, rawPrayerTime: '20:17', prayerTime: '8:17 PM', minutesSinceMidnight: 20 * 60 + 17 });
+		},
+	});
+
+	assert.deepEqual(requestedPrayers, ['isha']);
+	assert.equal(sentPayloads.length, 1);
+	assert.match(sentPayloads[0].content, /صيام يوم الاثنين/);
+});
+
+test('scheduler skips prayer-synced runs outside the exact prayer minute without rounding', async () => {
+	clearSubscriptionReminderPrayerTimeCache();
+	const sentPayloads: any[] = [];
+
+	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T20:16:00.000Z'), {
+		getConfiguration: async () => buildConfiguration({ timezone: 'UTC' }),
+		getSettings: async () => buildSettings({ sendTimeMode: reminderSendTimeModes.PRAYER, sendPrayer: 'isha' }),
+		getCachedHijriDate: async () => null,
+		hasEvent: async () => false,
+		recordEventSent: async () => true,
+		ensureCategoryRole: async () => ({ id: 'role-fasting', name: 'تذكيرات الصيام' }),
+		fetchPrayerTiming: async (_configuration, prayer) =>
+			buildPrayerTiming({ prayer, rawPrayerTime: '20:17', prayerTime: '8:17 PM', minutesSinceMidnight: 20 * 60 + 17 }),
+	});
+
+	assert.equal(sentPayloads.length, 0);
+});
+
+test('scheduler skips prayer-synced reminders when the prayer time cannot be resolved', async () => {
+	clearSubscriptionReminderPrayerTimeCache();
+	const sentPayloads: any[] = [];
+
+	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T03:00:00.000Z'), {
+		getConfiguration: async () => buildConfiguration({ timezone: 'UTC' }),
+		getSettings: async () => buildSettings({ sendTimeMode: reminderSendTimeModes.PRAYER, sendPrayer: 'fajr' }),
+		getCachedHijriDate: async () => null,
+		hasEvent: async () => false,
+		recordEventSent: async () => true,
+		ensureCategoryRole: async () => ({ id: 'role-fasting', name: 'تذكيرات الصيام' }),
+		fetchPrayerTiming: async () => {
+			throw new Error('AlAdhan is unavailable');
+		},
+	});
+
+	assert.equal(sentPayloads.length, 0);
+});
+
+test('scheduler keeps fixed-time behavior when prayer sync is not enabled', async () => {
+	clearSubscriptionReminderPrayerTimeCache();
+	const sentPayloads: any[] = [];
+	let prayerLookups = 0;
+
+	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T18:00:00.000Z'), {
+		getConfiguration: async () => buildConfiguration({ timezone: 'UTC' }),
+		getSettings: async () => buildSettings({ sendTimeMode: reminderSendTimeModes.FIXED, sendTime: '6:00 PM' }),
+		getCachedHijriDate: async () => null,
+		hasEvent: async () => false,
+		recordEventSent: async () => true,
+		ensureCategoryRole: async () => ({ id: 'role-fasting', name: 'تذكيرات الصيام' }),
+		fetchPrayerTiming: async () => {
+			prayerLookups += 1;
+			throw new Error('should not look up prayer time');
+		},
+	});
+
+	assert.equal(prayerLookups, 0);
+	assert.equal(sentPayloads.length, 1);
 });
 
 test('scheduler ignores the legacy days-before value and uses hard-coded event lead days', async () => {
@@ -167,7 +250,30 @@ function buildSettings(overrides: Partial<ReminderSettings> = {}): ReminderSetti
 		channelId: 'reminder-channel',
 		daysBefore: 1,
 		sendTime: '6:00 PM',
+		sendTimeMode: reminderSendTimeModes.FIXED,
+		sendPrayer: null,
 		updatedAt: '2026-04-20T12:00:00.000Z',
+		...overrides,
+	};
+}
+
+function buildConfiguration(overrides: any = {}) {
+	return {
+		timezone: 'UTC',
+		maqraahTimeSyncLatitude: 30.0444,
+		maqraahTimeSyncLongitude: 31.2357,
+		maqraahTimeSyncCalculationMethod: 5,
+		...overrides,
+	};
+}
+
+function buildPrayerTiming(overrides: any = {}) {
+	return {
+		date: '19-04-2026',
+		prayer: 'isha',
+		rawPrayerTime: '20:17',
+		prayerTime: '8:17 PM',
+		minutesSinceMidnight: 20 * 60 + 17,
 		...overrides,
 	};
 }

@@ -5,7 +5,7 @@ import { ReminderEventsRepository } from '../../../storage/sqlite/repositories/R
 import { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
 import { isValidTimeZone } from '../../../shared/time';
 import { buildReminderStageSchedules, reminderStages } from './cadence';
-import { buildAlAdhanTimingsUrl, buildMaqraahTimeSyncTiming, formatDateForAlAdhan, parsePrayerTimeToMinutes } from './prayerTimes';
+import { buildAlAdhanTimingsUrl, buildMaqraahTimeSyncTiming, fetchPrayerTiming, formatDateForAlAdhan, parsePrayerTimeToMinutes } from './prayerTimes';
 
 test('pre-reminder schedules at the correct local time', () => {
 	const schedules = buildReminderStageSchedules(buildConfiguration({
@@ -128,6 +128,42 @@ test('AlAdhan request includes configured timezone and prayer location', () => {
 	assert.equal(url.searchParams.get('latitude'), '40.7128');
 	assert.equal(url.searchParams.get('longitude'), '-74.006');
 	assert.equal(url.searchParams.get('method'), '2');
+});
+
+test('AlAdhan prayer lookup resolves a selected prayer without rounding', async () => {
+	const requestedUrls: string[] = [];
+	const timing = await fetchPrayerTiming(
+		buildConfiguration({ timezone: 'UTC' }),
+		'isha',
+		new Date('2026-04-15T12:00:00.000Z'),
+		async (url: any) => {
+			requestedUrls.push(url.toString());
+			return {
+				ok: true,
+				json: async () => ({
+					code: 200,
+					status: 'OK',
+					data: {
+						timings: {
+							Fajr: '04:10',
+							Sunrise: '05:32',
+							Dhuhr: '11:57',
+							Asr: '15:31',
+							Maghrib: '18:18',
+							Isha: '19:47',
+						},
+					},
+				}),
+			} as any;
+		}
+	);
+
+	assert.equal(timing.date, '15-04-2026');
+	assert.equal(timing.prayer, 'isha');
+	assert.equal(timing.rawPrayerTime, '19:47');
+	assert.equal(timing.prayerTime, '7:47 PM');
+	assert.equal(timing.minutesSinceMidnight, 19 * 60 + 47);
+	assert.equal(new URL(requestedUrls[0]).searchParams.get('timezonestring'), 'UTC');
 });
 
 function run(db: sqlite3.Database, sql: string): Promise<void> {

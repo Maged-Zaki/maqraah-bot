@@ -1,4 +1,5 @@
 import type { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
+import type { PrayerName } from '../../../shared/prayers';
 import { normalizeTimeZone } from '../../../shared/time';
 
 export const maqraahTimeSyncDefaults = {
@@ -17,43 +18,82 @@ export interface MaqraahTimeSyncTiming {
 	reminderTime: string;
 }
 
+export interface PrayerTiming {
+	date: string;
+	prayer: PrayerName;
+	rawPrayerTime: string;
+	prayerTime: string;
+	minutesSinceMidnight: number;
+}
+
+type AlAdhanPrayerTimingKey = 'Fajr' | 'Sunrise' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Isha';
+
+type AlAdhanPrayerTimings = Partial<Record<AlAdhanPrayerTimingKey, string>>;
+
 interface AlAdhanTimingsResponse {
 	code: number;
 	status: string;
 	data?: {
-		timings?: {
-			Maghrib?: string;
-		};
+		timings?: AlAdhanPrayerTimings;
 	};
 }
 
 type FetchImplementation = typeof fetch;
+
+const alAdhanPrayerTimingKeys: Record<PrayerName, AlAdhanPrayerTimingKey> = {
+	fajr: 'Fajr',
+	sunrise: 'Sunrise',
+	dhuhr: 'Dhuhr',
+	asr: 'Asr',
+	maghrib: 'Maghrib',
+	isha: 'Isha',
+};
 
 export async function fetchMaqraahTimeSyncTiming(
 	configuration: Configuration,
 	date: Date = new Date(),
 	fetchImplementation: FetchImplementation = fetch
 ): Promise<MaqraahTimeSyncTiming> {
+	const maghribTiming = await fetchPrayerTiming(configuration, 'maghrib', date, fetchImplementation);
+	return buildMaqraahTimeSyncTiming(
+		maghribTiming.date,
+		maghribTiming.rawPrayerTime,
+		getMaqraahTimeSyncOffsetMinutes(configuration.maqraahTimeSyncOffsetMinutes)
+	);
+}
+
+export async function fetchPrayerTiming(
+	configuration: Configuration,
+	prayer: PrayerName,
+	date: Date = new Date(),
+	fetchImplementation: FetchImplementation = fetch
+): Promise<PrayerTiming> {
 	const timezone = normalizeTimeZone(configuration.timezone);
 	if (!timezone) {
-		throw new Error(`Invalid timezone configured for maqraah time sync: ${configuration.timezone}`);
+		throw new Error(`Invalid timezone configured for prayer time lookup: ${configuration.timezone}`);
 	}
 
 	const localDate = formatDateForAlAdhan(date, timezone);
 	const url = buildAlAdhanTimingsUrl({ ...configuration, timezone }, localDate);
-	const response = await fetchImplementation(url);
-
-	if (!response.ok) {
-		throw new Error(`AlAdhan timings request failed with status ${response.status}`);
+	const timings = await fetchAlAdhanTimings(url, fetchImplementation);
+	const alAdhanPrayerKey = alAdhanPrayerTimingKeys[prayer];
+	const rawPrayerTime = timings[alAdhanPrayerKey];
+	if (!rawPrayerTime) {
+		throw new Error(`AlAdhan timings response did not include ${alAdhanPrayerKey} time.`);
 	}
 
-	const body = (await response.json()) as AlAdhanTimingsResponse;
-	const maghribTime = body.data?.timings?.Maghrib;
-	if (body.code !== 200 || !maghribTime) {
-		throw new Error(`AlAdhan timings response did not include Maghrib time: ${body.status}`);
+	const minutesSinceMidnight = parsePrayerTimeToMinutes(rawPrayerTime);
+	if (minutesSinceMidnight === null) {
+		throw new Error(`Invalid ${alAdhanPrayerKey} time returned by prayer API: ${rawPrayerTime}`);
 	}
 
-	return buildMaqraahTimeSyncTiming(localDate, maghribTime, getMaqraahTimeSyncOffsetMinutes(configuration.maqraahTimeSyncOffsetMinutes));
+	return {
+		date: localDate,
+		prayer,
+		rawPrayerTime,
+		prayerTime: minutesToDisplayTime(minutesSinceMidnight),
+		minutesSinceMidnight,
+	};
 }
 
 export function buildMaqraahTimeSyncTiming(date: string, maghribTime: string, offsetMinutes: number): MaqraahTimeSyncTiming {
@@ -159,6 +199,21 @@ export function buildAlAdhanTimingsUrl(configuration: Configuration, date: strin
 	url.searchParams.set('method', getCalculationMethod(configuration.maqraahTimeSyncCalculationMethod).toString());
 	url.searchParams.set('timezonestring', configuration.timezone);
 	return url.toString();
+}
+
+async function fetchAlAdhanTimings(url: string, fetchImplementation: FetchImplementation): Promise<AlAdhanPrayerTimings> {
+	const response = await fetchImplementation(url);
+
+	if (!response.ok) {
+		throw new Error(`AlAdhan timings request failed with status ${response.status}`);
+	}
+
+	const body = (await response.json()) as AlAdhanTimingsResponse;
+	if (body.code !== 200 || !body.data?.timings) {
+		throw new Error(`AlAdhan timings response was invalid: ${body.status}`);
+	}
+
+	return body.data.timings;
 }
 
 function getLatitude(value: number | null | undefined): number {

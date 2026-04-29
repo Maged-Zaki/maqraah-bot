@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
-import { buildQuranPageImageUrl, buildQuranPageReadUrl, quranPageImageSource } from '../../../shared/quran/pageImages';
+import { buildQuranPageImageUrl, buildQuranPageReadUrl } from '../../../shared/quran/pageImages';
 import { getReminderSessionId } from './sessionId';
 
 export const REMINDER_CUSTOM_ID_PREFIX = 'reminder';
@@ -122,11 +122,11 @@ export function buildCurrentQuranPageActionRows(sessionId: string, page: number)
 
 function buildCurrentQuranPageEmbed(page: number): EmbedBuilder {
 	return new EmbedBuilder()
-		.setTitle(`Read page ${page}`)
+		.setTitle(`Open page ${page} in your browser`)
 		.setURL(buildQuranPageReadUrl(page))
 		.setImage(buildQuranPageImageUrl(page))
 		.setColor(0x0099ff)
-		.setFooter({ text: `Image source: ${quranPageImageSource.name}` });
+		.setFooter({ text: `Page ${page}` });
 }
 
 function isReminderAction(action: string | undefined): action is ReminderAction {

@@ -119,10 +119,10 @@ test('main reminder suppresses link embeds and sends the current quran page prom
 	assert.equal(sentPayloads[1]?.content, 'ملاحظات اليوم:\n1. Review tajweed point\n');
 	assert.equal('content' in (sentPayloads[2] ?? {}), false);
 	const embed = (sentPayloads[2]?.embeds?.[0] as any).toJSON();
-	assert.equal(embed.title, 'Read page 13');
+	assert.equal(embed.title, 'Open page 13 in your browser');
 	assert.equal(embed.url, 'https://quran.com/page/13');
 	assert.equal(embed.image.url, 'https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/easyquran.com/hafs-tajweed/13.jpg');
-	assert.equal(embed.footer.text, 'Image source: QuranHub');
+	assert.equal(embed.footer.text, 'Page 13');
 	const row = (sentPayloads[2]?.components?.[0] as any).toJSON();
 	assert.deepEqual(parseReminderActionCustomId(row.components[0].custom_id), {
 		action: reminderActions.PREVIOUS_QURAN_PAGE,

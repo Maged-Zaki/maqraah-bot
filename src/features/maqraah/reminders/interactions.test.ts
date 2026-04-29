@@ -442,10 +442,10 @@ function assertCurrentPagePrompt(payload: any, sessionId: string, page: number):
 	assert.equal('content' in payload, false);
 	assert.equal(payload.flags, undefined);
 	const embed = payload.embeds?.[0].toJSON() as any;
-	assert.equal(embed.title, `Read page ${page}`);
+	assert.equal(embed.title, `Open page ${page} in your browser`);
 	assert.equal(embed.url, buildQuranPageReadUrl(page));
 	assert.equal(embed.image.url, buildQuranPageImageUrl(page));
-	assert.equal(embed.footer.text, 'Image source: QuranHub');
+	assert.equal(embed.footer.text, `Page ${page}`);
 	const row = payload.components?.[0].toJSON() as any;
 	assertCurrentPageButtons(row, sessionId, page);
 }

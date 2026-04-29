@@ -122,7 +122,7 @@ export function buildCurrentQuranPageActionRows(sessionId: string, page: number)
 
 function buildCurrentQuranPageEmbed(page: number): EmbedBuilder {
 	return new EmbedBuilder()
-		.setTitle(`Open page ${page} in your browser`)
+		.setTitle(`Page ${page}`)
 		.setURL(buildQuranPageReadUrl(page))
 		.setImage(buildQuranPageImageUrl(page))
 		.setColor(0x0099ff)

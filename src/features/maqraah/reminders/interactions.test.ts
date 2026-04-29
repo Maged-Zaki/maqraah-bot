@@ -442,7 +442,7 @@ function assertCurrentPagePrompt(payload: any, sessionId: string, page: number):
 	assert.equal('content' in payload, false);
 	assert.equal(payload.flags, undefined);
 	const embed = payload.embeds?.[0].toJSON() as any;
-	assert.equal(embed.title, `Open page ${page} in your browser`);
+	assert.equal(embed.title, `Page ${page}`);
 	assert.equal(embed.url, buildQuranPageReadUrl(page));
 	assert.equal(embed.image.url, buildQuranPageImageUrl(page));
 	assert.equal(embed.footer.text, `Page ${page}`);

@@ -29,7 +29,7 @@ test('current quran page button targets a page within a reminder session', () =>
 	const embed = prompt.embeds[0].toJSON() as any;
 
 	assert.equal('content' in prompt, false);
-	assert.equal(embed.title, 'Open page 13 in your browser');
+	assert.equal(embed.title, 'Page 13');
 	assert.equal(embed.url, 'https://quran.com/page/13');
 	assert.equal(embed.image.url, 'https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/easyquran.com/hafs-tajweed/13.jpg');
 	assert.equal(embed.footer.text, 'Page 13');

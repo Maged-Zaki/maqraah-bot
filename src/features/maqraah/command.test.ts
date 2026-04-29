@@ -21,7 +21,7 @@ test('maqraah command keeps attendance subcommands and exposes progress group', 
 	assert.equal(progressGroup.type, ApplicationCommandOptionType.SubcommandGroup);
 	assert.deepEqual(
 		progressGroup.options.map((option: any) => option.name),
-		['update', 'show']
+		['update', 'show', 'post-current-page']
 	);
 
 	const updateSubcommand = progressGroup.options.find((option: any) => option.name === 'update');

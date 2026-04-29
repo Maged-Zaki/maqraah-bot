@@ -1,6 +1,9 @@
 import { MessageFlags } from 'discord.js';
 import { configurationRepository, notesRepository, progressRepository } from '../../../storage/sqlite';
 import { logger, DiscordContext } from '../../../observability/logging/logger';
+import { normalizeTimeZone } from '../../../shared/time';
+import { buildCurrentQuranPagePrompt } from '../reminders/components';
+import { getReminderSessionId } from '../reminders/sessionId';
 import { buildProgressDashboardReply } from './dashboard';
 import { progressOptions, progressSubcommands } from './builders';
 
@@ -33,6 +36,9 @@ export async function handleProgressCommand(interaction: any, options: ProgressC
 				return;
 			case progressSubcommands.SHOW:
 				await handleProgressShow(interaction, discordContext, options.now);
+				return;
+			case progressSubcommands.POST_CURRENT_PAGE:
+				await handlePostCurrentPage(interaction, discordContext, options.now);
 				return;
 			default:
 				await interaction.reply({ content: 'Unknown progress command.', flags: MessageFlags.Ephemeral });
@@ -128,4 +134,60 @@ async function handleProgressShow(interaction: any, discordContext: DiscordConte
 			now,
 		})
 	);
+}
+
+async function handlePostCurrentPage(interaction: any, discordContext: DiscordContext, now: Date = new Date()): Promise<void> {
+	const channelId = process.env.CHANNEL_ID;
+	if (!channelId) {
+		await interaction.reply({
+			content: 'Reminder channel is not configured. Set CHANNEL_ID before using this command.',
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	const channel = interaction.client?.channels?.cache?.get(channelId);
+	if (!isSendableChannel(channel)) {
+		await interaction.reply({
+			content: `Reminder channel <#${channelId}> was not found or is not sendable.`,
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	const [configuration, progress] = await Promise.all([configurationRepository.getConfiguration(), progressRepository.getProgress()]);
+	const timezone = normalizeTimeZone(configuration.timezone);
+	if (!timezone) {
+		await interaction.reply({
+			content: 'The maqraah timezone is not configured correctly.',
+			flags: MessageFlags.Ephemeral,
+		});
+		return;
+	}
+
+	const sessionId = getReminderSessionId(now, timezone);
+	await channel.send(buildCurrentQuranPagePrompt(sessionId, progress.currentPage));
+
+	logger.info('Posted current Quran page prompt', discordContext, {
+		operationType: 'progress_post_current_page',
+		operationStatus: 'success',
+		additionalData: { currentPage: progress.currentPage, sessionId, targetChannelId: channelId },
+	});
+
+	await interaction.reply({
+		content: `Posted current Qur'an page prompt for page **${progress.currentPage}** in <#${channelId}>.`,
+		flags: MessageFlags.Ephemeral,
+	});
+}
+
+function isSendableChannel(channel: any): channel is { send: (payload: any) => Promise<unknown> } {
+	if (!channel || typeof channel.send !== 'function') {
+		return false;
+	}
+
+	if (typeof channel.isSendable === 'function') {
+		return channel.isSendable();
+	}
+
+	return true;
 }

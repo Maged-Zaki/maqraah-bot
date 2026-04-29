@@ -3,6 +3,7 @@ export const progressCommandGroup = 'progress';
 export const progressSubcommands = {
 	UPDATE: 'update',
 	SHOW: 'show',
+	POST_CURRENT_PAGE: 'post-current-page',
 } as const;
 
 export const progressOptions = {
@@ -19,5 +20,8 @@ export function addProgressSubcommands(builder: any): any {
 				.addIntegerOption((option: any) => option.setName(progressOptions.PAGE).setDescription("Current Qur'an page"))
 				.addIntegerOption((option: any) => option.setName(progressOptions.HADITH).setDescription('Current Hadith number'))
 		)
-		.addSubcommand((subcommand: any) => subcommand.setName(progressSubcommands.SHOW).setDescription('Show maqraah progress and setup status'));
+		.addSubcommand((subcommand: any) => subcommand.setName(progressSubcommands.SHOW).setDescription('Show maqraah progress and setup status'))
+		.addSubcommand((subcommand: any) =>
+			subcommand.setName(progressSubcommands.POST_CURRENT_PAGE).setDescription("Post the current Qur'an page prompt")
+		);
 }

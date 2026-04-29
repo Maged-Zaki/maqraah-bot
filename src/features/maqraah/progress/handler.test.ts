@@ -8,6 +8,11 @@ process.env.DATABASE_PATH ??= ':memory:';
 
 const { configurationRepository, notesRepository, progressRepository } = require('../../../storage/sqlite') as typeof import('../../../storage/sqlite');
 const { handleProgressCommand } = require('./handler') as typeof import('./handler');
+const {
+	parseReminderActionCustomId,
+	reminderActions,
+} = require('../reminders/components') as typeof import('../reminders/components');
+const { buildQuranPageImageUrl, buildQuranPageReadUrl } = require('../../../shared/quran/pageImages') as typeof import('../../../shared/quran/pageImages');
 
 test('maqraah progress show renders current reading progress and pending note count', { concurrency: false }, async () => {
 	const previousChannelId = process.env.CHANNEL_ID;
@@ -137,6 +142,156 @@ test('maqraah progress show warns about invalid or missing configuration without
 	assert.match(fields['Warnings'], /Reminder role is not configured/);
 	assert.match(fields['Warnings'], /Reminder channel is not configured/);
 	assert.match(fields['Warnings'], /Voice channel is not configured/);
+});
+
+test('maqraah progress post-current-page sends the current page prompt to the configured reminder channel', { concurrency: false }, async () => {
+	const previousChannelId = process.env.CHANNEL_ID;
+	process.env.CHANNEL_ID = 'reminder-channel';
+	const client = createClient();
+	const reminderChannel = client.channels.cache.get('reminder-channel') as any;
+	let replyPayload: any;
+
+	await withRepositoryMocks(
+		{
+			getConfiguration: async () => buildConfiguration({ timezone: 'Asia/Tokyo' }),
+			getProgress: async () => buildProgress({ currentPage: 321, currentHadith: 44 }),
+		},
+		async () => {
+			await handleProgressCommand(
+				buildInteraction({
+					subcommand: 'post-current-page',
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+					client,
+				}) as any,
+				{ commandName: 'maqraah', subcommandGroup: 'progress', now: new Date('2026-04-15T16:30:00.000Z') }
+			);
+		}
+	);
+
+	restoreEnv('CHANNEL_ID', previousChannelId);
+
+	assert.equal(reminderChannel.sentMessages.length, 1);
+	assertCurrentPagePrompt(reminderChannel.sentMessages[0], '2026-04-16', 321);
+	assert.deepEqual(replyPayload, {
+		content: "Posted current Qur'an page prompt for page **321** in <#reminder-channel>.",
+		flags: MessageFlags.Ephemeral,
+	});
+});
+
+test('maqraah progress post-current-page refuses when CHANNEL_ID is unset', { concurrency: false }, async () => {
+	const previousChannelId = process.env.CHANNEL_ID;
+	delete process.env.CHANNEL_ID;
+	const client = createClient();
+	const reminderChannel = client.channels.cache.get('reminder-channel') as any;
+	let replyPayload: any;
+	let getProgressCalls = 0;
+
+	await withRepositoryMocks(
+		{
+			getProgress: async () => {
+				getProgressCalls++;
+				return buildProgress({ currentPage: 42 });
+			},
+		},
+		async () => {
+			await handleProgressCommand(
+				buildInteraction({
+					subcommand: 'post-current-page',
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+					client,
+				}) as any,
+				{ commandName: 'maqraah', subcommandGroup: 'progress', now: new Date('2026-04-15T16:30:00.000Z') }
+			);
+		}
+	);
+
+	restoreEnv('CHANNEL_ID', previousChannelId);
+
+	assert.equal(getProgressCalls, 0);
+	assert.equal(reminderChannel.sentMessages.length, 0);
+	assert.deepEqual(replyPayload, {
+		content: 'Reminder channel is not configured. Set CHANNEL_ID before using this command.',
+		flags: MessageFlags.Ephemeral,
+	});
+});
+
+test('maqraah progress post-current-page refuses when the configured reminder channel is missing', { concurrency: false }, async () => {
+	const previousChannelId = process.env.CHANNEL_ID;
+	process.env.CHANNEL_ID = 'missing-channel';
+	let replyPayload: any;
+	let getProgressCalls = 0;
+
+	await withRepositoryMocks(
+		{
+			getProgress: async () => {
+				getProgressCalls++;
+				return buildProgress({ currentPage: 42 });
+			},
+		},
+		async () => {
+			await handleProgressCommand(
+				buildInteraction({
+					subcommand: 'post-current-page',
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+					client: createClient(),
+				}) as any,
+				{ commandName: 'maqraah', subcommandGroup: 'progress', now: new Date('2026-04-15T16:30:00.000Z') }
+			);
+		}
+	);
+
+	restoreEnv('CHANNEL_ID', previousChannelId);
+
+	assert.equal(getProgressCalls, 0);
+	assert.deepEqual(replyPayload, {
+		content: 'Reminder channel <#missing-channel> was not found or is not sendable.',
+		flags: MessageFlags.Ephemeral,
+	});
+});
+
+test('maqraah progress post-current-page refuses when the configured reminder channel is not sendable', { concurrency: false }, async () => {
+	const previousChannelId = process.env.CHANNEL_ID;
+	process.env.CHANNEL_ID = 'reminder-channel';
+	const client = createClient({ reminderChannelSendable: false });
+	const reminderChannel = client.channels.cache.get('reminder-channel') as any;
+	let replyPayload: any;
+	let getProgressCalls = 0;
+
+	await withRepositoryMocks(
+		{
+			getProgress: async () => {
+				getProgressCalls++;
+				return buildProgress({ currentPage: 42 });
+			},
+		},
+		async () => {
+			await handleProgressCommand(
+				buildInteraction({
+					subcommand: 'post-current-page',
+					reply: (payload) => {
+						replyPayload = payload;
+					},
+					client,
+				}) as any,
+				{ commandName: 'maqraah', subcommandGroup: 'progress', now: new Date('2026-04-15T16:30:00.000Z') }
+			);
+		}
+	);
+
+	restoreEnv('CHANNEL_ID', previousChannelId);
+
+	assert.equal(getProgressCalls, 0);
+	assert.equal(reminderChannel.sentMessages.length, 0);
+	assert.deepEqual(replyPayload, {
+		content: 'Reminder channel <#reminder-channel> was not found or is not sendable.',
+		flags: MessageFlags.Ephemeral,
+	});
 });
 
 test('maqraah progress update persists quran and hadith progress', { concurrency: false }, async () => {
@@ -300,7 +455,7 @@ function buildInteraction(options: {
 	};
 }
 
-function createClient(options: { includeRole?: boolean; includeVoiceChannel?: boolean } = {}) {
+function createClient(options: { includeRole?: boolean; includeVoiceChannel?: boolean; reminderChannelSendable?: boolean } = {}) {
 	const includeRole = options.includeRole ?? true;
 	const includeVoiceChannel = options.includeVoiceChannel ?? true;
 	const user = { id: 'bot-user' };
@@ -308,6 +463,7 @@ function createClient(options: { includeRole?: boolean; includeVoiceChannel?: bo
 		id: 'reminder-channel',
 		name: 'maqraah-reminders',
 		permissions: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages],
+		isSendable: options.reminderChannelSendable,
 	});
 	const voiceChannel = createChannel({
 		id: 'voice-channel',
@@ -341,7 +497,7 @@ function createClient(options: { includeRole?: boolean; includeVoiceChannel?: bo
 	};
 }
 
-function createChannel(options: { id: string; name: string; permissions: bigint[]; isVoiceBased?: boolean }) {
+function createChannel(options: { id: string; name: string; permissions: bigint[]; isVoiceBased?: boolean; isSendable?: boolean }) {
 	const permissions = new PermissionsBitField(options.permissions);
 	const sentMessages: any[] = [];
 	return {
@@ -354,6 +510,7 @@ function createChannel(options: { id: string; name: string; permissions: bigint[
 		},
 		permissionsFor: () => permissions,
 		isVoiceBased: () => Boolean(options.isVoiceBased),
+		isSendable: () => options.isSendable ?? true,
 	};
 }
 
@@ -387,6 +544,27 @@ function buildProgress(progress: Partial<Progress>): Progress {
 function getEmbedFields(replyPayload: any): Record<string, string> {
 	const fields = replyPayload.embeds[0].data.fields ?? [];
 	return Object.fromEntries(fields.map((field: any) => [field.name, field.value]));
+}
+
+function assertCurrentPagePrompt(payload: any, sessionId: string, page: number): void {
+	assert.equal('content' in payload, false);
+	const embed = payload.embeds?.[0].toJSON() as any;
+	assert.equal(embed.title, `Page ${page}`);
+	assert.equal(embed.url, buildQuranPageReadUrl(page));
+	assert.equal(embed.image.url, buildQuranPageImageUrl(page));
+	assert.equal(embed.footer.text, `Page ${page}`);
+
+	const row = payload.components?.[0].toJSON() as any;
+	assert.deepEqual(parseReminderActionCustomId(row.components[0].custom_id), {
+		action: reminderActions.PREVIOUS_QURAN_PAGE,
+		sessionId,
+		page,
+	});
+	assert.deepEqual(parseReminderActionCustomId(row.components[1].custom_id), {
+		action: reminderActions.NEXT_QURAN_PAGE,
+		sessionId,
+		page,
+	});
 }
 
 function restoreEnv(name: string, value: string | undefined): void {

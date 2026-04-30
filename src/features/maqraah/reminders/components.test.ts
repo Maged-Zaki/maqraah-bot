@@ -32,7 +32,7 @@ test('current quran page button targets a page within a reminder session', () =>
 	assert.equal(embed.title, 'Page 13');
 	assert.equal(embed.url, 'https://quran.com/page/13');
 	assert.equal(embed.image.url, 'https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/easyquran.com/hafs-tajweed/13.jpg');
-	assert.equal(embed.footer.text, 'Page 13');
+	assert.equal('footer' in embed, false);
 	assert.equal(previousButton.label, 'Previous');
 	assert.equal(previousButton.emoji.name, '⬅️');
 	assert.deepEqual(parseReminderActionCustomId(previousButton.custom_id), {

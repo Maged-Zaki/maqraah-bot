@@ -552,7 +552,7 @@ function assertCurrentPagePrompt(payload: any, sessionId: string, page: number):
 	assert.equal(embed.title, `Page ${page}`);
 	assert.equal(embed.url, buildQuranPageReadUrl(page));
 	assert.equal(embed.image.url, buildQuranPageImageUrl(page));
-	assert.equal(embed.footer.text, `Page ${page}`);
+	assert.equal('footer' in embed, false);
 
 	const row = payload.components?.[0].toJSON() as any;
 	assert.deepEqual(parseReminderActionCustomId(row.components[0].custom_id), {

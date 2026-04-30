@@ -125,8 +125,7 @@ function buildCurrentQuranPageEmbed(page: number): EmbedBuilder {
 		.setTitle(`Page ${page}`)
 		.setURL(buildQuranPageReadUrl(page))
 		.setImage(buildQuranPageImageUrl(page))
-		.setColor(0x0099ff)
-		.setFooter({ text: `Page ${page}` });
+		.setColor(0x0099ff);
 }
 
 function isReminderAction(action: string | undefined): action is ReminderAction {

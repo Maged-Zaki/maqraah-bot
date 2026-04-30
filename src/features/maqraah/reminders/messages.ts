@@ -23,7 +23,7 @@ export function buildPreReminderMessage(configuration: Configuration): string {
 
 function buildMainReminderMessage(configuration: Configuration, progress: Progress): string {
 	let message = `<@&${configuration.roleId}> بدأت المقرأة\n\n`;
-	message += `الصفحة الحالية: [${progress.currentPage}](https://quran.com/page/${progress.currentPage})\n`;
+	message += `Starting page: [${progress.currentPage}](https://quran.com/page/${progress.currentPage})\n`;
 	message += `الحديث الحالي: **${progress.currentHadith}**\n`;
 
 	return message;

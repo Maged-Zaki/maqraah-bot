@@ -1,4 +1,4 @@
-import { Client } from 'discord.js';
+import { Client, MessageFlags } from 'discord.js';
 import * as cron from 'node-cron';
 import {
 	configurationRepository,
@@ -178,6 +178,7 @@ export async function executeSubscriptionReminderRun(
 					targetGregorianDate: targetDate,
 					hijriDate,
 				}),
+				flags: MessageFlags.SuppressEmbeds,
 				allowedMentions: { parse: [], roles: [role.id] },
 			});
 

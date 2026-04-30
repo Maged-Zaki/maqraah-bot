@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { MessageFlags } from 'discord.js';
 import type { HijriCalendarCacheEntry } from '../../storage/sqlite/repositories/HijriCalendarCacheRepository';
 import type { ReminderSettings } from '../../storage/sqlite/repositories/ReminderSettingsRepository';
 
@@ -27,6 +28,7 @@ test('scheduler sends reminders at the configured time', async () => {
 	assert.match(sentPayloads[0].content, /الحديث:/);
 	assert.match(sentPayloads[0].content, /جامع الترمذي 747/);
 	assert.doesNotMatch(sentPayloads[0].content, /الموعد/);
+	assert.equal(sentPayloads[0].flags, MessageFlags.SuppressEmbeds);
 	assert.deepEqual(sentPayloads[0].allowedMentions, { parse: [], roles: ['role-fasting'] });
 });
 

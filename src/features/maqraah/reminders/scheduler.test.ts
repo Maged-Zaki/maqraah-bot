@@ -113,7 +113,7 @@ test('main reminder suppresses link embeds and sends the current quran page prom
 	);
 
 	assert.deepEqual(includedNoteIds, [[7]]);
-	assert.match(sentPayloads[0]?.content ?? '', /Starting page: \[13\]/);
+	assert.match(sentPayloads[0]?.content ?? '', /نبدأ من الصفحة: \[13\]/);
 	assert.match(sentPayloads[0]?.content ?? '', /الحديث الحالي: \*\*35\*\*/);
 	assert.equal(sentPayloads[0]?.flags, MessageFlags.SuppressEmbeds);
 	assert.equal(sentPayloads[1]?.content, 'ملاحظات اليوم:\n1. Review tajweed point\n');

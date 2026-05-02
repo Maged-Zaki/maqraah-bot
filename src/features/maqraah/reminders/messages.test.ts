@@ -17,7 +17,7 @@ test('main reminder starts with the role mention and keeps reading details', () 
 
 	assert.equal(
 		mainMessage,
-		`<@&daily-role> بدأت المقرأة\n\n` + `Starting page: [13](https://quran.com/page/13)\n` + `الحديث الحالي: **35**\n`
+		`<@&daily-role> بدأت المقرأة\n\n` + `نبدأ من الصفحة: [13](https://quran.com/page/13)\n` + `الحديث الحالي: **35**\n`
 	);
 	assert.equal(mainMessage.includes('السلام عليكم ورحمة الله وبركاته'), false);
 	assert.equal(mainMessage.includes('وقت المقراة اليومية! 📖'), false);

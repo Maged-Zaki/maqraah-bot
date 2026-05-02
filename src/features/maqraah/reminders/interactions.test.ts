@@ -93,7 +93,7 @@ test('changing attendance status posts the new public message and marks it annou
 	);
 
 	assert.deepEqual(upserts, [{ sessionId: '2026-04-15', userId: 'user-1', status: 'cannot_make_it', announcedAt: null }]);
-	assert.deepEqual(sentMessages, ['<@user-1> مش هيقدر يحضر المقراة النهارده.']);
+	assert.deepEqual(sentMessages, ['**تحديثات الحضور**\n> <@user-1> مش هيقدر يحضر المقراة النهارده.']);
 	assert.deepEqual(markedAttendance, [{ sessionId: '2026-04-15', userId: 'user-1' }]);
 });
 

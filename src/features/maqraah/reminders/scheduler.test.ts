@@ -12,7 +12,7 @@ const { attendanceRepository, notesRepository, progressRepository } = require('.
 const { parseReminderActionCustomId, reminderActions } = require('./components') as typeof import('./components');
 const { sendMainReminder, sendPreReminderStage } = require('./scheduler') as typeof import('./scheduler');
 
-test('pre reminder sends the reminder first and then preregistered attendance messages', { concurrency: false }, async () => {
+test('pre reminder sends the reminder first and then one framed preregistered attendance message', { concurrency: false }, async () => {
 	const sentPayloads: Array<{ content: string; components?: unknown[] }> = [];
 	const markedAttendance: string[] = [];
 
@@ -41,14 +41,47 @@ test('pre reminder sends the reminder first and then preregistered attendance me
 
 	assert.equal(sentPayloads[0]?.content, '<@&daily-role> السلام عليكم ورحمة الله وبركاته\nالمقراة اليومية بعد 5 دقائق إن شاء الله.');
 	assert.equal(Array.isArray(sentPayloads[0]?.components), true);
-	assert.deepEqual(
-		sentPayloads.slice(1).map((payload) => payload.content),
-		['<@user-1> هيتأخر شوية عن المقراة.', '<@user-2> مش هيقدر يحضر المقراة النهارده.']
-	);
+	assert.deepEqual(sentPayloads.slice(1).map((payload) => payload.content), [
+		'**تحديثات الحضور**\n> <@user-1> هيتأخر شوية عن المقراة.\n> <@user-2> مش هيقدر يحضر المقراة النهارده.',
+	]);
 	assert.deepEqual(markedAttendance, ['user-1', 'user-2']);
 });
 
-test('pre reminder keeps announcing later rows when one preregistered send fails', { concurrency: false }, async () => {
+test('pre reminder sends no attendance header when there are no pending valid attendance rows', { concurrency: false }, async () => {
+	const sentPayloads: Array<{ content: string; components?: unknown[] }> = [];
+	let markCalled = false;
+
+	await withAttendanceRepositoryMocks(
+		{
+			getAttendanceBySessionId: async () => [
+				buildAttendance({ userId: 'user-1', status: 'late', announcedAt: '2026-04-15T10:05:00.000Z' }),
+				buildAttendance({ userId: 'user-2', status: 'joining', announcedAt: null }),
+			],
+			markAttendanceAnnounced: async () => {
+				markCalled = true;
+			},
+		},
+		async () => {
+			await sendPreReminderStage(
+				{
+					send: async (payload) => {
+						sentPayloads.push(payload);
+					},
+				},
+				buildConfiguration({ roleId: 'daily-role' }),
+				'2026-04-15'
+			);
+		}
+	);
+
+	assert.deepEqual(
+		sentPayloads.map((payload) => payload.content),
+		['<@&daily-role> السلام عليكم ورحمة الله وبركاته\nالمقراة اليومية بعد 5 دقائق إن شاء الله.']
+	);
+	assert.equal(markCalled, false);
+});
+
+test('pre reminder does not mark grouped attendance when the announcement send fails', { concurrency: false }, async () => {
 	const sentPayloads: string[] = [];
 	const markedAttendance: string[] = [];
 	let sendCount = 0;
@@ -82,9 +115,8 @@ test('pre reminder keeps announcing later rows when one preregistered send fails
 
 	assert.deepEqual(sentPayloads, [
 		'<@&daily-role> السلام عليكم ورحمة الله وبركاته\nالمقراة اليومية بعد 5 دقائق إن شاء الله.',
-		'<@user-2> مش هيقدر يحضر المقراة النهارده.',
 	]);
-	assert.deepEqual(markedAttendance, ['user-2']);
+	assert.deepEqual(markedAttendance, []);
 });
 
 test('main reminder suppresses link embeds and sends the current quran page prompt after notes', { concurrency: false }, async () => {

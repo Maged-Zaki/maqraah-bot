@@ -3,6 +3,7 @@ import { ConfigurationRepository } from './repositories/ConfigurationRepository'
 import { ProgressRepository } from './repositories/ProgressRepository';
 import { NotesRepository } from './repositories/NotesRepository';
 import { AttendanceRepository } from './repositories/AttendanceRepository';
+import { AttendanceAnnouncementMessageRepository } from './repositories/AttendanceAnnouncementMessageRepository';
 import { ReminderEventsRepository } from './repositories/ReminderEventsRepository';
 import { ScheduleRepository } from './repositories/ScheduleRepository';
 import { ReminderCategoryRoleRepository } from './repositories/ReminderCategoryRoleRepository';
@@ -128,6 +129,22 @@ db.serialize(() => {
 		(err) => {
 			if (err) {
 				logger.error('Failed to create reminder_events table', err);
+			}
+		}
+	);
+
+	db.run(
+		`
+	   CREATE TABLE IF NOT EXISTS attendance_announcement_messages (
+	     sessionId TEXT PRIMARY KEY,
+	     channelId TEXT NOT NULL,
+	     messageId TEXT NOT NULL,
+	     updatedAt TEXT NOT NULL
+	   )
+	 `,
+		(err) => {
+			if (err) {
+				logger.error('Failed to create attendance_announcement_messages table', err);
 			}
 		}
 	);
@@ -267,6 +284,7 @@ export const configurationRepository = new ConfigurationRepository(db);
 export const progressRepository = new ProgressRepository(db);
 export const notesRepository: NotesRepository = new NotesRepository(db);
 export const attendanceRepository = new AttendanceRepository(db);
+export const attendanceAnnouncementMessageRepository = new AttendanceAnnouncementMessageRepository(db);
 export const reminderEventsRepository = new ReminderEventsRepository(db);
 export const scheduleRepository = new ScheduleRepository(db);
 export const reminderCategoryRoleRepository = new ReminderCategoryRoleRepository(db);

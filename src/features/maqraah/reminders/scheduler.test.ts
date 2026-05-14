@@ -8,13 +8,14 @@ import type { Progress } from '../../../storage/sqlite/repositories/ProgressRepo
 
 process.env.DATABASE_PATH ??= ':memory:';
 
-const { attendanceRepository, notesRepository, progressRepository } = require('../../../storage/sqlite') as typeof import('../../../storage/sqlite');
+const { attendanceAnnouncementMessageRepository, attendanceRepository, notesRepository, progressRepository } = require('../../../storage/sqlite') as typeof import('../../../storage/sqlite');
 const { parseReminderActionCustomId, reminderActions } = require('./components') as typeof import('./components');
 const { sendMainReminder, sendPreReminderStage } = require('./scheduler') as typeof import('./scheduler');
 
 test('pre reminder sends the reminder first and then one framed preregistered attendance message', { concurrency: false }, async () => {
 	const sentPayloads: Array<{ content: string; components?: unknown[] }> = [];
 	const markedAttendance: string[] = [];
+	const storedMessages: Array<{ sessionId: string; channelId: string; messageId: string }> = [];
 
 	await withAttendanceRepositoryMocks(
 		{
@@ -25,12 +26,18 @@ test('pre reminder sends the reminder first and then one framed preregistered at
 			markAttendanceAnnounced: async (_sessionId: string, userId: string) => {
 				markedAttendance.push(userId);
 			},
+			getMessageBySessionId: async () => null,
+			upsertMessage: async (sessionId: string, channelId: string, messageId: string) => {
+				storedMessages.push({ sessionId, channelId, messageId });
+			},
 		},
 		async () => {
 			await sendPreReminderStage(
 				{
+					id: 'channel-1',
 					send: async (payload) => {
 						sentPayloads.push(payload);
+						return { id: `message-${sentPayloads.length}` };
 					},
 				},
 				buildConfiguration({ roleId: 'daily-role' }),
@@ -44,6 +51,7 @@ test('pre reminder sends the reminder first and then one framed preregistered at
 	assert.deepEqual(sentPayloads.slice(1).map((payload) => payload.content), [
 		'**تحديثات الحضور**\n> <@user-1> هيتأخر شوية عن المقراة.\n> <@user-2> مش هيقدر يحضر المقراة النهارده.',
 	]);
+	assert.deepEqual(storedMessages, [{ sessionId: '2026-04-15', channelId: 'channel-1', messageId: 'message-2' }]);
 	assert.deepEqual(markedAttendance, ['user-1', 'user-2']);
 });
 
@@ -64,8 +72,10 @@ test('pre reminder sends no attendance header when there are no pending valid at
 		async () => {
 			await sendPreReminderStage(
 				{
+					id: 'channel-1',
 					send: async (payload) => {
 						sentPayloads.push(payload);
+						return { id: `message-${sentPayloads.length}` };
 					},
 				},
 				buildConfiguration({ roleId: 'daily-role' }),
@@ -99,12 +109,14 @@ test('pre reminder does not mark grouped attendance when the announcement send f
 		async () => {
 			await sendPreReminderStage(
 				{
+					id: 'channel-1',
 					send: async (payload) => {
 						sendCount += 1;
 						if (sendCount === 2) {
 							throw new Error('send failed');
 						}
 						sentPayloads.push(payload.content);
+						return { id: `message-${sendCount}` };
 					},
 				},
 				buildConfiguration({ roleId: 'daily-role' }),
@@ -169,11 +181,16 @@ test('main reminder suppresses link embeds and sends the current quran page prom
 });
 
 async function withAttendanceRepositoryMocks(
-	overrides: Partial<Pick<typeof attendanceRepository, 'getAttendanceBySessionId' | 'markAttendanceAnnounced'>>,
+	overrides: Partial<
+		Pick<typeof attendanceRepository, 'getAttendanceBySessionId' | 'markAttendanceAnnounced'> &
+			Pick<typeof attendanceAnnouncementMessageRepository, 'getMessageBySessionId' | 'upsertMessage'>
+	>,
 	callback: () => Promise<void>
 ): Promise<void> {
 	const originalGetAttendanceBySessionId = attendanceRepository.getAttendanceBySessionId;
 	const originalMarkAttendanceAnnounced = attendanceRepository.markAttendanceAnnounced;
+	const originalGetMessageBySessionId = attendanceAnnouncementMessageRepository.getMessageBySessionId;
+	const originalUpsertMessage = attendanceAnnouncementMessageRepository.upsertMessage;
 
 	if (overrides.getAttendanceBySessionId) {
 		attendanceRepository.getAttendanceBySessionId = overrides.getAttendanceBySessionId;
@@ -183,11 +200,21 @@ async function withAttendanceRepositoryMocks(
 		attendanceRepository.markAttendanceAnnounced = overrides.markAttendanceAnnounced;
 	}
 
+	if (overrides.getMessageBySessionId) {
+		attendanceAnnouncementMessageRepository.getMessageBySessionId = overrides.getMessageBySessionId;
+	}
+
+	if (overrides.upsertMessage) {
+		attendanceAnnouncementMessageRepository.upsertMessage = overrides.upsertMessage;
+	}
+
 	try {
 		await callback();
 	} finally {
 		attendanceRepository.getAttendanceBySessionId = originalGetAttendanceBySessionId;
 		attendanceRepository.markAttendanceAnnounced = originalMarkAttendanceAnnounced;
+		attendanceAnnouncementMessageRepository.getMessageBySessionId = originalGetMessageBySessionId;
+		attendanceAnnouncementMessageRepository.upsertMessage = originalUpsertMessage;
 	}
 }
 

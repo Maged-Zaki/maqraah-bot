@@ -3,7 +3,7 @@ import * as cron from 'node-cron';
 import { configurationRepository, notesRepository, progressRepository, reminderEventsRepository } from '../../../storage/sqlite';
 import { logger } from '../../../observability/logging/logger';
 import { normalizeTimeZone, parseTimeToCron } from '../../../shared/time';
-import { announcePendingAttendance } from './attendance';
+import { announcePendingAttendance, type AttendanceAnnouncementChannel } from './attendance';
 import { buildCurrentQuranPagePrompt, buildReminderActionRows } from './components';
 import { buildReminderStageSchedules, reminderStages, ReminderStage, ReminderStageSchedule } from './cadence';
 import { buildPreReminderMessage, buildReminderMessages } from './messages';
@@ -11,6 +11,10 @@ import { getReminderSessionId } from './sessionId';
 
 export let scheduledJob: cron.ScheduledTask | null = null;
 export let scheduledJobs: cron.ScheduledTask[] = [];
+
+type PreReminderChannel = Pick<AttendanceAnnouncementChannel, 'id' | 'messages'> & {
+	send: (options: { content: string; components?: ReturnType<typeof buildReminderActionRows> }) => Promise<unknown>;
+};
 
 export async function scheduleReminder(client: Client) {
 	logger.info('Scheduling reminder cadence', undefined, { operationType: 'schedule_reminder' });
@@ -177,7 +181,7 @@ async function sendReminderStage(client: Client, stage: ReminderStage, sessionId
 }
 
 export async function sendPreReminderStage(
-	channel: { send: (options: { content: string; components?: ReturnType<typeof buildReminderActionRows> }) => Promise<unknown> },
+	channel: PreReminderChannel,
 	configuration: Awaited<ReturnType<typeof configurationRepository.getConfiguration>>,
 	sessionId: string
 ): Promise<void> {

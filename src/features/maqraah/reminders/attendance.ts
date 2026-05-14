@@ -1,4 +1,4 @@
-import { attendanceRepository } from '../../../storage/sqlite';
+import { attendanceAnnouncementMessageRepository, attendanceRepository } from '../../../storage/sqlite';
 import { logger } from '../../../observability/logging/logger';
 
 export const attendanceStatuses = {
@@ -9,13 +9,27 @@ export const attendanceStatuses = {
 export type AttendanceStatus = (typeof attendanceStatuses)[keyof typeof attendanceStatuses];
 
 export interface AttendanceAnnouncementChannel {
+	id?: string;
 	send(options: { content: string }): Promise<unknown>;
+	messages?: {
+		fetch(messageId: string): Promise<AttendanceAnnouncementEditableMessage>;
+	};
+}
+
+export interface AttendanceAnnouncementEditableMessage {
+	edit(options: { content: string }): Promise<unknown>;
 }
 
 export interface AttendanceAnnouncement {
 	userId: string;
 	status: AttendanceStatus;
 }
+
+interface SyncAttendanceAnnouncementOptions {
+	onlyWhenUnannounced?: boolean;
+}
+
+const attendanceAnnouncementSyncs = new Map<string, Promise<void>>();
 
 export function isAttendanceStatus(status: string): status is AttendanceStatus {
 	return Object.values(attendanceStatuses).includes(status as AttendanceStatus);
@@ -39,31 +53,48 @@ export function buildAttendanceAnnouncementMessage(attendanceAnnouncements: Atte
 	return ['**تحديثات الحضور**', ...lines].join('\n');
 }
 
-export async function announceAttendanceStatus(
+export async function syncAttendanceAnnouncementMessage(
 	channel: AttendanceAnnouncementChannel,
 	sessionId: string,
-	userId: string,
-	status: AttendanceStatus
+	options: SyncAttendanceAnnouncementOptions = {}
 ): Promise<void> {
-	const message = buildAttendanceAnnouncementMessage([{ userId, status }]);
-	if (!message) {
-		return;
-	}
+	const previousSync = attendanceAnnouncementSyncs.get(sessionId) ?? Promise.resolve();
+	const nextSync = previousSync.catch(() => undefined).then(() => syncAttendanceAnnouncementMessageNow(channel, sessionId, options));
+	attendanceAnnouncementSyncs.set(sessionId, nextSync);
 
-	await channel.send({ content: message });
-	await attendanceRepository.markAttendanceAnnounced(sessionId, userId);
+	try {
+		await nextSync;
+	} finally {
+		if (attendanceAnnouncementSyncs.get(sessionId) === nextSync) {
+			attendanceAnnouncementSyncs.delete(sessionId);
+		}
+	}
 }
 
-export async function announcePendingAttendance(channel: AttendanceAnnouncementChannel, sessionId: string): Promise<void> {
+async function syncAttendanceAnnouncementMessageNow(
+	channel: AttendanceAnnouncementChannel,
+	sessionId: string,
+	options: SyncAttendanceAnnouncementOptions
+): Promise<void> {
 	const attendanceRows = await attendanceRepository.getAttendanceBySessionId(sessionId);
 	const attendanceAnnouncements: AttendanceAnnouncement[] = [];
+	const unannouncedAttendance: AttendanceAnnouncement[] = [];
 
 	for (const attendance of attendanceRows) {
-		if (attendance.announcedAt || !isAttendanceStatus(attendance.status)) {
+		if (!isAttendanceStatus(attendance.status)) {
 			continue;
 		}
 
-		attendanceAnnouncements.push({ userId: attendance.userId, status: attendance.status });
+		const announcement = { userId: attendance.userId, status: attendance.status };
+		attendanceAnnouncements.push(announcement);
+
+		if (!attendance.announcedAt) {
+			unannouncedAttendance.push(announcement);
+		}
+	}
+
+	if (attendanceAnnouncements.length === 0 || (options.onlyWhenUnannounced && unannouncedAttendance.length === 0)) {
+		return;
 	}
 
 	const message = buildAttendanceAnnouncementMessage(attendanceAnnouncements);
@@ -71,20 +102,94 @@ export async function announcePendingAttendance(channel: AttendanceAnnouncementC
 		return;
 	}
 
-	try {
-		await channel.send({ content: message });
+	const trackedMessage = await attendanceAnnouncementMessageRepository.getMessageBySessionId(sessionId);
+	const channelId = getChannelId(channel, trackedMessage?.channelId);
+	let messageId = trackedMessage?.messageId ?? null;
 
-		for (const attendance of attendanceAnnouncements) {
-			await attendanceRepository.markAttendanceAnnounced(sessionId, attendance.userId);
+	if (messageId) {
+		const edited = await tryEditAttendanceAnnouncementMessage(channel, messageId, message);
+		if (!edited) {
+			messageId = null;
 		}
+	}
+
+	if (!messageId) {
+		const sentMessage = await channel.send({ content: message });
+		messageId = getSentMessageId(sentMessage);
+		if (!messageId) {
+			throw new Error('Attendance announcement send did not return a message id.');
+		}
+	}
+
+	await attendanceAnnouncementMessageRepository.upsertMessage(sessionId, channelId, messageId);
+
+	for (const attendance of unannouncedAttendance) {
+		await attendanceRepository.markAttendanceAnnounced(sessionId, attendance.userId);
+	}
+}
+
+export async function announcePendingAttendance(channel: AttendanceAnnouncementChannel, sessionId: string): Promise<void> {
+	try {
+		await syncAttendanceAnnouncementMessage(channel, sessionId, { onlyWhenUnannounced: true });
 	} catch (error) {
 		logger.error('Failed to announce preregistered attendance', error as Error, undefined, {
 			operationType: 'attendance_announcement',
 			operationStatus: 'failure',
 			additionalData: {
 				sessionId,
-				attendanceCount: attendanceAnnouncements.length,
 			},
 		});
 	}
+}
+
+async function tryEditAttendanceAnnouncementMessage(channel: AttendanceAnnouncementChannel, messageId: string, content: string): Promise<boolean> {
+	if (!channel.messages) {
+		return false;
+	}
+
+	try {
+		const message = await channel.messages.fetch(messageId);
+		await message.edit({ content });
+		return true;
+	} catch (error) {
+		if (isMissingDiscordMessageError(error)) {
+			return false;
+		}
+
+		throw error;
+	}
+}
+
+function getSentMessageId(sentMessage: unknown): string | null {
+	if (typeof sentMessage !== 'object' || sentMessage === null || !('id' in sentMessage)) {
+		return null;
+	}
+
+	const { id } = sentMessage as { id?: unknown };
+	return typeof id === 'string' ? id : null;
+}
+
+function getChannelId(channel: AttendanceAnnouncementChannel, fallbackChannelId?: string): string {
+	if (typeof channel.id === 'string' && channel.id.length > 0) {
+		return channel.id;
+	}
+
+	if (fallbackChannelId) {
+		return fallbackChannelId;
+	}
+
+	if (process.env.CHANNEL_ID) {
+		return process.env.CHANNEL_ID;
+	}
+
+	throw new Error('Attendance announcement channel id is unavailable.');
+}
+
+function isMissingDiscordMessageError(error: unknown): boolean {
+	if (typeof error !== 'object' || error === null) {
+		return false;
+	}
+
+	const candidate = error as { code?: unknown; status?: unknown; message?: unknown };
+	return candidate.code === 10008 || candidate.status === 404 || (typeof candidate.message === 'string' && candidate.message.includes('Unknown Message'));
 }

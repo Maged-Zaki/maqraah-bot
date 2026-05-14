@@ -5,7 +5,7 @@ import type { Progress } from '../../../storage/sqlite/repositories/ProgressRepo
 
 process.env.DATABASE_PATH ??= ':memory:';
 
-const { attendanceRepository, progressRepository } = require('../../../storage/sqlite') as typeof import('../../../storage/sqlite');
+const { attendanceAnnouncementMessageRepository, attendanceRepository, progressRepository } = require('../../../storage/sqlite') as typeof import('../../../storage/sqlite');
 const {
 	buildNextQuranPageActionCustomId,
 	buildPreviousQuranPageActionCustomId,
@@ -59,10 +59,12 @@ test('same attendance status does not post a duplicate message once it was alrea
 	assert.deepEqual(sentMessages, []);
 });
 
-test('changing attendance status posts the new public message and marks it announced', { concurrency: false }, async () => {
+test('changing attendance status edits the shared attendance message and marks it announced', { concurrency: false }, async () => {
 	const sentMessages: string[] = [];
+	const editedMessages: string[] = [];
 	const upserts: Array<{ sessionId: string; userId: string; status: string; announcedAt: string | null }> = [];
 	const markedAttendance: Array<{ sessionId: string; userId: string }> = [];
+	const storedMessages: Array<{ sessionId: string; channelId: string; messageId: string }> = [];
 
 	await withAttendanceRepositoryMocks(
 		{
@@ -74,14 +76,27 @@ test('changing attendance status posts the new public message and marks it annou
 			upsertAttendance: async (sessionId: string, userId: string, status: string, announcedAt: string | null = null) => {
 				upserts.push({ sessionId, userId, status, announcedAt });
 			},
+			getAttendanceBySessionId: async () => [buildAttendance({ status: 'cannot_make_it', announcedAt: null })],
 			markAttendanceAnnounced: async (sessionId: string, userId: string) => {
 				markedAttendance.push({ sessionId, userId });
+			},
+			getMessageBySessionId: async () => ({
+				sessionId: '2026-04-15',
+				channelId: 'channel-1',
+				messageId: 'attendance-message-1',
+				updatedAt: '2026-04-15T10:05:00.000Z',
+			}),
+			upsertMessage: async (sessionId: string, channelId: string, messageId: string) => {
+				storedMessages.push({ sessionId, channelId, messageId });
 			},
 		},
 		async () => {
 			const handled = await handleReminderButtonInteraction(
 				buildInteraction({
 					customId: buildReminderActionCustomId(reminderActions.CANNOT_MAKE_IT, '2026-04-15'),
+					onEdit: ({ content }) => {
+						editedMessages.push(content);
+					},
 					onSend: ({ content }) => {
 						sentMessages.push(content);
 					},
@@ -93,7 +108,124 @@ test('changing attendance status posts the new public message and marks it annou
 	);
 
 	assert.deepEqual(upserts, [{ sessionId: '2026-04-15', userId: 'user-1', status: 'cannot_make_it', announcedAt: null }]);
-	assert.deepEqual(sentMessages, ['**تحديثات الحضور**\n> <@user-1> مش هيقدر يحضر المقراة النهارده.']);
+	assert.deepEqual(sentMessages, []);
+	assert.deepEqual(editedMessages, ['**تحديثات الحضور**\n> <@user-1> مش هيقدر يحضر المقراة النهارده.']);
+	assert.deepEqual(storedMessages, [{ sessionId: '2026-04-15', channelId: 'channel-1', messageId: 'attendance-message-1' }]);
+	assert.deepEqual(markedAttendance, [{ sessionId: '2026-04-15', userId: 'user-1' }]);
+});
+
+test('later attendance button edits the existing session message to include everyone', { concurrency: false }, async () => {
+	const sentMessages: string[] = [];
+	const editedMessages: string[] = [];
+	const upserts: Array<{ sessionId: string; userId: string; status: string; announcedAt: string | null }> = [];
+	const markedAttendance: Array<{ sessionId: string; userId: string }> = [];
+
+	await withAttendanceRepositoryMocks(
+		{
+			getAttendance: async () => null,
+			upsertAttendance: async (sessionId: string, userId: string, status: string, announcedAt: string | null = null) => {
+				upserts.push({ sessionId, userId, status, announcedAt });
+			},
+			getAttendanceBySessionId: async () => [
+				buildAttendance({
+					userId: 'user-1',
+					status: 'cannot_make_it',
+					updatedAt: '2026-04-15T10:00:00.000Z',
+					announcedAt: '2026-04-15T10:05:00.000Z',
+				}),
+				buildAttendance({
+					userId: 'user-2',
+					status: 'late',
+					updatedAt: '2026-04-15T10:06:00.000Z',
+					announcedAt: null,
+				}),
+			],
+			markAttendanceAnnounced: async (sessionId: string, userId: string) => {
+				markedAttendance.push({ sessionId, userId });
+			},
+			getMessageBySessionId: async () => ({
+				sessionId: '2026-04-15',
+				channelId: 'channel-1',
+				messageId: 'attendance-message-1',
+				updatedAt: '2026-04-15T10:05:00.000Z',
+			}),
+			upsertMessage: async () => {},
+		},
+		async () => {
+			const handled = await handleReminderButtonInteraction(
+				buildInteraction({
+					customId: buildReminderActionCustomId(reminderActions.JOINING_SHORTLY, '2026-04-15'),
+					userId: 'user-2',
+					username: 'User Two',
+					onEdit: ({ content }) => {
+						editedMessages.push(content);
+					},
+					onSend: ({ content }) => {
+						sentMessages.push(content);
+					},
+				}) as any
+			);
+
+			assert.equal(handled, true);
+		}
+	);
+
+	assert.deepEqual(upserts, [{ sessionId: '2026-04-15', userId: 'user-2', status: 'late', announcedAt: null }]);
+	assert.deepEqual(sentMessages, []);
+	assert.deepEqual(editedMessages, [
+		'**تحديثات الحضور**\n> <@user-1> مش هيقدر يحضر المقراة النهارده.\n> <@user-2> هيتأخر شوية عن المقراة.',
+	]);
+	assert.deepEqual(markedAttendance, [{ sessionId: '2026-04-15', userId: 'user-2' }]);
+});
+
+test('attendance button sends one replacement message when the stored message was deleted', { concurrency: false }, async () => {
+	const sentMessages: string[] = [];
+	const editedMessages: string[] = [];
+	const storedMessages: Array<{ sessionId: string; channelId: string; messageId: string }> = [];
+	const markedAttendance: Array<{ sessionId: string; userId: string }> = [];
+
+	await withAttendanceRepositoryMocks(
+		{
+			getAttendance: async () => null,
+			upsertAttendance: async () => {},
+			getAttendanceBySessionId: async () => [buildAttendance({ status: 'late', announcedAt: null })],
+			markAttendanceAnnounced: async (sessionId: string, userId: string) => {
+				markedAttendance.push({ sessionId, userId });
+			},
+			getMessageBySessionId: async () => ({
+				sessionId: '2026-04-15',
+				channelId: 'channel-1',
+				messageId: 'deleted-message-1',
+				updatedAt: '2026-04-15T10:05:00.000Z',
+			}),
+			upsertMessage: async (sessionId: string, channelId: string, messageId: string) => {
+				storedMessages.push({ sessionId, channelId, messageId });
+			},
+		},
+		async () => {
+			const handled = await handleReminderButtonInteraction(
+				buildInteraction({
+					customId: buildReminderActionCustomId(reminderActions.JOINING_SHORTLY, '2026-04-15'),
+					sentMessageId: 'replacement-message-1',
+					onFetch: async () => {
+						throw { code: 10008, message: 'Unknown Message' };
+					},
+					onEdit: ({ content }) => {
+						editedMessages.push(content);
+					},
+					onSend: ({ content }) => {
+						sentMessages.push(content);
+					},
+				}) as any
+			);
+
+			assert.equal(handled, true);
+		}
+	);
+
+	assert.deepEqual(editedMessages, []);
+	assert.deepEqual(sentMessages, ['**تحديثات الحضور**\n> <@user-1> هيتأخر شوية عن المقراة.']);
+	assert.deepEqual(storedMessages, [{ sessionId: '2026-04-15', channelId: 'channel-1', messageId: 'replacement-message-1' }]);
 	assert.deepEqual(markedAttendance, [{ sessionId: '2026-04-15', userId: 'user-1' }]);
 });
 
@@ -354,15 +486,25 @@ test('previous quran page button wraps the prompt to page 604 before page one', 
 });
 
 async function withAttendanceRepositoryMocks(
-	overrides: Partial<Pick<typeof attendanceRepository, 'getAttendance' | 'upsertAttendance' | 'markAttendanceAnnounced'>>,
+	overrides: Partial<
+		Pick<typeof attendanceRepository, 'getAttendance' | 'getAttendanceBySessionId' | 'upsertAttendance' | 'markAttendanceAnnounced'> &
+			Pick<typeof attendanceAnnouncementMessageRepository, 'getMessageBySessionId' | 'upsertMessage'>
+	>,
 	callback: () => Promise<void>
 ): Promise<void> {
 	const originalGetAttendance = attendanceRepository.getAttendance;
+	const originalGetAttendanceBySessionId = attendanceRepository.getAttendanceBySessionId;
 	const originalUpsertAttendance = attendanceRepository.upsertAttendance;
 	const originalMarkAttendanceAnnounced = attendanceRepository.markAttendanceAnnounced;
+	const originalGetMessageBySessionId = attendanceAnnouncementMessageRepository.getMessageBySessionId;
+	const originalUpsertMessage = attendanceAnnouncementMessageRepository.upsertMessage;
 
 	if (overrides.getAttendance) {
 		attendanceRepository.getAttendance = overrides.getAttendance;
+	}
+
+	if (overrides.getAttendanceBySessionId) {
+		attendanceRepository.getAttendanceBySessionId = overrides.getAttendanceBySessionId;
 	}
 
 	if (overrides.upsertAttendance) {
@@ -373,12 +515,23 @@ async function withAttendanceRepositoryMocks(
 		attendanceRepository.markAttendanceAnnounced = overrides.markAttendanceAnnounced;
 	}
 
+	if (overrides.getMessageBySessionId) {
+		attendanceAnnouncementMessageRepository.getMessageBySessionId = overrides.getMessageBySessionId;
+	}
+
+	if (overrides.upsertMessage) {
+		attendanceAnnouncementMessageRepository.upsertMessage = overrides.upsertMessage;
+	}
+
 	try {
 		await callback();
 	} finally {
 		attendanceRepository.getAttendance = originalGetAttendance;
+		attendanceRepository.getAttendanceBySessionId = originalGetAttendanceBySessionId;
 		attendanceRepository.upsertAttendance = originalUpsertAttendance;
 		attendanceRepository.markAttendanceAnnounced = originalMarkAttendanceAnnounced;
+		attendanceAnnouncementMessageRepository.getMessageBySessionId = originalGetMessageBySessionId;
+		attendanceAnnouncementMessageRepository.upsertMessage = originalUpsertMessage;
 	}
 }
 
@@ -453,8 +606,13 @@ function assertCurrentPagePrompt(payload: any, sessionId: string, page: number):
 function buildInteraction(options: {
 	customId: string;
 	client?: any;
+	sentMessageId?: string;
+	userId?: string;
+	username?: string;
 	onDeferUpdate?: () => void;
 	onDelete?: () => void;
+	onEdit?: (payload: any) => void;
+	onFetch?: (messageId: string) => Promise<any> | any;
 	onFollowUp?: (payload: any) => void;
 	onSend?: (payload: any) => void;
 	onUpdate?: (payload: any) => void;
@@ -462,17 +620,32 @@ function buildInteraction(options: {
 	return {
 		customId: options.customId,
 		user: {
-			id: 'user-1',
-			username: 'User One',
+			id: options.userId ?? 'user-1',
+			username: options.username ?? 'User One',
 		},
 		guildId: 'guild-1',
 		channelId: 'channel-1',
 		client: options.client,
 		message: {
 			channel: {
+				id: 'channel-1',
 				isSendable: () => true,
+				messages: {
+					fetch: async (messageId: string) => {
+						if (options.onFetch) {
+							return options.onFetch(messageId);
+						}
+
+						return {
+							edit: async (payload: any) => {
+								options.onEdit?.(payload);
+							},
+						};
+					},
+				},
 				send: async (payload: any) => {
 					options.onSend?.(payload);
+					return { id: options.sentMessageId ?? 'sent-message-1' };
 				},
 			},
 			delete: async () => {

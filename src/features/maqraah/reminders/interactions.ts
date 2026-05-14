@@ -3,7 +3,7 @@ import { attendanceRepository, notesRepository, progressRepository } from '../..
 import { logger, DiscordContext } from '../../../observability/logging/logger';
 import { decrementQuranPage, incrementQuranPage } from '../../../shared/quran/pages';
 import { TOTAL_QURAN_PAGES } from '../../../shared/quran/progress';
-import { announceAttendanceStatus, attendanceStatuses, AttendanceStatus } from './attendance';
+import { syncAttendanceAnnouncementMessage, attendanceStatuses, AttendanceStatus } from './attendance';
 import {
 	buildCurrentQuranPagePrompt,
 	buildNotesCarryOverActionRows,
@@ -100,7 +100,7 @@ async function handleAttendanceSelection(interaction: ButtonInteraction, session
 	}
 
 	await attendanceRepository.upsertAttendance(sessionId, interaction.user.id, status, null);
-	await announceAttendanceStatus(channel, sessionId, interaction.user.id, status);
+	await syncAttendanceAnnouncementMessage(channel, sessionId);
 }
 
 async function carryOverReminderNotes(interaction: ButtonInteraction, sessionId: string): Promise<void> {

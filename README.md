@@ -76,6 +76,15 @@ Slash commands are discovered from `src/features/**/command.ts` and `src/feature
 
 There is no `/configuration set` command in the current bot.
 
+### `/maqraah`
+
+- `/maqraah cannot-attend-upcoming-maqraah [dates]`
+  Marks you as unable to attend. Without `dates`, this applies to the upcoming maqraah. `dates` accepts comma-separated maqraah session dates in `YYYY-MM-DD`, such as `2026-04-20, 2026-04-22`.
+- `/maqraah will-be-late-upcoming-maqraah`
+  Marks you as arriving late for the upcoming maqraah.
+- `/maqraah clear-upcoming-maqraah-status [dates]`
+  Clears your saved preregistration. Without `dates`, this applies to the upcoming maqraah. `dates` accepts the same comma-separated `YYYY-MM-DD` format.
+
 ### `/maqraah progress`
 
 - `/maqraah progress update [page] [hadith]`

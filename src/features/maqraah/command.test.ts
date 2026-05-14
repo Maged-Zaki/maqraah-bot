@@ -17,6 +17,18 @@ test('maqraah command keeps attendance subcommands and exposes progress group', 
 	assert.ok(optionNames.includes('will-be-late-upcoming-maqraah'));
 	assert.ok(optionNames.includes('clear-upcoming-maqraah-status'));
 
+	const cannotAttendSubcommand = command.options.find((option: any) => option.name === 'cannot-attend-upcoming-maqraah');
+	assert.deepEqual(
+		cannotAttendSubcommand.options.map((option: any) => ({ name: option.name, type: option.type, required: option.required ?? false })),
+		[{ name: 'dates', type: ApplicationCommandOptionType.String, required: false }]
+	);
+
+	const clearSubcommand = command.options.find((option: any) => option.name === 'clear-upcoming-maqraah-status');
+	assert.deepEqual(
+		clearSubcommand.options.map((option: any) => ({ name: option.name, type: option.type, required: option.required ?? false })),
+		[{ name: 'dates', type: ApplicationCommandOptionType.String, required: false }]
+	);
+
 	const progressGroup = command.options.find((option: any) => option.name === 'progress');
 	assert.equal(progressGroup.type, ApplicationCommandOptionType.SubcommandGroup);
 	assert.deepEqual(
@@ -56,6 +68,47 @@ test('cannot-attend preregisters the upcoming maqraah for today before reminder 
 
 	assert.deepEqual(upserts, [{ sessionId: '2026-04-15', userId: 'user-1', status: attendanceStatuses.CANNOT_MAKE_IT, announcedAt: null }]);
 	assert.deepEqual(replies, [{ content: 'You are marked as unable to attend the upcoming maqraah.', flags: MessageFlags.Ephemeral }]);
+});
+
+test('cannot-attend preregisters explicit maqraah dates once in sorted order', { concurrency: false }, async () => {
+	const replies: any[] = [];
+	const upserts: Array<{ sessionId: string; userId: string; status: string; announcedAt: string | null }> = [];
+	const sentEventChecks: string[] = [];
+
+	await withCommandRepositoryMocks(
+		{
+			getConfiguration: async () => buildConfiguration({ dailyTime: '7:00 PM', timezone: 'UTC' }),
+			hasSentEvent: async (sessionId: string) => {
+				sentEventChecks.push(sessionId);
+				return false;
+			},
+			upsertAttendance: async (sessionId: string, userId: string, status: string, announcedAt: string | null = null) => {
+				upserts.push({ sessionId, userId, status, announcedAt });
+			},
+		},
+		async () => {
+			await handleMaqraahCommand(
+				buildInteraction({
+					subcommand: 'cannot-attend-upcoming-maqraah',
+					dates: '2026-04-22, 2026-04-20, 2026-04-22',
+					replies,
+				}) as any,
+				new Date('2026-04-15T18:00:00.000Z')
+			);
+		}
+	);
+
+	assert.deepEqual(sentEventChecks, ['2026-04-20', '2026-04-22']);
+	assert.deepEqual(upserts, [
+		{ sessionId: '2026-04-20', userId: 'user-1', status: attendanceStatuses.CANNOT_MAKE_IT, announcedAt: null },
+		{ sessionId: '2026-04-22', userId: 'user-1', status: attendanceStatuses.CANNOT_MAKE_IT, announcedAt: null },
+	]);
+	assert.deepEqual(replies, [
+		{
+			content: 'You are marked as unable to attend these maqraah dates: 2026-04-20, 2026-04-22.',
+			flags: MessageFlags.Ephemeral,
+		},
+	]);
 });
 
 test('will-be-late preregisters the next day once reminder time is reached', { concurrency: false }, async () => {
@@ -113,6 +166,43 @@ test('clear-upcoming-maqraah-status deletes preregistered attendance', { concurr
 	assert.deepEqual(replies, [{ content: 'Your upcoming maqraah preregistration was cleared.', flags: MessageFlags.Ephemeral }]);
 });
 
+test('clear-upcoming-maqraah-status clears explicit dates and reports missing dates', { concurrency: false }, async () => {
+	const replies: any[] = [];
+	const clears: Array<{ sessionId: string; userId: string }> = [];
+
+	await withCommandRepositoryMocks(
+		{
+			getConfiguration: async () => buildConfiguration({ dailyTime: '7:00 PM', timezone: 'UTC' }),
+			hasSentEvent: async () => false,
+			deleteAttendance: async (sessionId: string, userId: string) => {
+				clears.push({ sessionId, userId });
+				return sessionId === '2026-04-20';
+			},
+		},
+		async () => {
+			await handleMaqraahCommand(
+				buildInteraction({
+					subcommand: 'clear-upcoming-maqraah-status',
+					dates: '2026-04-20, 2026-04-22',
+					replies,
+				}) as any,
+				new Date('2026-04-15T18:00:00.000Z')
+			);
+		}
+	);
+
+	assert.deepEqual(clears, [
+		{ sessionId: '2026-04-20', userId: 'user-1' },
+		{ sessionId: '2026-04-22', userId: 'user-1' },
+	]);
+	assert.deepEqual(replies, [
+		{
+			content: 'Cleared your maqraah preregistration for: 2026-04-20.\nNo saved preregistration found for: 2026-04-22.',
+			flags: MessageFlags.Ephemeral,
+		},
+	]);
+});
+
 test('maqraah preregistration refuses when pre-reminders are disabled', { concurrency: false }, async () => {
 	const replies: any[] = [];
 
@@ -139,6 +229,50 @@ test('maqraah preregistration refuses when pre-reminders are disabled', { concur
 	]);
 });
 
+test('maqraah preregistration rejects invalid explicit date lists before writing', { concurrency: false }, async () => {
+	const cases = [
+		{ dates: '2026-02-31', message: /Invalid date/ },
+		{ dates: '2026-04-20,', message: /comma-separated/ },
+		{ dates: Array.from({ length: 31 }, (_, index) => `2026-05-${String(index + 1).padStart(2, '0')}`).join(', '), message: /up to 30/ },
+		{ dates: '2026-04-14', message: /on or after the upcoming maqraah date \(2026-04-15\)/ },
+	];
+
+	for (const testCase of cases) {
+		const replies: any[] = [];
+		let upsertCalls = 0;
+		let sentEventChecks = 0;
+
+		await withCommandRepositoryMocks(
+			{
+				getConfiguration: async () => buildConfiguration({ dailyTime: '7:00 PM', timezone: 'UTC' }),
+				hasSentEvent: async () => {
+					sentEventChecks += 1;
+					return false;
+				},
+				upsertAttendance: async () => {
+					upsertCalls += 1;
+				},
+			},
+			async () => {
+				await handleMaqraahCommand(
+					buildInteraction({
+						subcommand: 'cannot-attend-upcoming-maqraah',
+						dates: testCase.dates,
+						replies,
+					}) as any,
+					new Date('2026-04-15T18:00:00.000Z')
+				);
+			}
+		);
+
+		assert.equal(upsertCalls, 0);
+		assert.equal(sentEventChecks, 0);
+		assert.equal(replies.length, 1);
+		assert.match(replies[0].content, testCase.message);
+		assert.equal(replies[0].flags, MessageFlags.Ephemeral);
+	}
+});
+
 test('maqraah preregistration refuses after the pre reminder already went out', { concurrency: false }, async () => {
 	const replies: any[] = [];
 
@@ -161,6 +295,44 @@ test('maqraah preregistration refuses after the pre reminder already went out', 
 	assert.deepEqual(replies, [
 		{
 			content: 'The pre-maqraah reminder for that session has already been sent. Please use the reminder buttons instead.',
+			flags: MessageFlags.Ephemeral,
+		},
+	]);
+});
+
+test('explicit maqraah dates refuse when any selected pre reminder already went out', { concurrency: false }, async () => {
+	const replies: any[] = [];
+	let upsertCalls = 0;
+	const sentEventChecks: string[] = [];
+
+	await withCommandRepositoryMocks(
+		{
+			getConfiguration: async () => buildConfiguration({ dailyTime: '7:00 PM', timezone: 'UTC' }),
+			hasSentEvent: async (sessionId: string) => {
+				sentEventChecks.push(sessionId);
+				return sessionId === '2026-04-22';
+			},
+			upsertAttendance: async () => {
+				upsertCalls += 1;
+			},
+		},
+		async () => {
+			await handleMaqraahCommand(
+				buildInteraction({
+					subcommand: 'cannot-attend-upcoming-maqraah',
+					dates: '2026-04-20, 2026-04-22',
+					replies,
+				}) as any,
+				new Date('2026-04-15T18:00:00.000Z')
+			);
+		}
+	);
+
+	assert.deepEqual(sentEventChecks, ['2026-04-20', '2026-04-22']);
+	assert.equal(upsertCalls, 0);
+	assert.deepEqual(replies, [
+		{
+			content: 'The pre-maqraah reminder has already been sent for: 2026-04-22. Please use the reminder buttons instead.',
 			flags: MessageFlags.Ephemeral,
 		},
 	]);
@@ -205,10 +377,17 @@ async function withCommandRepositoryMocks(
 	}
 }
 
-function buildInteraction(options: { subcommand: string; replies: any[] }): Record<string, unknown> {
+function buildInteraction(options: { subcommand: string; replies: any[]; dates?: string | null }): Record<string, unknown> {
 	return {
 		options: {
 			getSubcommand: () => options.subcommand,
+			getString: (optionName: string) => {
+				if (optionName === 'dates') {
+					return options.dates ?? null;
+				}
+
+				return null;
+			},
 		},
 		user: {
 			id: 'user-1',

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
-import { buildReminderMessages } from './messages';
+import { Note } from '../../../storage/sqlite/repositories/NotesRepository';
+import { buildPreReminderMessage, buildReminderMessages } from './messages';
 
 test('main reminder starts with the role mention and keeps reading details', () => {
 	const { mainMessage } = buildReminderMessages(
@@ -23,7 +24,44 @@ test('main reminder starts with the role mention and keeps reading details', () 
 	assert.equal(mainMessage.includes('وقت المقراة اليومية! 📖'), false);
 });
 
-function buildConfiguration(configuration: Partial<Configuration>): Configuration {
+test('buildPreReminderMessage includes role mention and offset', () => {
+	const message = buildPreReminderMessage(buildConfiguration({ roleId: 'pre-role', preReminderOffsetMinutes: 10 }));
+	assert.equal(message.startsWith('<@&pre-role>'), true);
+	assert.ok(message.includes('10'));
+	assert.ok(message.includes('السلام عليكم ورحمة الله وبركاته'));
+});
+
+test('buildPreReminderMessage uses default offset when not configured', () => {
+	const message = buildPreReminderMessage(buildConfiguration({ roleId: 'pre-role', preReminderOffsetMinutes: null as any }));
+	assert.ok(message.includes('5'));
+});
+
+test('buildReminderMessages returns empty notes messages when no notes', () => {
+	const { notesMessages } = buildReminderMessages(buildConfiguration(), { currentPage: 1, currentHadith: 1 }, []);
+	assert.deepEqual(notesMessages, []);
+});
+
+test('buildReminderMessages returns notes messages for single note', () => {
+	const notes: Note[] = [{ id: 1, userId: 'user-1', note: 'Review tajweed', dateAdded: '2026-04-15T12:00:00.000Z' }];
+	const { notesMessages } = buildReminderMessages(buildConfiguration(), { currentPage: 1, currentHadith: 1 }, notes);
+	assert.equal(notesMessages.length, 1);
+	assert.ok(notesMessages[0].includes('Review tajweed'));
+	assert.ok(notesMessages[0].includes('ملاحظات اليوم'));
+});
+
+test('buildReminderMessages chunks notes when they exceed message limit', () => {
+	const notes: Note[] = [];
+	for (let i = 1; i <= 100; i++) {
+		notes.push({ id: i, userId: `user-${i}`, note: `Note ${i}: ${'x'.repeat(30)}`, dateAdded: '2026-04-15T12:00:00.000Z' });
+	}
+	const { notesMessages } = buildReminderMessages(buildConfiguration(), { currentPage: 1, currentHadith: 1 }, notes);
+	assert.ok(notesMessages.length > 1);
+	for (const msg of notesMessages) {
+		assert.ok(msg.length <= 2000, `message length ${msg.length} exceeds 2000`);
+	}
+});
+
+function buildConfiguration(configuration: Partial<Configuration> = {}): Configuration {
 	return {
 		roleId: 'role-id',
 		dailyTime: '1:00 PM',

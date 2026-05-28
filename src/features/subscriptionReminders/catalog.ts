@@ -38,6 +38,11 @@ export interface ReminderHadithReference {
 	source: ReminderSourceReference;
 }
 
+export interface ExcludedHijriDateRange {
+	month: number;
+	days: number[];
+}
+
 export interface SubscriptionReminderEventDefinition {
 	key: string;
 	categoryKey: SubscriptionReminderCategoryKey;
@@ -56,6 +61,7 @@ export interface SubscriptionReminderEventDefinition {
 		| 'dhul-hijjah-ten'
 		| 'eid-adha';
 	hadith: ReminderHadithReference;
+	excludedHijriDates?: ExcludedHijriDateRange[];
 }
 
 export const subscriptionReminderEvents: SubscriptionReminderEventDefinition[] = [
@@ -69,6 +75,10 @@ export const subscriptionReminderEvents: SubscriptionReminderEventDefinition[] =
 			text: 'تعرض الأعمال يوم الاثنين والخميس، فأحب أن يعرض عملي وأنا صائم.',
 			source: { label: 'جامع الترمذي 747', url: 'https://sunnah.com/tirmidhi/8/66' },
 		},
+		excludedHijriDates: [
+			{ month: 10, days: [1] }, // Eid al-Fitr (1 Shawwal)
+			{ month: 12, days: [10, 11, 12, 13] }, // Eid al-Adha + Days of Tashriq (10-13 Dhul-Hijjah)
+		],
 	},
 	{
 		key: 'fasting-thursday',
@@ -80,6 +90,10 @@ export const subscriptionReminderEvents: SubscriptionReminderEventDefinition[] =
 			text: 'تعرض الأعمال يوم الاثنين والخميس، فأحب أن يعرض عملي وأنا صائم.',
 			source: { label: 'جامع الترمذي 747', url: 'https://sunnah.com/tirmidhi/8/66' },
 		},
+		excludedHijriDates: [
+			{ month: 10, days: [1] }, // Eid al-Fitr (1 Shawwal)
+			{ month: 12, days: [10, 11, 12, 13] }, // Eid al-Adha + Days of Tashriq (10-13 Dhul-Hijjah)
+		],
 	},
 	{
 		key: 'white-days',

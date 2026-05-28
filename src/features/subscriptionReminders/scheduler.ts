@@ -296,7 +296,24 @@ async function getDueSubscriptionReminderEventsForSendDate(
 
 		if (event.matcher.type === 'gregorian-weekday') {
 			if (event.matcher.weekday === getWeekdayFromDateKey(targetDate)) {
-				dueEvents.push({ event, targetDate, hijriDate: null });
+				// Fetch Hijri date to check for excluded dates
+				let hijriDate = hijriDateCache.get(targetDate);
+				if (hijriDate === undefined) {
+					hijriDate = await getCachedHijriDate(targetDate);
+					hijriDateCache.set(targetDate, hijriDate);
+				}
+
+				// Check if this date is excluded for this event
+				if (hijriDate && event.excludedHijriDates) {
+					const isExcluded = event.excludedHijriDates.some(
+						(range) => range.month === hijriDate!.hijriMonth && range.days.includes(hijriDate!.hijriDay)
+					);
+					if (isExcluded) {
+						continue;
+					}
+				}
+
+				dueEvents.push({ event, targetDate, hijriDate });
 			}
 
 			continue;

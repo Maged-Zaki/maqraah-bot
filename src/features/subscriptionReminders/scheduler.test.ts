@@ -293,3 +293,135 @@ function buildHijriDate(overrides: Partial<HijriCalendarCacheEntry> = {}): Hijri
 		...overrides,
 	};
 }
+
+test('scheduler skips Monday fasting reminder when target date is Eid al-Fitr (1 Shawwal)', async () => {
+	const sentPayloads: any[] = [];
+	const hijriDateLookups: string[] = [];
+
+	// Sunday 2026-05-10, reminder for Monday 2026-05-11 which is 1 Shawwal (Eid al-Fitr)
+	// The Monday fasting reminder should be skipped, but the Eid al-Fitr reminder should still be sent
+	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-05-10T18:00:00.000Z'), {
+		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
+		getCachedHijriDate: async (dateKey) => {
+			hijriDateLookups.push(dateKey);
+			if (dateKey === '2026-05-11') {
+				return buildHijriDate({ gregorianDate: dateKey, hijriMonth: 10, hijriDay: 1 });
+			}
+			return null;
+		},
+		hasEvent: async () => false,
+		recordEventSent: async () => true,
+		ensureCategoryRole: async (guild, categoryKey) => ({
+			id: categoryKey === 'islamic-events' ? 'role-islamic-events' : 'role-fasting',
+			name: categoryKey === 'islamic-events' ? 'تذكيرات المناسبات الإسلامية' : 'تذكيرات الصيام',
+		}),
+	});
+
+	// Should receive Eid al-Fitr reminder but NOT Monday fasting reminder
+	assert.equal(sentPayloads.length, 1);
+	assert.match(sentPayloads[0].content, /عيد الفطر/);
+	assert.doesNotMatch(sentPayloads[0].content, /صيام يوم الاثنين/);
+	assert.deepEqual(hijriDateLookups, ['2026-05-11']);
+});
+
+test('scheduler skips Thursday fasting reminder when target date is Eid al-Adha (10 Dhul-Hijjah)', async () => {
+	const sentPayloads: any[] = [];
+	const hijriDateLookups: string[] = [];
+
+	// Wednesday 2026-06-17, reminder for Thursday 2026-06-18 which is 10 Dhul-Hijjah (Eid al-Adha)
+	// The Thursday fasting reminder should be skipped, but the Eid al-Adha reminder should still be sent
+	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-06-17T18:00:00.000Z'), {
+		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
+		getCachedHijriDate: async (dateKey) => {
+			hijriDateLookups.push(dateKey);
+			if (dateKey === '2026-06-18') {
+				return buildHijriDate({ gregorianDate: dateKey, hijriMonth: 12, hijriDay: 10 });
+			}
+			return null;
+		},
+		hasEvent: async () => false,
+		recordEventSent: async () => true,
+		ensureCategoryRole: async (guild, categoryKey) => ({
+			id: categoryKey === 'islamic-events' ? 'role-islamic-events' : 'role-fasting',
+			name: categoryKey === 'islamic-events' ? 'تذكيرات المناسبات الإسلامية' : 'تذكيرات الصيام',
+		}),
+	});
+
+	// Should receive Eid al-Adha reminder but NOT Thursday fasting reminder
+	assert.equal(sentPayloads.length, 1);
+	assert.match(sentPayloads[0].content, /عيد الأضحى/);
+	assert.doesNotMatch(sentPayloads[0].content, /صيام يوم الخميس/);
+	assert.deepEqual(hijriDateLookups, ['2026-06-18']);
+});
+
+test('scheduler skips Monday fasting reminder during Days of Tashriq (11 Dhul-Hijjah)', async () => {
+	const sentPayloads: any[] = [];
+
+	// Sunday 2026-06-21, reminder for Monday 2026-06-22 which is 11 Dhul-Hijjah (Day of Tashriq)
+	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-06-21T18:00:00.000Z'), {
+		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
+		getCachedHijriDate: async (dateKey) => {
+			if (dateKey === '2026-06-22') {
+				return buildHijriDate({ gregorianDate: dateKey, hijriMonth: 12, hijriDay: 11 });
+			}
+			return null;
+		},
+		hasEvent: async () => false,
+		recordEventSent: async () => true,
+		ensureCategoryRole: async () => ({ id: 'role-fasting', name: 'تذكيرات الصيام' }),
+	});
+
+	assert.equal(sentPayloads.length, 0);
+});
+
+test('scheduler skips Thursday fasting reminder during Days of Tashriq (13 Dhul-Hijjah)', async () => {
+	const sentPayloads: any[] = [];
+
+	// Wednesday 2026-06-17, reminder for Thursday 2026-06-18 which is 13 Dhul-Hijjah (Day of Tashriq)
+	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-06-17T18:00:00.000Z'), {
+		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
+		getCachedHijriDate: async (dateKey) => {
+			if (dateKey === '2026-06-18') {
+				return buildHijriDate({ gregorianDate: dateKey, hijriMonth: 12, hijriDay: 13 });
+			}
+			return null;
+		},
+		hasEvent: async () => false,
+		recordEventSent: async () => true,
+		ensureCategoryRole: async () => ({ id: 'role-fasting', name: 'تذكيرات الصيام' }),
+	});
+
+	// When Thursday is 13 Dhul-Hijjah, the Thursday fasting reminder should be skipped
+	// Note: white-days reminder may be sent since it matches day 13 of any month
+	const thursdayFastingReminders = sentPayloads.filter(p => p.content.includes('صيام يوم الخميس'));
+	assert.equal(thursdayFastingReminders.length, 0, 'Thursday fasting reminder should be skipped');
+});
+
+test('scheduler sends Monday fasting reminder normally when target date is not during Eid', async () => {
+	const sentPayloads: any[] = [];
+	const hijriDateLookups: string[] = [];
+
+	// Sunday 2026-04-19, reminder for Monday 2026-04-20 which is 2 Ramadan (not Eid)
+	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T18:00:00.000Z'), {
+		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
+		getCachedHijriDate: async (dateKey) => {
+			hijriDateLookups.push(dateKey);
+			if (dateKey === '2026-04-20') {
+				return buildHijriDate({ gregorianDate: dateKey, hijriMonth: 9, hijriDay: 2 });
+			}
+			return null;
+		},
+		hasEvent: async () => false,
+		recordEventSent: async () => true,
+		ensureCategoryRole: async () => ({ id: 'role-fasting', name: 'تذكيرات الصيام' }),
+	});
+
+	assert.equal(sentPayloads.length, 1);
+	assert.match(sentPayloads[0].content, /صيام يوم الاثنين/);
+	assert.deepEqual(hijriDateLookups, ['2026-04-20']);
+});

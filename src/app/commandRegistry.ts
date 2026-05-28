@@ -37,8 +37,9 @@ export async function registerCommands(client: Client): Promise<void> {
 }
 
 function discoverCommandModules(): BotCommand[] {
+	const ext = getCommandExtension();
 	const featuresPath = path.join(__dirname, '..', 'features');
-	const commandFiles = findCommandFiles(featuresPath);
+	const commandFiles = findCommandFiles(featuresPath, ext);
 	const commands: BotCommand[] = [];
 
 	for (const filePath of commandFiles) {
@@ -53,7 +54,7 @@ function discoverCommandModules(): BotCommand[] {
 	return commands;
 }
 
-function findCommandFiles(directoryPath: string): string[] {
+function findCommandFiles(directoryPath: string, ext: string): string[] {
 	if (!fs.existsSync(directoryPath)) {
 		return [];
 	}
@@ -65,8 +66,8 @@ function findCommandFiles(directoryPath: string): string[] {
 		const entryPath = path.join(directoryPath, entry.name);
 
 		if (entry.isDirectory()) {
-			files.push(...findCommandFiles(entryPath));
-		} else if (entry.isFile() && isCommandFile(entry.name)) {
+			files.push(...findCommandFiles(entryPath, ext));
+		} else if (entry.isFile() && isCommandFile(entry.name, ext)) {
 			files.push(entryPath);
 		}
 	}
@@ -74,8 +75,12 @@ function findCommandFiles(directoryPath: string): string[] {
 	return files;
 }
 
-function isCommandFile(fileName: string): boolean {
-	return fileName === 'command.js' || fileName.endsWith('Command.js');
+export function getCommandExtension(): '.ts' | '.js' {
+	return __dirname.endsWith(path.join('src', 'app')) ? '.ts' : '.js';
+}
+
+export function isCommandFile(fileName: string, ext: string): boolean {
+	return fileName === `command${ext}` || fileName.endsWith(`Command${ext}`);
 }
 
 function isBotCommand(command: any): command is BotCommand {

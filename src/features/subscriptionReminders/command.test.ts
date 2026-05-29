@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { before, test } from 'node:test';
 import { MessageFlags } from 'discord.js';
 
 process.env.DATABASE_PATH ??= ':memory:';
 process.env.CHANNEL_ID ??= 'reminder-channel';
 
-const { reminderSettingsRepository } = require('../../storage/sqlite') as typeof import('../../storage/sqlite');
+const { reminderSettingsRepository, dbReady } = require('../../storage/sqlite') as typeof import('../../storage/sqlite');
+
+before(async () => {
+	await dbReady;
+});
 const { reminderSendTimeModes } = require('../../storage/sqlite/repositories/ReminderSettingsRepository') as typeof import('../../storage/sqlite/repositories/ReminderSettingsRepository');
 const command = require('./command') as typeof import('./command');
 const roleManager = require('./roleManager') as typeof import('./roleManager');

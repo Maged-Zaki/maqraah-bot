@@ -4,7 +4,7 @@ import { scheduleReminder } from '../features/maqraah/reminders/scheduler';
 import { scheduleGenericSchedules } from '../features/schedule/scheduler';
 import { scheduleSubscriptionReminders } from '../features/subscriptionReminders/scheduler';
 import { sendFirstRunSetupGuideFromConfig } from '../features/setup/startup';
-import { configurationRepository } from '../storage/sqlite';
+import { configurationRepository, dbReady } from '../storage/sqlite';
 import { logger } from '../observability/logging/logger';
 import { registerCommands } from './commandRegistry';
 import { routeInteraction } from './interactionRouter';
@@ -37,6 +37,7 @@ function registerLifecycleHandlers(client: Client): void {
 	client.once('clientReady', async () => {
 		logger.info(`Bot logged in successfully`, undefined, { additionalData: { botTag: client.user?.tag } });
 
+		await dbReady;
 		await registerCommands(client);
 		await scheduleMaqraahTimeSync(client);
 		await scheduleReminder(client);

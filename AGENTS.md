@@ -1,4 +1,9 @@
 # Maqraah Bot Agents Guide
+
+<!-- IMPORTANT: When making changes to the codebase (adding commands, tables, migrations, features, or configuration),
+     always update AGENTS.md, README.md, and any related documentation to stay in sync.
+     Out-of-date docs are a bug. -->
+
 <!-- hash: sha256:aad9989824f5e06595a3853fca5788358b75bb460dc1478c31f181c87c33926d -->
 
 ## 1. Project Identity
@@ -31,6 +36,7 @@ src/                         source TypeScript
     logging/                 structured logger and tests
   storage/                   persistence layer
     sqlite/                  SQLite bootstrap and repository instances
+      migrations/            ordered TypeScript migration files and runner
       repositories/          table-specific repository classes and tests
   shared/                    cross-feature helpers with no feature ownership
     confirmations/           in-memory destructive confirmation button workflow
@@ -52,11 +58,11 @@ README.md                    user-facing setup, command, schema, and deployment 
 CLAUDE.md                    compatibility pointer; currently references `AGENTS.md`
 ```
 
-There is no separate `db/`, migrations directory, Dockerfile, Docker Compose file, Fly/Railway config, PM2 ecosystem file, or systemd unit in the current repository. SQLite schema creation and lightweight column additions happen in `src/storage/sqlite/index.ts` during module initialization.
+There is no separate `db/`, Dockerfile, Docker Compose file, Fly/Railway config, PM2 ecosystem file, or systemd unit in the current repository. Schema changes are managed through ordered TypeScript migration files in `src/storage/sqlite/migrations/`.
 
 ## 3. Architecture
 
-The app starts in `src/index.ts`, loads `dotenv/config` and `newrelic`, then calls `startBot()` from `src/app/bot.ts`. `startBot()` validates required env vars, constructs a `discord.js` client with only the `Guilds` intent, registers lifecycle handlers, and logs in with `DISCORD_TOKEN`. On `clientReady`, it discovers command modules from the compiled `dist/features` tree, registers them to the configured guild, starts the maqraah time sync cron, starts maqraah reminders, starts generic schedules, and sends the first-run setup guide if it has not been sent. The storage module opens SQLite as a singleton at import time, creates tables if needed, and exports repository singletons used directly by feature modules.
+The app starts in `src/index.ts`, loads `dotenv/config` and `newrelic`, then calls `startBot()` from `src/app/bot.ts`. `startBot()` validates required env vars, constructs a `discord.js` client with only the `Guilds` intent, registers lifecycle handlers, and logs in with `DISCORD_TOKEN`. On `clientReady`, it awaits `dbReady` (the migration promise from `src/storage/sqlite/index.ts`), discovers command modules from the compiled `dist/features` tree, registers them to the configured guild, starts the maqraah time sync cron, starts maqraah reminders, starts generic schedules, and sends the first-run setup guide if it has not been sent. The storage module opens SQLite as a singleton at import time, runs pending migrations, and exports repository singletons used directly by feature modules.
 
 - Command loading strategy: dynamic CommonJS `require()` scan from compiled `dist/features/**/command.js` and `dist/features/**/*Command.js`.
 - Event bus pattern: direct `client.once()` and `client.on()` calls in `src/app/bot.ts`; there is no event module auto-loader.
@@ -83,7 +89,7 @@ Discord API
 
 Modules with the highest downstream blast radius:
 
-- `src/storage/sqlite/index.ts`: creates schema and exports all repository singletons.
+- `src/storage/sqlite/index.ts`: runs migrations, creates `db` singleton, and exports all repository singletons.
 - `src/app/interactionRouter.ts`: routes every button and slash command interaction.
 - `src/app/commandRegistry.ts`: discovers and guild-registers every slash command.
 - `src/shared/time.ts`: parses reminder times and validates timezones for configuration, reminders, and schedules.
@@ -203,7 +209,7 @@ Required bot permissions:
 
 ## 7. Data Model
 
-ORM: none. Repositories use raw `sqlite3` queries with callbacks wrapped in promises. Migration tool: none. Schema is created and amended at startup in `src/storage/sqlite/index.ts`; there is no ordered migration command. Backup strategy: not documented. Notes are hard-deleted when deleted; included notes are retained by status. One-time schedules are soft-completed with `status = 'completed'`.
+ORM: none. Repositories use raw `sqlite3` queries with callbacks wrapped in promises. Migration tool: ordered TypeScript migration files in `src/storage/sqlite/migrations/` with a transactional runner. Schema changes are applied automatically at startup; there is no separate `db:migrate` command. Backup strategy: not documented. Notes are hard-deleted when deleted; included notes are retained by status. One-time schedules are soft-completed with `status = 'completed'`.
 
 ### `configuration`
 
@@ -311,6 +317,18 @@ Purpose: generic recurring and one-time reminders. Write frequency: per `/schedu
 
 Example record: `{ id: 4, name: "Monday prep", nameKey: "monday prep", type: "recurring", weekdays: "1", time: "7:30 PM", message: "Prepare notes", mentionUserIds: "user:111,role:222", status: "active" }`.
 
+### `migrations`
+
+Purpose: idempotency ledger tracking which schema migrations have been applied. Write frequency: per migration at startup.
+
+| Column | Type | Nullable | Default | Index |
+| --- | --- | --- | --- | --- |
+| `id` | INTEGER PRIMARY KEY AUTOINCREMENT | no | auto | PK |
+| `name` | TEXT | no | none | UNIQUE |
+| `appliedAt` | TEXT | no | none | none |
+
+Example record: `{ id: 1, name: "001_initial_schema", appliedAt: "2026-05-29T12:00:00.000Z" }`.
+
 ## 8. Rate Limits & Quotas
 
 | Endpoint / Action | Limit | How Bot Handles It |
@@ -351,7 +369,7 @@ npm run build
 npm run dev
 ```
 
-There are no `deploy:guild`, `deploy:global`, `db:migrate`, or `db:seed` scripts. Commands are registered to the configured guild automatically on `clientReady`; restart the bot after changing command definitions.
+There are no `deploy:guild`, `deploy:global`, or `db:seed` scripts. Commands are registered to the configured guild automatically on `clientReady`; restart the bot after changing command definitions. Schema migrations run automatically at startup; there is no separate `db:migrate` command.
 
 Config hierarchy:
 
@@ -390,6 +408,35 @@ How to add a new event listener:
 2. Add a direct `client.on(Events.SomeEvent, handler)` or `client.once(...)` registration.
 3. Keep substantial logic in a feature/helper module and import it into `bot.ts`.
 4. Document the event in section 5 and add tests around the handler logic if it is not trivial.
+
+How to add a new database migration:
+
+1. Create a migration file: `src/storage/sqlite/migrations/{NNN}_{descriptive_name}.ts`.
+2. Export a `Migration` object with a unique `name` (matching the filename convention) and an `async up(db)` function.
+
+```ts
+import sqlite3 from 'sqlite3';
+import type { Migration } from './types';
+
+export const migration002: Migration = {
+	name: '002_add_new_table',
+	async up(db: sqlite3.Database): Promise<void> {
+		await run(db, `CREATE TABLE IF NOT EXISTS new_table (...)`);
+	},
+};
+
+function run(db: sqlite3.Database, sql: string, params: unknown[] = []): Promise<void> {
+	return new Promise((resolve, reject) => {
+		db.run(sql, params, (err) => (err ? reject(err) : resolve()));
+	});
+}
+```
+
+3. Register the migration by adding it to the `migrations` array in `src/storage/sqlite/migrations/runner.ts`.
+4. Migrations run in array order, wrapped in a transaction. Each migration + its `migrations` row insert is atomic. On failure, the migration is rolled back and startup halts with a clear error.
+5. Use `IF NOT EXISTS`, `IF NOT NULL` guards, and `INSERT OR IGNORE` to keep migrations idempotent for existing databases.
+6. Add a test in `src/storage/sqlite/migrations/runner.test.ts` or a colocated test file.
+7. Document the new table/column in the Data Model section (section 7) of `AGENTS.md` and `README.md`.
 
 Error handling pattern:
 
@@ -517,18 +564,18 @@ Naming:
 ## 15. Known Issues & Tech Debt
 
 - [HIGH] No command authorization middleware; any user can run configuration, progress updates, note delete-all, and schedule mutations - `src/features/configuration/command.ts:30`, `src/features/notes/command.ts:69`, `src/features/schedule/command.ts:37`.
-- [HIGH] Data model is singleton, so multi-guild installs can overwrite shared configuration/progress despite `guildCreate` handling - `src/storage/sqlite/index.ts:23`, `src/app/bot.ts:48`.
+- [HIGH] Data model is singleton, so multi-guild installs can overwrite shared configuration/progress despite `guildCreate` handling - `src/storage/sqlite/index.ts`, `src/app/bot.ts`.
 - [MED] Router error path always calls `interaction.reply()` and can fail after a command has already replied or deferred - `src/app/interactionRouter.ts:76`.
 - [MED] Long command paths do not consistently defer before DB/API work, creating interaction timeout risk - `src/app/interactionRouter.ts:54`.
-- [MED] No ordered migration system or backup procedure; startup DDL/ALTER is the only schema evolution mechanism - `src/storage/sqlite/index.ts:19`.
 - [LOW] Public subcommand typo `create-annyomous` is now part of the registered Discord surface - `src/features/notes/command.ts:17`.
-- [LOW] `copyColumnIfPresent()` is unused migration helper code - `src/storage/sqlite/index.ts:196`.
 
 ## 16. Architecture Decision Records (ADR)
 
 2026-04-20 | Use guild-scoped startup command registration | Commands update instantly in the configured guild and require no separate deploy script | Commands are unavailable outside `GUILD_ID` and startup overwrites the guild command set.
 
-2026-04-20 | Use SQLite with repository singletons | Simple single-process persistence with no database service to operate | Current singleton schema is not multi-guild safe and has no formal migrations.
+2026-04-20 | Use SQLite with repository singletons | Simple single-process persistence with no database service to operate | Current singleton schema is not multi-guild safe.
+
+2026-05-29 | Ordered TypeScript migration files with transactional runner | Migrations are idempotent, version-controlled, and run automatically at startup in transactions; TypeScript functions allow logic beyond raw SQL | Migration failures halt startup; no rollback-to-version command exists.
 
 2026-04-20 | Run schedulers in-process with node-cron | Minimal infrastructure for daily reminders, hourly time sync, and generic schedules | Process downtime means missed jobs; no distributed locking or queue.
 

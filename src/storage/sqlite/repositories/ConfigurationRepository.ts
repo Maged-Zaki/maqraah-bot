@@ -15,6 +15,10 @@ export interface Configuration {
 	maqraahTimeSyncLongitude: number;
 	maqraahTimeSyncCalculationMethod: number;
 	welcomeSentAt: string | null;
+	hifzTime?: string;
+	hifzReminderEnabled?: boolean | number;
+	hifzPreReminderEnabled?: boolean | number;
+	hifzPreReminderOffsetMinutes?: number;
 }
 
 export class ConfigurationRepository {

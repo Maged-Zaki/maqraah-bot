@@ -7,6 +7,8 @@ import { scheduleMaqraahTimeSync, syncMaqraahTimeFromMaghrib } from '../maqraah/
 import { getMaqraahTimeSyncOffsetMinutes, isMaqraahTimeSyncEnabled, isValidLatitude, isValidLongitude } from '../maqraah/reminders/prayerTimes';
 import { scheduleReminder } from '../maqraah/reminders/scheduler';
 import { updateReminderVoiceChannelName } from '../maqraah/reminders/voiceChannel';
+import { defaultHifzCadence, getHifzReminderOffset, isHifzReminderStageEnabled } from '../hifz/reminders/cadence';
+import { scheduleHifzReminder } from '../hifz/reminders/scheduler';
 
 const subcommands = {
 	UPDATE: 'update',
@@ -25,6 +27,10 @@ const options = {
 	MAQRAAH_MINUTES_AFTER_MAGHRIB: 'maqraah-minutes-after-maghrib',
 	PRAYER_TIME_LATITUDE: 'prayer-time-latitude',
 	PRAYER_TIME_LONGITUDE: 'prayer-time-longitude',
+	HIFZ_TIME: 'hifz-time',
+	HIFZ_REMINDER_ENABLED: 'hifz-reminder-enabled',
+	HIFZ_PRE_REMINDER_ENABLED: 'hifz-pre-reminder-enabled',
+	HIFZ_PRE_REMINDER_MINUTES: 'hifz-pre-reminder-minutes',
 } as const;
 
 export const data = new SlashCommandBuilder()
@@ -63,6 +69,12 @@ export const data = new SlashCommandBuilder()
 					.setDescription('Longitude for Maghrib prayer time, e.g. 31.2357')
 					.setMinValue(-180)
 					.setMaxValue(180)
+			)
+			.addStringOption((option) => option.setName(options.HIFZ_TIME).setDescription('Hifz (memorization) reminder time (e.g., 6:00 PM)'))
+			.addBooleanOption((option) => option.setName(options.HIFZ_REMINDER_ENABLED).setDescription('Enable the hifz reminder stage'))
+			.addBooleanOption((option) => option.setName(options.HIFZ_PRE_REMINDER_ENABLED).setDescription('Enable the hifz pre-reminder stage'))
+			.addIntegerOption((option) =>
+				option.setName(options.HIFZ_PRE_REMINDER_MINUTES).setDescription('Minutes before the hifz to send the pre-reminder').setMinValue(0)
 			)
 	)
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW).setDescription('Display current configuration'));
@@ -179,20 +191,56 @@ export async function execute(interaction: any) {
 					replyMessages.push(`Prayer time latitude set to \`${prayerTimeLatitude}\`.`);
 				}
 
-				const prayerTimeLongitude = interaction.options.getNumber(options.PRAYER_TIME_LONGITUDE);
-				if (prayerTimeLongitude !== null) {
-					if (!isValidLongitude(prayerTimeLongitude)) {
-						await interaction.reply({
-							content: 'Invalid longitude. Please provide a number from -180 to 180.',
-							flags: MessageFlags.Ephemeral,
-						});
-						return;
-					}
-					updates.maqraahTimeSyncLongitude = prayerTimeLongitude;
-					replyMessages.push(`Prayer time longitude set to \`${prayerTimeLongitude}\`.`);
+			const prayerTimeLongitude = interaction.options.getNumber(options.PRAYER_TIME_LONGITUDE);
+			if (prayerTimeLongitude !== null) {
+				if (!isValidLongitude(prayerTimeLongitude)) {
+					await interaction.reply({
+						content: 'Invalid longitude. Please provide a number from -180 to 180.',
+						flags: MessageFlags.Ephemeral,
+					});
+					return;
 				}
+				updates.maqraahTimeSyncLongitude = prayerTimeLongitude;
+				replyMessages.push(`Prayer time longitude set to \`${prayerTimeLongitude}\`.`);
+			}
 
-				if (Object.keys(updates).length > 0) {
+			const hifzTime = interaction.options.getString(options.HIFZ_TIME);
+			if (hifzTime) {
+				const parsedHifzTime = parseReminderTime(hifzTime);
+				if (!parsedHifzTime) {
+					logger.warn(`Invalid hifz time provided: ${hifzTime}`, discordContext, {
+						operationType: 'configuration_update',
+						operationStatus: 'failure',
+					});
+					await interaction.reply({
+						content: 'Invalid hifz time. Please use `H:MM AM/PM`, such as `6:00 PM` or `12:00 AM`.',
+						flags: MessageFlags.Ephemeral,
+					});
+					return;
+				}
+				updates.hifzTime = parsedHifzTime.displayTime;
+				replyMessages.push(`Hifz time set to \`${parsedHifzTime.displayTime}\`.`);
+			}
+
+			const hifzReminderEnabled = interaction.options.getBoolean(options.HIFZ_REMINDER_ENABLED);
+			if (hifzReminderEnabled !== null) {
+				updates.hifzReminderEnabled = hifzReminderEnabled ? 1 : 0;
+				replyMessages.push(`Hifz reminder stage ${hifzReminderEnabled ? 'enabled' : 'disabled'}.`);
+			}
+
+			const hifzPreReminderEnabled = interaction.options.getBoolean(options.HIFZ_PRE_REMINDER_ENABLED);
+			if (hifzPreReminderEnabled !== null) {
+				updates.hifzPreReminderEnabled = hifzPreReminderEnabled ? 1 : 0;
+				replyMessages.push(`Hifz pre-reminder stage ${hifzPreReminderEnabled ? 'enabled' : 'disabled'}.`);
+			}
+
+			const hifzPreReminderMinutes = interaction.options.getInteger(options.HIFZ_PRE_REMINDER_MINUTES);
+			if (hifzPreReminderMinutes !== null) {
+				updates.hifzPreReminderOffsetMinutes = hifzPreReminderMinutes;
+				replyMessages.push(`Hifz pre-reminder set to \`${hifzPreReminderMinutes}\` minute(s) before hifz.`);
+			}
+
+			if (Object.keys(updates).length > 0) {
 					logger.info(`Updating configuration with changes`, discordContext, { additionalData: { updates } });
 					await configurationRepository.updateConfiguration(updates);
 
@@ -227,6 +275,11 @@ export async function execute(interaction: any) {
 					if (shouldRescheduleReminder(updates)) {
 						logger.info(`Rescheduling reminder due to configuration changes`, discordContext);
 						await scheduleReminder(interaction.client);
+					}
+
+					if (shouldRescheduleHifzReminder(updates)) {
+						logger.info(`Rescheduling hifz reminder due to configuration changes`, discordContext);
+						await scheduleHifzReminder(interaction.client);
 					}
 
 					if (voiceChannelTime) {
@@ -264,12 +317,23 @@ export async function execute(interaction: any) {
 							inline: true,
 						},
 						{
-							name: 'Maqraah time sync',
-							value: formatMaqraahTimeSyncConfig(configuration),
-							inline: false,
-						}
-					)
-					.setColor(0x0099ff);
+						name: 'Maqraah time sync',
+						value: formatMaqraahTimeSyncConfig(configuration),
+						inline: false,
+					},
+					{ name: 'Hifz Time', value: configuration.hifzTime ?? '6:00 PM', inline: true },
+					{
+						name: 'Hifz Pre-reminder',
+						value: formatHifzPreReminderConfig(configuration.hifzPreReminderEnabled, configuration.hifzPreReminderOffsetMinutes),
+						inline: true,
+					},
+					{
+						name: 'Hifz reminder',
+						value: isHifzReminderStageEnabled(configuration.hifzReminderEnabled, defaultHifzCadence.mainReminderEnabled) ? 'Enabled' : 'Disabled',
+						inline: true,
+					}
+				)
+				.setColor(0x0099ff);
 
 				await interaction.reply({
 					embeds: [embed],
@@ -308,6 +372,17 @@ function shouldRescheduleMaqraahTimeSync(updates: Record<string, unknown>): bool
 	return Boolean(updates.maqraahTimeSyncEnabled !== undefined || updates.timezone);
 }
 
+function shouldRescheduleHifzReminder(updates: Record<string, unknown>): boolean {
+	return Boolean(
+		updates.hifzTime ||
+			updates.timezone ||
+			updates.roleId ||
+			updates.hifzReminderEnabled !== undefined ||
+			updates.hifzPreReminderEnabled !== undefined ||
+			updates.hifzPreReminderOffsetMinutes !== undefined
+	);
+}
+
 function shouldSyncMaqraahTime(updates: Record<string, unknown>, configuration: Awaited<ReturnType<typeof configurationRepository.getConfiguration>>): boolean {
 	const nextEnabled =
 		updates.maqraahTimeSyncEnabled !== undefined
@@ -330,6 +405,12 @@ function shouldSyncMaqraahTime(updates: Record<string, unknown>, configuration: 
 function formatPreReminderConfig(enabledValue: boolean | number, offsetMinutes: number): string {
 	const status = formatStageConfig(enabledValue, defaultReminderCadence.preReminderEnabled);
 	const minutes = getReminderOffset(offsetMinutes, defaultReminderCadence.preReminderOffsetMinutes);
+	return `${status}, ${minutes} minute(s) before`;
+}
+
+function formatHifzPreReminderConfig(enabledValue: boolean | number | undefined, offsetMinutes: number | undefined): string {
+	const status = isHifzReminderStageEnabled(enabledValue, defaultHifzCadence.preReminderEnabled) ? 'Enabled' : 'Disabled';
+	const minutes = getHifzReminderOffset(offsetMinutes, defaultHifzCadence.preReminderOffsetMinutes);
 	return `${status}, ${minutes} minute(s) before`;
 }
 

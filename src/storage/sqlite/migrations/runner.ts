@@ -1,10 +1,12 @@
 import sqlite3 from 'sqlite3';
 import type { Migration } from './types';
 import { migration001 } from './001_initial_schema';
+import { migration002 } from './002_hifz_progress';
 import { logger } from '../../../observability/logging/logger';
 
 const migrations: Migration[] = [
 	migration001,
+	migration002,
 ];
 
 export async function runMigrations(db: sqlite3.Database): Promise<void> {

@@ -68,11 +68,12 @@ Slash commands are discovered from `src/features/**/command.ts` and `src/feature
 
 ### `/configuration`
 
-- `/configuration update [role] [voicechannel] [maqraah-time] [timezone] [pre-reminder-enabled] [pre-reminder-minutes] [maqraah-reminder-enabled] [maqraah-time-sync-enabled] [maqraah-minutes-after-maghrib] [prayer-time-latitude] [prayer-time-longitude]`
+- `/configuration update [role] [voicechannel] [maqraah-time] [timezone] [pre-reminder-enabled] [pre-reminder-minutes] [maqraah-reminder-enabled] [maqraah-time-sync-enabled] [maqraah-minutes-after-maghrib] [prayer-time-latitude] [prayer-time-longitude] [hifz-time] [hifz-reminder-enabled] [hifz-pre-reminder-enabled] [hifz-pre-reminder-minutes]`
   Updates bot configuration. `maqraah-time` must use `H:MM AM/PM`, such as `9:05 PM`, and is saved in normalized form. `timezone` must be an IANA timezone such as `Africa/Cairo`.
+  The hifz (memorization) options are independent: `hifz-time` (defaults to `6:00 PM`), `hifz-reminder-enabled`, `hifz-pre-reminder-enabled`, and `hifz-pre-reminder-minutes` control the hifz reminder cadence, which reuses the same role, timezone, and reminder channel as the maqraah.
   When `maqraah-time-sync-enabled` is true, the bot checks AlAdhan prayer timings with the configured timezone and location, then sets `dailyTime` to the configured number of minutes after Maghrib. Maghrib is rounded down to the current 5-minute bucket, so `6:31 PM` through `6:34 PM` keeps the same Maqraah time as `6:30 PM`, while `6:35 PM` moves it.
 - `/configuration show`
-  Shows reminder time, timezone, role, voice channel, enabled reminder stages, and Maqraah time sync settings.
+  Shows reminder time, timezone, role, voice channel, enabled reminder stages, Maqraah time sync settings, and hifz settings.
 
 There is no `/configuration set` command in the current bot.
 
@@ -93,6 +94,26 @@ There is no `/configuration set` command in the current bot.
   Shows the current shared reading progress.
 
 There is no top-level `/progress`, `/progress set`, `/set-progress`, or `/show-progress` command in the current bot.
+
+### `/hifz`
+
+Hifz is a group Qur'an memorization (حِفْظ) feature that mirrors the maqraah flow but runs on its own reminder time. It shares the reminder role, timezone, channel, and notes with the maqraah, and tracks a separate memorization page.
+
+- `/hifz cannot-attend-upcoming-hifz`
+  Marks you as unable to attend the upcoming hifz.
+- `/hifz will-be-late-upcoming-hifz`
+  Marks you as arriving late for the upcoming hifz.
+- `/hifz clear-upcoming-hifz-status`
+  Clears your saved preregistration for the upcoming hifz.
+
+### `/hifz progress`
+
+- `/hifz progress update [page]`
+  Updates the shared memorization page. Qur'an pages must be between 1 and 604.
+- `/hifz progress show`
+  Shows the current memorization progress and setup status.
+- `/hifz progress post-current-page`
+  Posts the current memorization page prompt (with prev/next navigation) to the reminder channel.
 
 ### `/notes`
 
@@ -119,6 +140,8 @@ There is no `/notes add`, `/add-note`, `/notes remove-my`, or `/notes remove-all
 
 - `/change-upcoming-maqraah-time time:<H:MM AM/PM>`
   Overrides the next main maqraah reminder time once, then returns to the configured daily schedule.
+- `/change-upcoming-hifz-time time:<H:MM AM/PM>`
+  Overrides the next main hifz reminder time once, then returns to the configured hifz schedule.
 
 ### `/reminders`
 
@@ -185,6 +208,10 @@ Single-row table with `id = 1`.
 | `maqraahTimeSyncLatitude` | `REAL` | `30.0444` | Latitude passed to AlAdhan |
 | `maqraahTimeSyncLongitude` | `REAL` | `31.2357` | Longitude passed to AlAdhan |
 | `maqraahTimeSyncCalculationMethod` | `INTEGER` | `5` | AlAdhan calculation method id |
+| `hifzTime` | `TEXT` | `'6:00 PM'` | Main hifz (memorization) reminder time |
+| `hifzReminderEnabled` | `INTEGER` | `1` | Enables hifz main reminder stage |
+| `hifzPreReminderEnabled` | `INTEGER` | `1` | Enables hifz pre-reminder stage |
+| `hifzPreReminderOffsetMinutes` | `INTEGER` | `5` | Minutes before hifz to send the pre-reminder |
 
 ### `progress`
 
@@ -195,6 +222,15 @@ Single-row table with `id = 1`.
 | `id` | `INTEGER PRIMARY KEY` | `1` | Singleton row |
 | `currentPage` | `INTEGER` | `1` | Current Qur'an page |
 | `currentHadith` | `INTEGER` | `1` | Current Hadith number |
+
+### `hifz_progress`
+
+Single-row table with `id = 1`. Tracks the group memorization pointer, independent of maqraah reading progress.
+
+| Column | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `id` | `INTEGER PRIMARY KEY` | `1` | Singleton row |
+| `currentPage` | `INTEGER` | `1` | Current memorization Qur'an page (1-604) |
 
 ### `notes`
 
@@ -212,7 +248,7 @@ Single-row table with `id = 1`.
 | Column | Type | Purpose |
 | --- | --- | --- |
 | `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Attendance row ID |
-| `sessionId` | `TEXT NOT NULL` | Maqraah session date |
+| `sessionId` | `TEXT NOT NULL` | Session id (`YYYY-MM-DD` for maqraah, `hifz-YYYY-MM-DD` for hifz) |
 | `userId` | `TEXT NOT NULL` | Discord user ID |
 | `status` | `TEXT NOT NULL` | Attendance response |
 | `updatedAt` | `TEXT NOT NULL` | ISO update timestamp |
@@ -224,7 +260,7 @@ Single-row table with `id = 1`.
 | Column | Type | Purpose |
 | --- | --- | --- |
 | `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Event row ID |
-| `sessionId` | `TEXT NOT NULL` | Maqraah session date |
+| `sessionId` | `TEXT NOT NULL` | Session id (`YYYY-MM-DD` for maqraah, `hifz-YYYY-MM-DD` for hifz) |
 | `stage` | `TEXT NOT NULL` | `pre` or `main` |
 | `scheduledFor` | `TEXT NOT NULL` | Intended reminder timestamp |
 | `sentAt` | `TEXT NOT NULL` | Actual send timestamp |

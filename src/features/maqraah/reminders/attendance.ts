@@ -25,8 +25,11 @@ export interface AttendanceAnnouncement {
 	status: AttendanceStatus;
 }
 
+export type AttendanceStatusLineBuilder = (userId: string, status: AttendanceStatus) => string;
+
 interface SyncAttendanceAnnouncementOptions {
 	onlyWhenUnannounced?: boolean;
+	buildStatusLine?: AttendanceStatusLineBuilder;
 }
 
 const attendanceAnnouncementSyncs = new Map<string, Promise<void>>();
@@ -44,12 +47,15 @@ export function buildAttendanceStatusLine(userId: string, status: AttendanceStat
 	}
 }
 
-export function buildAttendanceAnnouncementMessage(attendanceAnnouncements: AttendanceAnnouncement[]): string | null {
+export function buildAttendanceAnnouncementMessage(
+	attendanceAnnouncements: AttendanceAnnouncement[],
+	buildStatusLine: AttendanceStatusLineBuilder = buildAttendanceStatusLine
+): string | null {
 	if (attendanceAnnouncements.length === 0) {
 		return null;
 	}
 
-	const lines = attendanceAnnouncements.map((attendance) => `> ${buildAttendanceStatusLine(attendance.userId, attendance.status)}`);
+	const lines = attendanceAnnouncements.map((attendance) => `> ${buildStatusLine(attendance.userId, attendance.status)}`);
 	return ['**تحديثات الحضور**', ...lines].join('\n');
 }
 
@@ -97,7 +103,7 @@ async function syncAttendanceAnnouncementMessageNow(
 		return;
 	}
 
-	const message = buildAttendanceAnnouncementMessage(attendanceAnnouncements);
+	const message = buildAttendanceAnnouncementMessage(attendanceAnnouncements, options.buildStatusLine);
 	if (!message) {
 		return;
 	}
@@ -128,9 +134,13 @@ async function syncAttendanceAnnouncementMessageNow(
 	}
 }
 
-export async function announcePendingAttendance(channel: AttendanceAnnouncementChannel, sessionId: string): Promise<void> {
+export async function announcePendingAttendance(
+	channel: AttendanceAnnouncementChannel,
+	sessionId: string,
+	options: SyncAttendanceAnnouncementOptions = {}
+): Promise<void> {
 	try {
-		await syncAttendanceAnnouncementMessage(channel, sessionId, { onlyWhenUnannounced: true });
+		await syncAttendanceAnnouncementMessage(channel, sessionId, { onlyWhenUnannounced: true, ...options });
 	} catch (error) {
 		logger.error('Failed to announce preregistered attendance', error as Error, undefined, {
 			operationType: 'attendance_announcement',

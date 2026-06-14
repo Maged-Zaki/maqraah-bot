@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import sqlite3 from 'sqlite3';
 import { migration001 } from './001_initial_schema';
+import { migration002 } from './002_hifz_progress';
 import type { Migration } from './types';
 
 test('fresh database migrates successfully', async () => {
@@ -118,6 +119,34 @@ test('failed migration stops with clear error', async () => {
 			applied.map((r) => r.name),
 			['001_initial_schema'],
 		);
+	} finally {
+		await close(db);
+	}
+});
+
+test('migration 002 adds hifz_progress table and hifz configuration columns', async () => {
+	const db = new sqlite3.Database(':memory:');
+
+	try {
+		await runMigrationsWith(db, [migration001, migration002]);
+
+		const tables = await all<{ name: string }>(
+			db,
+			`SELECT name FROM sqlite_master WHERE type='table' AND name='hifz_progress'`,
+		);
+		assert.equal(tables.length, 1);
+
+		const hifzProgress = await get<{ id: number }>(db, 'SELECT id FROM hifz_progress WHERE id = 1');
+		assert.equal(hifzProgress?.id, 1);
+
+		const config = await get<{ hifzTime: string; hifzReminderEnabled: number; hifzPreReminderEnabled: number; hifzPreReminderOffsetMinutes: number }>(
+			db,
+			'SELECT hifzTime, hifzReminderEnabled, hifzPreReminderEnabled, hifzPreReminderOffsetMinutes FROM configuration WHERE id = 1',
+		);
+		assert.equal(config?.hifzTime, '6:00 PM');
+		assert.equal(config?.hifzReminderEnabled, 1);
+		assert.equal(config?.hifzPreReminderEnabled, 1);
+		assert.equal(config?.hifzPreReminderOffsetMinutes, 5);
 	} finally {
 		await close(db);
 	}

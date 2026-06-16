@@ -14,6 +14,7 @@ import {
 import { scheduleHifzReminder } from './reminders/scheduler';
 import { DEFAULT_HIFZ_TIME } from './reminders/sessionId';
 import { resolveHifzRoleId } from './role';
+import { parseWeekdayInput, serializeWeekdays, formatWeekdayNames, parseStoredWeekdays } from '../../shared/weekdays';
 
 export const hifzConfigurationGroup = 'configuration';
 
@@ -26,6 +27,7 @@ const options = {
 	HIFZ_ENABLED: 'hifz-enabled',
 	HIFZ_ROLE: 'hifz-role',
 	HIFZ_TIME: 'hifz-time',
+	HIFZ_DAYS: 'hifz-days',
 	HIFZ_REMINDER_ENABLED: 'hifz-reminder-enabled',
 	HIFZ_PRE_REMINDER_ENABLED: 'hifz-pre-reminder-enabled',
 	HIFZ_PRE_REMINDER_MINUTES: 'hifz-pre-reminder-minutes',
@@ -52,6 +54,9 @@ export function addHifzConfigurationSubcommands(group: SlashCommandSubcommandGro
 				.addBooleanOption((option) => option.setName(options.HIFZ_ENABLED).setDescription('Enable or disable the entire hifz feature'))
 				.addRoleOption((option) => option.setName(options.HIFZ_ROLE).setDescription('Role to ping for hifz reminders'))
 				.addStringOption((option) => option.setName(options.HIFZ_TIME).setDescription('Hifz reminder time (e.g., 6:00 PM)'))
+				.addStringOption((option) =>
+					option.setName(options.HIFZ_DAYS).setDescription('Days hifz happens, comma-separated: Sunday, Thursday (no shortcuts)')
+				)
 				.addBooleanOption((option) => option.setName(options.HIFZ_REMINDER_ENABLED).setDescription('Enable the hifz reminder stage'))
 				.addBooleanOption((option) => option.setName(options.HIFZ_PRE_REMINDER_ENABLED).setDescription('Enable the hifz pre-reminder stage'))
 				.addIntegerOption((option) =>
@@ -138,6 +143,20 @@ async function handleUpdate(interaction: any, discordContext: DiscordContext): P
 		replyMessages.push(`Hifz time set to \`${parsedTime.displayTime}\`.`);
 	}
 
+	const hifzDays = interaction.options.getString(options.HIFZ_DAYS);
+	if (hifzDays !== null) {
+		const weekdayValues = parseWeekdayInput(hifzDays, { allowShortcuts: false });
+		if (!weekdayValues) {
+			await interaction.reply({
+				content: 'Invalid hifz days. Use full weekday names separated by commas, such as `Sunday, Thursday`. No shortcuts like "daily" are allowed.',
+				flags: MessageFlags.Ephemeral,
+			});
+			return;
+		}
+		updates.hifzWeekdays = serializeWeekdays(weekdayValues);
+		replyMessages.push(`Hifz days set to \`${formatWeekdayNames(weekdayValues)}\`.`);
+	}
+
 	const hifzReminderEnabled = interaction.options.getBoolean(options.HIFZ_REMINDER_ENABLED);
 	if (hifzReminderEnabled !== null) {
 		updates.hifzReminderEnabled = hifzReminderEnabled ? 1 : 0;
@@ -217,12 +236,16 @@ async function handleShow(interaction: any, discordContext: DiscordContext): Pro
 	logger.info(`Displaying current hifz configuration`, discordContext, { operationType: 'hifz_configuration_show', operationStatus: 'success' });
 
 	const hifzRoleId = resolveHifzRoleId(configuration);
+	const hifzWeekdays = parseStoredWeekdays(configuration.hifzWeekdays);
+	const hifzDaysDisplay = hifzWeekdays.length > 0 ? formatWeekdayNames(hifzWeekdays) : 'Not set';
+	const warningText = hifzWeekdays.length === 0 ? '\n⚠️ Hifz days not configured - reminders will not be scheduled until configured!' : '';
 
 	const embed = new EmbedBuilder()
 		.setTitle('Hifz Configuration')
 		.addFields(
 			{ name: 'Enabled', value: isHifzReminderStageEnabled(configuration.hifzEnabled, true) ? 'Yes' : 'No', inline: true },
 			{ name: 'Reminder Time', value: configuration.hifzTime ?? DEFAULT_HIFZ_TIME, inline: true },
+			{ name: 'Days', value: hifzDaysDisplay + warningText, inline: true },
 			{ name: 'Role', value: hifzRoleId ? `<@&${hifzRoleId}>` : 'Not set', inline: true },
 			{
 				name: 'Pre-reminder',
@@ -253,7 +276,8 @@ function shouldRescheduleHifzReminder(updates: Record<string, unknown>): boolean
 			updates.hifzRoleId ||
 			updates.hifzReminderEnabled !== undefined ||
 			updates.hifzPreReminderEnabled !== undefined ||
-			updates.hifzPreReminderOffsetMinutes !== undefined
+			updates.hifzPreReminderOffsetMinutes !== undefined ||
+			updates.hifzWeekdays !== undefined
 	);
 }
 

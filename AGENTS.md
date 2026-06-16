@@ -4,7 +4,7 @@
      always update AGENTS.md, README.md, and any related documentation to stay in sync.
      Out-of-date docs are a bug. -->
 
-<!-- hash: sha256:aad9989824f5e06595a3853fca5788358b75bb460dc1478c31f181c87c33926d -->
+<!-- hash updated after hifz-weekdays changes -->
 
 ## 1. Project Identity
 
@@ -260,9 +260,11 @@ Purpose: singleton bot/guild configuration row (`id = 1`). Write frequency: rare
 | `hifzTimeSyncEnabled` | INTEGER | yes | `1` | none |
 | `hifzTimeSyncPrayer` | TEXT | yes | `dhuhr` | none |
 | `hifzTimeSyncOffsetMinutes` | INTEGER | yes | `90` | none |
+| hifzWeekdays | TEXT | yes | '' | none |
 | `maqraahTimeSyncPrayer` | TEXT | yes | `maghrib` | none |
 
 Example record: `{ id: 1, roleId: "123", dailyTime: "9:05 PM", timezone: "Africa/Cairo", voiceChannelId: "456", preReminderEnabled: 1, preReminderOffsetMinutes: 5, mainReminderEnabled: 1, maqraahTimeSyncEnabled: 0, maqraahTimeSyncPrayer: "maghrib", welcomeSentAt: "2026-04-20T18:00:00.000Z", hifzEnabled: 1, hifzRoleId: "123", hifzTime: "1:30 PM", hifzReminderEnabled: 1, hifzPreReminderEnabled: 1, hifzPreReminderOffsetMinutes: 5, hifzTimeSyncEnabled: 1, hifzTimeSyncPrayer: "dhuhr", hifzTimeSyncOffsetMinutes: 90 }`.
+| hifzWeekdays | TEXT | yes | '' | none |
 
 Guild settings and defaults are exactly the fields above. The current schema is singleton and does not support per-guild rows despite `GUILD_ID` being configurable.
 

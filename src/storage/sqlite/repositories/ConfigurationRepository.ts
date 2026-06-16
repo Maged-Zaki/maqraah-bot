@@ -25,6 +25,7 @@ export interface Configuration {
 	hifzTimeSyncPrayer?: string;
 	hifzTimeSyncOffsetMinutes?: number;
 	maqraahTimeSyncPrayer?: string;
+	hifzWeekdays?: string;
 }
 
 export class ConfigurationRepository {

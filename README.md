@@ -125,7 +125,7 @@ Hifz is a group Qur'an memorization (حِفْظ) feature that mirrors the maqraa
 
 ### `/hifz configuration`
 
-- `/hifz configuration update [hifz-enabled] [hifz-role] [hifz-time] [hifz-reminder-enabled] [hifz-pre-reminder-enabled] [hifz-pre-reminder-minutes] [hifz-time-sync-enabled] [hifz-time-sync-prayer] [hifz-minutes-after-prayer]`
+- `/hifz configuration update [hifz-enabled] [hifz-role] [hifz-time] [hifz-days] [hifz-reminder-enabled] [hifz-pre-reminder-enabled] [hifz-pre-reminder-minutes] [hifz-time-sync-enabled] [hifz-time-sync-prayer] [hifz-minutes-after-prayer]`
   Updates hifz configuration. `hifz-enabled` is the master toggle for the whole feature. `hifz-role` sets the role pinged by hifz reminders (independent of the maqraah role). `hifz-time` must use `H:MM AM/PM`, such as `6:00 PM`.
   When `hifz-time-sync-enabled` is true (the default), the bot sets `hifz-time` to the configured number of minutes after the selected prayer (`hifz-time-sync-prayer`, defaults to Dhuhr; offset defaults to 90 minutes). The prayer time is rounded down to a 5-minute bucket.
 - `/hifz configuration show`
@@ -234,6 +234,7 @@ Single-row table with `id = 1`.
 | `hifzTimeSyncEnabled` | `INTEGER` | `1` | Enables automatic hifz time updates from a prayer |
 | `hifzTimeSyncPrayer` | `TEXT` | `'dhuhr'` | Prayer used for hifz time sync |
 | `hifzTimeSyncOffsetMinutes` | `INTEGER` | `90` | Minutes after the prayer for the hifz time |
+| `hifzWeekdays` | `TEXT` | `''` | Comma-separated ISO weekday numbers (1=Monday, 7=Sunday) when hifz happens |
 
 ### `progress`
 

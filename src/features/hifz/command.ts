@@ -3,8 +3,10 @@ import { attendanceRepository, configurationRepository, reminderEventsRepository
 import { logger, DiscordContext } from '../../observability/logging/logger';
 import { addHifzProgressSubcommands, hifzProgressCommandGroup } from './progress/builders';
 import { handleHifzProgressCommand } from './progress/handler';
+import { addHifzConfigurationSubcommands, handleHifzConfigurationCommand, hifzConfigurationGroup } from './configurationCommand';
 import { hifzAttendanceStatuses } from './reminders/attendance';
 import { defaultHifzCadence, isHifzReminderStageEnabled, hifzReminderStages } from './reminders/cadence';
+import { isHifzEnabled } from './reminders/hifzTimeSync';
 import { getUpcomingHifzSessionId } from './reminders/sessionId';
 
 const subcommands = {
@@ -19,7 +21,8 @@ export const data = new SlashCommandBuilder()
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.CANNOT_ATTEND).setDescription('Preregister that you cannot attend the upcoming hifz'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.WILL_BE_LATE).setDescription('Preregister that you will be late to the upcoming hifz'))
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.CLEAR_STATUS).setDescription('Clear your preregistered status for the upcoming hifz'))
-	.addSubcommandGroup((group) => addHifzProgressSubcommands(group.setName(hifzProgressCommandGroup).setDescription('Manage hifz memorization progress')));
+	.addSubcommandGroup((group) => addHifzProgressSubcommands(group.setName(hifzProgressCommandGroup).setDescription('Manage hifz memorization progress')))
+	.addSubcommandGroup((group) => addHifzConfigurationSubcommands(group.setName(hifzConfigurationGroup).setDescription('Manage hifz configuration')));
 
 export async function execute(interaction: any) {
 	await handleHifzCommand(interaction);
@@ -31,6 +34,11 @@ export async function handleHifzCommand(interaction: any, now: Date = new Date()
 
 	if (subcommandGroup === hifzProgressCommandGroup) {
 		await handleHifzProgressCommand(interaction, { commandName: 'hifz', subcommandGroup, now });
+		return;
+	}
+
+	if (subcommandGroup === hifzConfigurationGroup) {
+		await handleHifzConfigurationCommand(interaction);
 		return;
 	}
 
@@ -47,6 +55,14 @@ export async function handleHifzCommand(interaction: any, now: Date = new Date()
 
 	try {
 		const configuration = await configurationRepository.getConfiguration();
+		if (!isHifzEnabled(configuration)) {
+			await interaction.reply({
+				content: 'Hifz is currently disabled. Enable it with `/hifz configuration update hifz-enabled: true`.',
+				flags: MessageFlags.Ephemeral,
+			});
+			return;
+		}
+
 		if (!isHifzReminderStageEnabled(configuration.hifzPreReminderEnabled, defaultHifzCadence.preReminderEnabled)) {
 			await interaction.reply({
 				content: 'Pre-reminders are disabled right now, so preregistering for the upcoming hifz is unavailable.',

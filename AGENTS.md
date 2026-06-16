@@ -42,7 +42,9 @@ src/                         source TypeScript
   shared/                    cross-feature helpers with no feature ownership
     confirmations/           in-memory destructive confirmation button workflow
     content/                 message chunking helper
+    prayerSync/              shared AlAdhan prayer-time lookup and time-sync math
     quran/                   Qur'an page metadata helpers
+    time/                    time/timezone parsing helpers
 dist/                        generated CommonJS build output from `npm run build`; ignored by git
 .github/
   workflows/                 GitHub Actions CI and SSH/PM2 deployment workflow
@@ -63,7 +65,7 @@ There is no separate `db/`, Dockerfile, Docker Compose file, Fly/Railway config,
 
 ## 3. Architecture
 
-The app starts in `src/index.ts`, loads `dotenv/config` and `newrelic`, then calls `startBot()` from `src/app/bot.ts`. `startBot()` validates required env vars, constructs a `discord.js` client with only the `Guilds` intent, registers lifecycle handlers, and logs in with `DISCORD_TOKEN`. On `clientReady`, it awaits `dbReady` (the migration promise from `src/storage/sqlite/index.ts`), discovers command modules from the compiled `dist/features` tree, registers them to the configured guild, starts the maqraah time sync cron, starts maqraah reminders, starts hifz reminders, starts generic schedules, and sends the first-run setup guide if it has not been sent. The storage module opens SQLite as a singleton at import time, runs pending migrations, and exports repository singletons used directly by feature modules.
+The app starts in `src/index.ts`, loads `dotenv/config` and `newrelic`, then calls `startBot()` from `src/app/bot.ts`. `startBot()` validates required env vars, constructs a `discord.js` client with only the `Guilds` intent, registers lifecycle handlers, and logs in with `DISCORD_TOKEN`. On `clientReady`, it awaits `dbReady` (the migration promise from `src/storage/sqlite/index.ts`), discovers command modules from the compiled `dist/features` tree, registers them to the configured guild, starts the maqraah time sync cron, starts maqraah reminders, starts hifz time sync, starts hifz reminders, starts generic schedules, and sends the first-run setup guide if it has not been sent. The storage module opens SQLite as a singleton at import time, runs pending migrations, and exports repository singletons used directly by feature modules.
 
 - Command loading strategy: dynamic CommonJS `require()` scan from compiled `dist/features/**/command.js` and `dist/features/**/*Command.js`.
 - Event bus pattern: direct `client.once()` and `client.on()` calls in `src/app/bot.ts`; there is no event module auto-loader.
@@ -105,7 +107,7 @@ Modules with the highest downstream blast radius:
 | Database | SQLite via sqlite3 | sqlite3 5.1.7 installed | Single `sqlite3.Database`; no pool. |
 | Cache | None | n/a | Uses Discord.js caches and in-process maps only. |
 | Queue | None | n/a | Cron callbacks send directly. |
-| Scheduler | node-cron | 3.0.3 | Maqraah reminders, time sync, generic schedules. |
+| Scheduler | node-cron | 3.0.3 | Maqraah/hifz reminders, time sync, generic schedules. |
 | Observability | Winston, New Relic | winston 3.19.0, newrelic 13.12.0 | New Relic active when license key is present. |
 | Hosting | Remote VPS over SSH | n/a | GitHub Actions rsyncs to `/home/ubuntu/app`. |
 | Process mgr | PM2 direct command | n/a | No `ecosystem.config.js`. |
@@ -117,8 +119,8 @@ Modules with the highest downstream blast radius:
 
 | Name | Description | Options (name:type:required) | Permissions | Scope | File |
 | --- | --- | --- | --- | --- | --- |
-| `/configuration update` | Update bot configuration | `role:role:no`, `voicechannel:channel:no`, `maqraah-time:string:no`, `timezone:string:no`, `pre-reminder-enabled:boolean:no`, `pre-reminder-minutes:integer:no`, `maqraah-reminder-enabled:boolean:no`, `maqraah-time-sync-enabled:boolean:no`, `maqraah-minutes-after-maghrib:integer:no`, `prayer-time-latitude:number:no`, `prayer-time-longitude:number:no`, `hifz-time:string:no`, `hifz-reminder-enabled:boolean:no`, `hifz-pre-reminder-enabled:boolean:no`, `hifz-pre-reminder-minutes:integer:no` | No command permission enforced | Guild from `GUILD_ID` | `src/features/configuration/command.ts` |
-| `/configuration show` | Display current configuration | none | No command permission enforced | Guild | `src/features/configuration/command.ts` |
+| `/configuration update` | Update shared configuration (timezone, prayer location) | `timezone:string:no`, `prayer-time-latitude:number:no`, `prayer-time-longitude:number:no`, `prayer-calculation-method:integer:no` | No command permission enforced | Guild from `GUILD_ID` | `src/features/configuration/command.ts` |
+| `/configuration show` | Display current shared configuration | none | No command permission enforced | Guild | `src/features/configuration/command.ts` |
 | `/help` | List all available commands | none | No command permission enforced | Guild | `src/features/help/command.ts` |
 | `/hifz cannot-attend-upcoming-hifz` | Preregister unable to attend upcoming hifz | none | No command permission enforced | Guild | `src/features/hifz/command.ts` |
 | `/hifz will-be-late-upcoming-hifz` | Preregister arriving late to hifz | none | No command permission enforced | Guild | `src/features/hifz/command.ts` |
@@ -126,12 +128,18 @@ Modules with the highest downstream blast radius:
 | `/hifz progress update` | Update shared memorization progress | `page:integer:no` | No command permission enforced | Guild | `src/features/hifz/command.ts`, `src/features/hifz/progress/handler.ts` |
 | `/hifz progress show` | Show hifz memorization progress and setup status | none | No command permission enforced | Guild | `src/features/hifz/command.ts`, `src/features/hifz/progress/handler.ts` |
 | `/hifz progress post-current-page` | Post the current memorization page prompt | none | No command permission enforced | Guild | `src/features/hifz/command.ts`, `src/features/hifz/progress/handler.ts` |
+| `/hifz progress post-current-page` | Post the current memorization page prompt | none | No command permission enforced | Guild | `src/features/hifz/command.ts`, `src/features/hifz/progress/handler.ts` |
+| `/hifz configuration update` | Update hifz configuration | `hifz-enabled:boolean:no`, `hifz-role:role:no`, `hifz-time:string:no`, `hifz-reminder-enabled:boolean:no`, `hifz-pre-reminder-enabled:boolean:no`, `hifz-pre-reminder-minutes:integer:no`, `hifz-time-sync-enabled:boolean:no`, `hifz-time-sync-prayer:string:no`, `hifz-minutes-after-prayer:integer:no` | No command permission enforced | Guild | `src/features/hifz/command.ts`, `src/features/hifz/configurationCommand.ts` |
+| `/hifz configuration show` | Display current hifz configuration | none | No command permission enforced | Guild | `src/features/hifz/command.ts`, `src/features/hifz/configurationCommand.ts` |
 | `/change-upcoming-hifz-time` | Change the next hifz reminder time once | `time:string:yes` | No command permission enforced | Guild | `src/features/hifz/reminders/changeUpcomingHifzTimeCommand.ts` |
 | `/maqraah cannot-attend-upcoming-maqraah` | Preregister unable to attend upcoming maqraah | none | No command permission enforced | Guild | `src/features/maqraah/command.ts` |
 | `/maqraah will-be-late-upcoming-maqraah` | Preregister arriving late | none | No command permission enforced | Guild | `src/features/maqraah/command.ts` |
 | `/maqraah clear-upcoming-maqraah-status` | Clear preregistered attendance status | none | No command permission enforced | Guild | `src/features/maqraah/command.ts` |
 | `/maqraah progress update` | Update shared reading progress | `page:integer:no`, `hadith:integer:no` | No command permission enforced | Guild | `src/features/maqraah/command.ts`, `src/features/maqraah/progress/handler.ts` |
 | `/maqraah progress show` | Show maqraah progress and setup status | none | No command permission enforced | Guild | `src/features/maqraah/command.ts`, `src/features/maqraah/progress/handler.ts` |
+| `/maqraah progress post-current-page` | Post the current Qur'an reading page prompt | none | No command permission enforced | Guild | `src/features/maqraah/command.ts`, `src/features/maqraah/progress/handler.ts` |
+| `/maqraah configuration update` | Update maqraah configuration | `role:role:no`, `voicechannel:channel:no`, `maqraah-time:string:no`, `pre-reminder-enabled:boolean:no`, `pre-reminder-minutes:integer:no`, `maqraah-reminder-enabled:boolean:no`, `maqraah-time-sync-enabled:boolean:no`, `maqraah-time-sync-prayer:string:no`, `maqraah-minutes-after-prayer:integer:no` | No command permission enforced | Guild | `src/features/maqraah/command.ts`, `src/features/maqraah/configurationCommand.ts` |
+| `/maqraah configuration show` | Display current maqraah configuration | none | No command permission enforced | Guild | `src/features/maqraah/command.ts`, `src/features/maqraah/configurationCommand.ts` |
 | `/change-upcoming-maqraah-time` | Change the next maqraah reminder time once | `time:string:yes` | No command permission enforced | Guild | `src/features/maqraah/reminders/changeUpcomingMaqraahTimeCommand.ts` |
 | `/notes create` | Add a pending note | `text:string:yes` | No command permission enforced | Guild | `src/features/notes/command.ts` |
 | `/notes create-annyomous` | Add an anonymous pending note | `text:string:yes` | No command permission enforced | Guild | `src/features/notes/command.ts` |
@@ -247,8 +255,14 @@ Purpose: singleton bot/guild configuration row (`id = 1`). Write frequency: rare
 | `hifzReminderEnabled` | INTEGER | yes | `1` | none |
 | `hifzPreReminderEnabled` | INTEGER | yes | `1` | none |
 | `hifzPreReminderOffsetMinutes` | INTEGER | yes | `5` | none |
+| `hifzEnabled` | INTEGER | yes | `1` | none |
+| `hifzRoleId` | TEXT | yes | `Not set` (seeded from `roleId` on migrate) | none |
+| `hifzTimeSyncEnabled` | INTEGER | yes | `1` | none |
+| `hifzTimeSyncPrayer` | TEXT | yes | `dhuhr` | none |
+| `hifzTimeSyncOffsetMinutes` | INTEGER | yes | `90` | none |
+| `maqraahTimeSyncPrayer` | TEXT | yes | `maghrib` | none |
 
-Example record: `{ id: 1, roleId: "123", dailyTime: "9:05 PM", timezone: "Africa/Cairo", voiceChannelId: "456", preReminderEnabled: 1, preReminderOffsetMinutes: 5, mainReminderEnabled: 1, maqraahTimeSyncEnabled: 0, welcomeSentAt: "2026-04-20T18:00:00.000Z", hifzTime: "6:00 PM", hifzReminderEnabled: 1, hifzPreReminderEnabled: 1, hifzPreReminderOffsetMinutes: 5 }`.
+Example record: `{ id: 1, roleId: "123", dailyTime: "9:05 PM", timezone: "Africa/Cairo", voiceChannelId: "456", preReminderEnabled: 1, preReminderOffsetMinutes: 5, mainReminderEnabled: 1, maqraahTimeSyncEnabled: 0, maqraahTimeSyncPrayer: "maghrib", welcomeSentAt: "2026-04-20T18:00:00.000Z", hifzEnabled: 1, hifzRoleId: "123", hifzTime: "1:30 PM", hifzReminderEnabled: 1, hifzPreReminderEnabled: 1, hifzPreReminderOffsetMinutes: 5, hifzTimeSyncEnabled: 1, hifzTimeSyncPrayer: "dhuhr", hifzTimeSyncOffsetMinutes: 90 }`.
 
 Guild settings and defaults are exactly the fields above. The current schema is singleton and does not support per-guild rows despite `GUILD_ID` being configurable.
 

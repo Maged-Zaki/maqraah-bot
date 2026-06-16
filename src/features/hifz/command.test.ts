@@ -29,6 +29,31 @@ test('hifz command keeps attendance subcommands and exposes progress group', () 
 		updateSubcommand.options.map((option: any) => option.name),
 		['page']
 	);
+
+	const configurationGroup = command.options.find((option: any) => option.name === 'configuration');
+	assert.equal(configurationGroup.type, ApplicationCommandOptionType.SubcommandGroup);
+});
+
+test('attendance subcommands are refused when hifz is disabled', { concurrency: false }, async () => {
+	const replies: any[] = [];
+	let upsertCalls = 0;
+
+	await withMocks(
+		{
+			getConfiguration: async () => buildConfiguration({ hifzTime: '7:00 PM', timezone: 'UTC', hifzEnabled: 0 }),
+			hasSentEvent: async () => false,
+			upsertAttendance: async () => {
+				upsertCalls += 1;
+			},
+		},
+		async () => {
+			await handleHifzCommand(buildInteraction('cannot-attend-upcoming-hifz', replies) as any, new Date('2026-04-15T18:00:00.000Z'));
+		}
+	);
+
+	assert.equal(upsertCalls, 0);
+	assert.equal(replies.length, 1);
+	assert.match(replies[0].content, /disabled/);
 });
 
 test('cannot-attend preregisters the upcoming hifz for today before reminder time', { concurrency: false }, async () => {

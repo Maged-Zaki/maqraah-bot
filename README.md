@@ -68,12 +68,12 @@ Slash commands are discovered from `src/features/**/command.ts` and `src/feature
 
 ### `/configuration`
 
-- `/configuration update [role] [voicechannel] [maqraah-time] [timezone] [pre-reminder-enabled] [pre-reminder-minutes] [maqraah-reminder-enabled] [maqraah-time-sync-enabled] [maqraah-minutes-after-maghrib] [prayer-time-latitude] [prayer-time-longitude] [hifz-time] [hifz-reminder-enabled] [hifz-pre-reminder-enabled] [hifz-pre-reminder-minutes]`
-  Updates bot configuration. `maqraah-time` must use `H:MM AM/PM`, such as `9:05 PM`, and is saved in normalized form. `timezone` must be an IANA timezone such as `Africa/Cairo`.
-  The hifz (memorization) options are independent: `hifz-time` (defaults to `6:00 PM`), `hifz-reminder-enabled`, `hifz-pre-reminder-enabled`, and `hifz-pre-reminder-minutes` control the hifz reminder cadence, which reuses the same role, timezone, and reminder channel as the maqraah.
-  When `maqraah-time-sync-enabled` is true, the bot checks AlAdhan prayer timings with the configured timezone and location, then sets `dailyTime` to the configured number of minutes after Maghrib. Maghrib is rounded down to the current 5-minute bucket, so `6:31 PM` through `6:34 PM` keeps the same Maqraah time as `6:30 PM`, while `6:35 PM` moves it.
+Shared/global settings only. Maqraah-specific settings live under `/maqraah configuration` and hifz-specific settings live under `/hifz configuration`.
+
+- `/configuration update [timezone] [prayer-time-latitude] [prayer-time-longitude] [prayer-calculation-method]`
+  Updates shared configuration. `timezone` must be an IANA timezone such as `Africa/Cairo`. The prayer location (latitude/longitude) and `prayer-calculation-method` (AlAdhan method id, e.g. `4` = Umm al-Qura, `5` = Egyptian ASA) are shared by both maqraah and hifz prayer-time sync.
 - `/configuration show`
-  Shows reminder time, timezone, role, voice channel, enabled reminder stages, Maqraah time sync settings, and hifz settings.
+  Shows the shared timezone and prayer location.
 
 There is no `/configuration set` command in the current bot.
 
@@ -95,9 +95,17 @@ There is no `/configuration set` command in the current bot.
 
 There is no top-level `/progress`, `/progress set`, `/set-progress`, or `/show-progress` command in the current bot.
 
+### `/maqraah configuration`
+
+- `/maqraah configuration update [role] [voicechannel] [maqraah-time] [pre-reminder-enabled] [pre-reminder-minutes] [maqraah-reminder-enabled] [maqraah-time-sync-enabled] [maqraah-time-sync-prayer] [maqraah-minutes-after-prayer]`
+  Updates maqraah configuration. `maqraah-time` must use `H:MM AM/PM`, such as `9:05 PM`.
+  When `maqraah-time-sync-enabled` is true, the bot sets `maqraah-time` to the configured number of minutes after the selected prayer (`maqraah-time-sync-prayer`, defaults to Maghrib). The prayer time is rounded down to a 5-minute bucket, so `6:31 PM` through `6:34 PM` keeps the same time as `6:30 PM`, while `6:35 PM` moves it.
+- `/maqraah configuration show`
+  Shows maqraah reminder time, role, voice channel, reminder stages, and time-sync settings.
+
 ### `/hifz`
 
-Hifz is a group Qur'an memorization (حِفْظ) feature that mirrors the maqraah flow but runs on its own reminder time. It shares the reminder role, timezone, channel, and notes with the maqraah, and tracks a separate memorization page.
+Hifz is a group Qur'an memorization (حِفْظ) feature that mirrors the maqraah flow but runs on its own reminder time. It has its own reminder role and tracks a separate memorization page; it shares the timezone, reminder channel, and notes with the maqraah.
 
 - `/hifz cannot-attend-upcoming-hifz`
   Marks you as unable to attend the upcoming hifz.
@@ -114,6 +122,14 @@ Hifz is a group Qur'an memorization (حِفْظ) feature that mirrors the maqraa
   Shows the current memorization progress and setup status.
 - `/hifz progress post-current-page`
   Posts the current memorization page prompt (with prev/next navigation) to the reminder channel.
+
+### `/hifz configuration`
+
+- `/hifz configuration update [hifz-enabled] [hifz-role] [hifz-time] [hifz-reminder-enabled] [hifz-pre-reminder-enabled] [hifz-pre-reminder-minutes] [hifz-time-sync-enabled] [hifz-time-sync-prayer] [hifz-minutes-after-prayer]`
+  Updates hifz configuration. `hifz-enabled` is the master toggle for the whole feature. `hifz-role` sets the role pinged by hifz reminders (independent of the maqraah role). `hifz-time` must use `H:MM AM/PM`, such as `6:00 PM`.
+  When `hifz-time-sync-enabled` is true (the default), the bot sets `hifz-time` to the configured number of minutes after the selected prayer (`hifz-time-sync-prayer`, defaults to Dhuhr; offset defaults to 90 minutes). The prayer time is rounded down to a 5-minute bucket.
+- `/hifz configuration show`
+  Shows whether hifz is enabled, its reminder time, role, reminder stages, and time-sync settings.
 
 ### `/notes`
 
@@ -196,22 +212,28 @@ Single-row table with `id = 1`.
 | Column | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `id` | `INTEGER PRIMARY KEY` | `1` | Singleton row |
-| `roleId` | `TEXT` | `'Not set'` | Role pinged by reminders |
+| `roleId` | `TEXT` | `'Not set'` | Role pinged by maqraah reminders |
 | `dailyTime` | `TEXT` | `'12:00 PM'` | Main maqraah time |
 | `timezone` | `TEXT` | `'Africa/Cairo'` | IANA timezone for scheduling |
-| `voiceChannelId` | `TEXT` | `''` | Voice channel renamed when time changes |
-| `preReminderEnabled` | `INTEGER` | `1` | Enables pre-reminder stage |
-| `preReminderOffsetMinutes` | `INTEGER` | `5` | Minutes before main reminder |
-| `mainReminderEnabled` | `INTEGER` | `1` | Enables main reminder stage |
-| `maqraahTimeSyncEnabled` | `INTEGER` | `0` | Enables automatic Maqraah time updates from Maghrib |
-| `maqraahTimeSyncOffsetMinutes` | `INTEGER` | `30` | Minutes after Maghrib for the Maqraah time |
-| `maqraahTimeSyncLatitude` | `REAL` | `30.0444` | Latitude passed to AlAdhan |
-| `maqraahTimeSyncLongitude` | `REAL` | `31.2357` | Longitude passed to AlAdhan |
-| `maqraahTimeSyncCalculationMethod` | `INTEGER` | `5` | AlAdhan calculation method id |
+| `voiceChannelId` | `TEXT` | `''` | Voice channel renamed when maqraah time changes |
+| `preReminderEnabled` | `INTEGER` | `1` | Enables maqraah pre-reminder stage |
+| `preReminderOffsetMinutes` | `INTEGER` | `5` | Minutes before main maqraah reminder |
+| `mainReminderEnabled` | `INTEGER` | `1` | Enables maqraah main reminder stage |
+| `maqraahTimeSyncEnabled` | `INTEGER` | `0` | Enables automatic Maqraah time updates from a prayer |
+| `maqraahTimeSyncPrayer` | `TEXT` | `'maghrib'` | Prayer used for Maqraah time sync |
+| `maqraahTimeSyncOffsetMinutes` | `INTEGER` | `30` | Minutes after the prayer for the Maqraah time |
+| `maqraahTimeSyncLatitude` | `REAL` | `30.0444` | Latitude passed to AlAdhan (shared) |
+| `maqraahTimeSyncLongitude` | `REAL` | `31.2357` | Longitude passed to AlAdhan (shared) |
+| `maqraahTimeSyncCalculationMethod` | `INTEGER` | `5` | AlAdhan calculation method id (shared) |
+| `hifzEnabled` | `INTEGER` | `1` | Master toggle for the entire hifz feature |
+| `hifzRoleId` | `TEXT` | `'Not set'` | Role pinged by hifz reminders |
 | `hifzTime` | `TEXT` | `'6:00 PM'` | Main hifz (memorization) reminder time |
 | `hifzReminderEnabled` | `INTEGER` | `1` | Enables hifz main reminder stage |
 | `hifzPreReminderEnabled` | `INTEGER` | `1` | Enables hifz pre-reminder stage |
 | `hifzPreReminderOffsetMinutes` | `INTEGER` | `5` | Minutes before hifz to send the pre-reminder |
+| `hifzTimeSyncEnabled` | `INTEGER` | `1` | Enables automatic hifz time updates from a prayer |
+| `hifzTimeSyncPrayer` | `TEXT` | `'dhuhr'` | Prayer used for hifz time sync |
+| `hifzTimeSyncOffsetMinutes` | `INTEGER` | `90` | Minutes after the prayer for the hifz time |
 
 ### `progress`
 

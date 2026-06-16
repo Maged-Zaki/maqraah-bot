@@ -2,6 +2,7 @@ import { Client, Collection, Events, GatewayIntentBits } from 'discord.js';
 import { scheduleMaqraahTimeSync } from '../features/maqraah/reminders/maqraahTimeSync';
 import { scheduleReminder } from '../features/maqraah/reminders/scheduler';
 import { scheduleHifzReminder } from '../features/hifz/reminders/scheduler';
+import { scheduleHifzTimeSync } from '../features/hifz/reminders/hifzTimeSync';
 import { scheduleGenericSchedules } from '../features/schedule/scheduler';
 import { scheduleSubscriptionReminders } from '../features/subscriptionReminders/scheduler';
 import { sendFirstRunSetupGuideFromConfig } from '../features/setup/startup';
@@ -42,6 +43,7 @@ function registerLifecycleHandlers(client: Client): void {
 		await registerCommands(client);
 		await scheduleMaqraahTimeSync(client);
 		await scheduleReminder(client);
+		await scheduleHifzTimeSync(client);
 		await scheduleHifzReminder(client);
 		await scheduleGenericSchedules(client);
 		await scheduleSubscriptionReminders(client);
@@ -53,7 +55,7 @@ function registerLifecycleHandlers(client: Client): void {
 	client.on(Events.GuildCreate, async (guild) => {
 		logger.info(`Bot joined new guild`, undefined, { additionalData: { guildId: guild.id, guildName: guild.name } });
 		try {
-			await configurationRepository.updateConfiguration({ roleId: guild.roles.everyone.id });
+			await configurationRepository.updateConfiguration({ roleId: guild.roles.everyone.id, hifzRoleId: guild.roles.everyone.id });
 			logger.info(`Configuration updated for new guild`, undefined, {
 				additionalData: { guildId: guild.id, guildName: guild.name, roleId: guild.roles.everyone.id },
 			});

@@ -5,7 +5,7 @@ import { ReminderEventsRepository } from '../../../storage/sqlite/repositories/R
 import { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
 import { isValidTimeZone } from '../../../shared/time';
 import { buildReminderStageSchedules, reminderStages } from './cadence';
-import { buildAlAdhanTimingsUrl, buildMaqraahTimeSyncTiming, fetchPrayerTiming, formatDateForAlAdhan, parsePrayerTimeToMinutes } from './prayerTimes';
+import { buildAlAdhanTimingsUrl, buildPrayerSyncTiming, fetchPrayerTiming, formatDateForAlAdhan, parsePrayerTimeToMinutes } from '../../../shared/prayerSync/timings';
 
 test('pre-reminder schedules at the correct local time', () => {
 	const schedules = buildReminderStageSchedules(buildConfiguration({
@@ -95,15 +95,15 @@ test('timezone validation rejects clock times', () => {
 });
 
 test('Maqraah time sync only moves after a full five-minute prayer-time bucket', () => {
-	assert.equal(buildMaqraahTimeSyncTiming('15-04-2026', '18:30', 30).reminderTime, '7:00 PM');
-	assert.equal(buildMaqraahTimeSyncTiming('15-04-2026', '18:31', 30).reminderTime, '7:00 PM');
-	assert.equal(buildMaqraahTimeSyncTiming('15-04-2026', '18:34', 30).reminderTime, '7:00 PM');
-	assert.equal(buildMaqraahTimeSyncTiming('15-04-2026', '18:35', 30).reminderTime, '7:05 PM');
+	assert.equal(buildPrayerSyncTiming('15-04-2026', 'maghrib', '18:30', 30).reminderTime, '7:00 PM');
+	assert.equal(buildPrayerSyncTiming('15-04-2026', 'maghrib', '18:31', 30).reminderTime, '7:00 PM');
+	assert.equal(buildPrayerSyncTiming('15-04-2026', 'maghrib', '18:34', 30).reminderTime, '7:00 PM');
+	assert.equal(buildPrayerSyncTiming('15-04-2026', 'maghrib', '18:35', 30).reminderTime, '7:05 PM');
 });
 
 test('Maqraah time sync handles API timezone suffixes and day rollover', () => {
 	assert.equal(parsePrayerTimeToMinutes('18:35 (EET)'), 1115);
-	assert.equal(buildMaqraahTimeSyncTiming('15-04-2026', '23:58', 10).reminderTime, '12:05 AM');
+	assert.equal(buildPrayerSyncTiming('15-04-2026', 'maghrib', '23:58', 10).reminderTime, '12:05 AM');
 });
 
 test('AlAdhan dates use the configured prayer timezone', () => {

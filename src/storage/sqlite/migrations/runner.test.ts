@@ -3,6 +3,7 @@ import test from 'node:test';
 import sqlite3 from 'sqlite3';
 import { migration001 } from './001_initial_schema';
 import { migration002 } from './002_hifz_progress';
+import { migration003 } from './003_hifz_sync_roles_and_prayer_select';
 import type { Migration } from './types';
 
 test('fresh database migrates successfully', async () => {
@@ -147,6 +148,39 @@ test('migration 002 adds hifz_progress table and hifz configuration columns', as
 		assert.equal(config?.hifzReminderEnabled, 1);
 		assert.equal(config?.hifzPreReminderEnabled, 1);
 		assert.equal(config?.hifzPreReminderOffsetMinutes, 5);
+	} finally {
+		await close(db);
+	}
+});
+
+test('migration 003 adds hifz sync columns, prayer select, and copies roleId into hifzRoleId', async () => {
+	const db = new sqlite3.Database(':memory:');
+
+	try {
+		// Seed a configuration table the way migration 001 leaves it, with a real role id.
+		await runMigrationsWith(db, [migration001, migration002]);
+		await run(db, `UPDATE configuration SET roleId = 'role-123' WHERE id = 1`);
+
+		await runMigrationsWith(db, [migration003]);
+
+		const config = await get<{
+			hifzEnabled: number;
+			hifzRoleId: string;
+			hifzTimeSyncEnabled: number;
+			hifzTimeSyncPrayer: string;
+			hifzTimeSyncOffsetMinutes: number;
+			maqraahTimeSyncPrayer: string;
+		}>(
+			db,
+			'SELECT hifzEnabled, hifzRoleId, hifzTimeSyncEnabled, hifzTimeSyncPrayer, hifzTimeSyncOffsetMinutes, maqraahTimeSyncPrayer FROM configuration WHERE id = 1',
+		);
+
+		assert.equal(config?.hifzEnabled, 1);
+		assert.equal(config?.hifzRoleId, 'role-123');
+		assert.equal(config?.hifzTimeSyncEnabled, 1);
+		assert.equal(config?.hifzTimeSyncPrayer, 'dhuhr');
+		assert.equal(config?.hifzTimeSyncOffsetMinutes, 90);
+		assert.equal(config?.maqraahTimeSyncPrayer, 'maghrib');
 	} finally {
 		await close(db);
 	}

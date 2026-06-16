@@ -3,6 +3,7 @@ import { attendanceRepository, configurationRepository, reminderEventsRepository
 import { logger, DiscordContext } from '../../observability/logging/logger';
 import { addProgressSubcommands, progressCommandGroup } from './progress/builders';
 import { handleProgressCommand } from './progress/handler';
+import { addMaqraahConfigurationSubcommands, handleMaqraahConfigurationCommand, maqraahConfigurationGroup } from './configurationCommand';
 import { attendanceStatuses } from './reminders/attendance';
 import { defaultReminderCadence, isReminderStageEnabled, reminderStages } from './reminders/cadence';
 import { getUpcomingSessionId } from './reminders/sessionId';
@@ -40,7 +41,8 @@ export const data = new SlashCommandBuilder()
 			.setDescription('Clear your preregistered status for the upcoming maqraah')
 			.addStringOption((option) => option.setName(options.DATES).setDescription('Maqraah dates in YYYY-MM-DD, comma-separated'))
 	)
-	.addSubcommandGroup((group) => addProgressSubcommands(group.setName(progressCommandGroup).setDescription('Manage maqraah reading progress')));
+	.addSubcommandGroup((group) => addProgressSubcommands(group.setName(progressCommandGroup).setDescription('Manage maqraah reading progress')))
+	.addSubcommandGroup((group) => addMaqraahConfigurationSubcommands(group.setName(maqraahConfigurationGroup).setDescription('Manage maqraah configuration')));
 
 export async function execute(interaction: any) {
 	await handleMaqraahCommand(interaction);
@@ -52,6 +54,11 @@ export async function handleMaqraahCommand(interaction: any, now: Date = new Dat
 
 	if (subcommandGroup === progressCommandGroup) {
 		await handleProgressCommand(interaction, { commandName: 'maqraah', subcommandGroup, now });
+		return;
+	}
+
+	if (subcommandGroup === maqraahConfigurationGroup) {
+		await handleMaqraahConfigurationCommand(interaction);
 		return;
 	}
 

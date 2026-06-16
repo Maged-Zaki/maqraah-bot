@@ -12,7 +12,7 @@ import { reminderSendTimeModes, type ReminderSettings } from '../../storage/sqli
 import { logger } from '../../observability/logging/logger';
 import { normalizeTimeZone, parseReminderTime } from '../../shared/time';
 import type { PrayerName } from '../../shared/prayers';
-import { fetchPrayerTiming as fetchPrayerTimingFromAlAdhan } from '../maqraah/reminders/prayerTimes';
+import { fetchPrayerTiming as fetchPrayerTimingFromAlAdhan } from '../../shared/prayerSync/timings';
 import { subscriptionReminderEvents, type SubscriptionReminderEventDefinition } from './catalog';
 import { getReminderChannel, isSendableTextChannel } from './channel';
 import { addDaysToDateKey, formatLocalDateKey, getWeekdayFromDateKey, isSameLocalHourAndMinute } from './dateUtils';

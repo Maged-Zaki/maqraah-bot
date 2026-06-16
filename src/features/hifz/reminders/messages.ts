@@ -4,6 +4,7 @@ import type { HifzProgress } from '../../../storage/sqlite/repositories/HifzProg
 import { chunkContent } from '../../../shared/content/chunkContent';
 import { defaultHifzCadence, getHifzReminderOffset } from './cadence';
 import { DEFAULT_HIFZ_TIME } from './sessionId';
+import { resolveHifzRoleId } from '../role';
 
 export interface HifzReminderMessages {
 	mainMessage: string;
@@ -19,12 +20,12 @@ export function buildHifzReminderMessages(configuration: Configuration, progress
 
 export function buildPreHifzReminderMessage(configuration: Configuration): string {
 	const offset = getHifzReminderOffset(configuration.hifzPreReminderOffsetMinutes, defaultHifzCadence.preReminderOffsetMinutes);
-	const roleId = configuration.roleId;
+	const roleId = resolveHifzRoleId(configuration);
 	return `<@&${roleId}> السلام عليكم ورحمة الله وبركاته\nحلقة الحفظ بعد ${offset} دقائق إن شاء الله.`;
 }
 
 function buildMainHifzReminderMessage(configuration: Configuration, progress: HifzProgress): string {
-	const roleId = configuration.roleId;
+	const roleId = resolveHifzRoleId(configuration);
 	let message = `<@&${roleId}> بدأت حلقة الحفظ\n\n`;
 	message += `صفحة الحفظ النهارده: [${progress.currentPage}](https://quran.com/page/${progress.currentPage})\n`;
 

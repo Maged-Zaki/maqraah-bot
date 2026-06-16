@@ -3,16 +3,19 @@ import * as cron from 'node-cron';
 import { configurationRepository } from '../../../storage/sqlite';
 import { logger } from '../../../observability/logging/logger';
 import { normalizeTimeZone } from '../../../shared/time';
-import { fetchMaqraahTimeSyncTiming, isMaqraahTimeSyncEnabled, MaqraahTimeSyncTiming } from './prayerTimes';
+import type { PrayerName } from '../../../shared/prayers';
+import { fetchPrayerSyncTiming, getPrayerSyncOffsetMinutes, isPrayerSyncEnabled, type PrayerSyncTiming } from '../../../shared/prayerSync/timings';
 import { scheduleReminder } from './scheduler';
 import { updateReminderVoiceChannelName } from './voiceChannel';
+
+export const DEFAULT_MAQRAAH_TIME_SYNC_PRAYER: PrayerName = 'maghrib';
 
 export let maqraahTimeSyncJob: cron.ScheduledTask | null = null;
 
 export interface MaqraahTimeSyncResult {
 	enabled: boolean;
 	changed: boolean;
-	timing?: MaqraahTimeSyncTiming;
+	timing?: PrayerSyncTiming;
 }
 
 interface SyncOptions {
@@ -25,7 +28,7 @@ export async function scheduleMaqraahTimeSync(client: Client, runImmediately: bo
 	stopMaqraahTimeSync();
 
 	const configuration = await configurationRepository.getConfiguration();
-	if (!isMaqraahTimeSyncEnabled(configuration.maqraahTimeSyncEnabled)) {
+	if (!isPrayerSyncEnabled(configuration.maqraahTimeSyncEnabled)) {
 		logger.info('Maqraah time sync is disabled');
 		return;
 	}
@@ -41,7 +44,7 @@ export async function scheduleMaqraahTimeSync(client: Client, runImmediately: bo
 	maqraahTimeSyncJob = cron.schedule(
 		'7 * * * *',
 		async () => {
-			await syncMaqraahTimeFromMaghribSafely(client);
+			await syncMaqraahTimeFromPrayerSafely(client);
 		},
 		{ timezone }
 	);
@@ -53,7 +56,7 @@ export async function scheduleMaqraahTimeSync(client: Client, runImmediately: bo
 	});
 
 	if (runImmediately) {
-		await syncMaqraahTimeFromMaghribSafely(client);
+		await syncMaqraahTimeFromPrayerSafely(client);
 	}
 }
 
@@ -65,21 +68,24 @@ export function stopMaqraahTimeSync(): void {
 	}
 }
 
-export async function syncMaqraahTimeFromMaghrib(client: Client, options: SyncOptions = {}): Promise<MaqraahTimeSyncResult> {
+export async function syncMaqraahTimeFromPrayer(client: Client, options: SyncOptions = {}): Promise<MaqraahTimeSyncResult> {
 	const { reschedule = true, updateVoiceChannel = true, announceChange = true } = options;
 	const configuration = await configurationRepository.getConfiguration();
 
-	if (!isMaqraahTimeSyncEnabled(configuration.maqraahTimeSyncEnabled)) {
+	if (!isPrayerSyncEnabled(configuration.maqraahTimeSyncEnabled)) {
 		return { enabled: false, changed: false };
 	}
 
-	const timing = await fetchMaqraahTimeSyncTiming(configuration);
+	const prayer = resolveMaqraahTimeSyncPrayer(configuration.maqraahTimeSyncPrayer);
+	const offsetMinutes = getPrayerSyncOffsetMinutes(configuration.maqraahTimeSyncOffsetMinutes);
+	const timing = await fetchPrayerSyncTiming(configuration, prayer, offsetMinutes);
 	if (timing.reminderTime === configuration.dailyTime) {
-		logger.info('Maqraah time is already synced from Maghrib', undefined, {
+		logger.info('Maqraah time is already synced from prayer time', undefined, {
 			additionalData: {
 				date: timing.date,
-				maghribTime: timing.maghribTime,
-				roundedMaghribTime: timing.roundedMaghribTime,
+				prayer: timing.prayer,
+				prayerTime: timing.prayerTime,
+				roundedPrayerTime: timing.roundedPrayerTime,
 				reminderTime: timing.reminderTime,
 			},
 		});
@@ -87,15 +93,16 @@ export async function syncMaqraahTimeFromMaghrib(client: Client, options: SyncOp
 	}
 
 	await configurationRepository.updateConfiguration({ dailyTime: timing.reminderTime });
-	logger.info('Updated maqraah time from Maghrib prayer time', undefined, {
+	logger.info('Updated maqraah time from prayer time', undefined, {
 		operationType: 'maqraah_time_sync',
 		operationStatus: 'success',
 		additionalData: {
 			previousReminderTime: configuration.dailyTime,
 			newReminderTime: timing.reminderTime,
 			date: timing.date,
-			maghribTime: timing.maghribTime,
-			roundedMaghribTime: timing.roundedMaghribTime,
+			prayer: timing.prayer,
+			prayerTime: timing.prayerTime,
+			roundedPrayerTime: timing.roundedPrayerTime,
 		},
 	});
 
@@ -114,11 +121,15 @@ export async function syncMaqraahTimeFromMaghrib(client: Client, options: SyncOp
 	return { enabled: true, changed: true, timing };
 }
 
-async function syncMaqraahTimeFromMaghribSafely(client: Client): Promise<void> {
+export function resolveMaqraahTimeSyncPrayer(value: string | null | undefined): PrayerName {
+	return isPrayerName(value) ? value : DEFAULT_MAQRAAH_TIME_SYNC_PRAYER;
+}
+
+async function syncMaqraahTimeFromPrayerSafely(client: Client): Promise<void> {
 	try {
-		await syncMaqraahTimeFromMaghrib(client);
+		await syncMaqraahTimeFromPrayer(client);
 	} catch (error) {
-		logger.error('Failed to sync maqraah time from Maghrib', error as Error, undefined, {
+		logger.error('Failed to sync maqraah time from prayer', error as Error, undefined, {
 			operationType: 'maqraah_time_sync',
 			operationStatus: 'failure',
 		});
@@ -138,4 +149,8 @@ async function announceMaqraahTimeChange(client: Client, roleId: string, dailyTi
 	} catch (error) {
 		logger.error('Failed to announce Maqraah time sync change', error as Error);
 	}
+}
+
+function isPrayerName(value: string | null | undefined): value is PrayerName {
+	return value === 'fajr' || value === 'sunrise' || value === 'dhuhr' || value === 'asr' || value === 'maghrib' || value === 'isha';
 }

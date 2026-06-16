@@ -1,13 +1,11 @@
-import { SlashCommandBuilder, ChannelType, MessageFlags, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { configurationRepository } from '../../storage/sqlite';
 import { logger, DiscordContext } from '../../observability/logging/logger';
-import { normalizeTimeZone, parseReminderTime } from '../../shared/time';
-import { defaultReminderCadence, getReminderOffset, isReminderStageEnabled } from '../maqraah/reminders/cadence';
-import { scheduleMaqraahTimeSync, syncMaqraahTimeFromMaghrib } from '../maqraah/reminders/maqraahTimeSync';
-import { getMaqraahTimeSyncOffsetMinutes, isMaqraahTimeSyncEnabled, isValidLatitude, isValidLongitude } from '../maqraah/reminders/prayerTimes';
+import { normalizeTimeZone } from '../../shared/time';
+import { isValidLatitude, isValidLongitude, isValidCalculationMethod, prayerSyncDefaults } from '../../shared/prayerSync/timings';
+import { scheduleMaqraahTimeSync } from '../maqraah/reminders/maqraahTimeSync';
 import { scheduleReminder } from '../maqraah/reminders/scheduler';
-import { updateReminderVoiceChannelName } from '../maqraah/reminders/voiceChannel';
-import { defaultHifzCadence, getHifzReminderOffset, isHifzReminderStageEnabled } from '../hifz/reminders/cadence';
+import { scheduleHifzTimeSync } from '../hifz/reminders/hifzTimeSync';
 import { scheduleHifzReminder } from '../hifz/reminders/scheduler';
 
 const subcommands = {
@@ -16,68 +14,38 @@ const subcommands = {
 } as const;
 
 const options = {
-	ROLE: 'role',
-	VOICE_CHANNEL: 'voicechannel',
-	MAQRAAH_TIME: 'maqraah-time',
 	TIMEZONE: 'timezone',
-	PRE_REMINDER_ENABLED: 'pre-reminder-enabled',
-	PRE_REMINDER_MINUTES: 'pre-reminder-minutes',
-	MAQRAAH_REMINDER_ENABLED: 'maqraah-reminder-enabled',
-	MAQRAAH_TIME_SYNC_ENABLED: 'maqraah-time-sync-enabled',
-	MAQRAAH_MINUTES_AFTER_MAGHRIB: 'maqraah-minutes-after-maghrib',
 	PRAYER_TIME_LATITUDE: 'prayer-time-latitude',
 	PRAYER_TIME_LONGITUDE: 'prayer-time-longitude',
-	HIFZ_TIME: 'hifz-time',
-	HIFZ_REMINDER_ENABLED: 'hifz-reminder-enabled',
-	HIFZ_PRE_REMINDER_ENABLED: 'hifz-pre-reminder-enabled',
-	HIFZ_PRE_REMINDER_MINUTES: 'hifz-pre-reminder-minutes',
+	PRAYER_CALCULATION_METHOD: 'prayer-calculation-method',
 } as const;
 
 export const data = new SlashCommandBuilder()
 	.setName('configuration')
-	.setDescription('Manage bot configuration')
+	.setDescription('Manage shared bot configuration (timezone and prayer location)')
 	.addSubcommand((subcommand) =>
 		subcommand
 			.setName(subcommands.UPDATE)
-			.setDescription('Update configuration settings')
-			.addRoleOption((option) => option.setName(options.ROLE).setDescription('Role to ping for reminders'))
-			.addChannelOption((option) =>
-				option.setName(options.VOICE_CHANNEL).setDescription('Voice channel to update with time').addChannelTypes(ChannelType.GuildVoice)
-			)
-			.addStringOption((option) => option.setName(options.MAQRAAH_TIME).setDescription('Maqraah reminder time (e.g., 9:05 PM)'))
-			.addStringOption((option) => option.setName(options.TIMEZONE).setDescription('Timezone for reminders (e.g., Africa/Cairo)'))
-			.addBooleanOption((option) => option.setName(options.PRE_REMINDER_ENABLED).setDescription('Enable the pre-reminder stage'))
-			.addIntegerOption((option) =>
-				option.setName(options.PRE_REMINDER_MINUTES).setDescription('Minutes before the maqraah to send the pre-reminder').setMinValue(0)
-			)
-			.addBooleanOption((option) => option.setName(options.MAQRAAH_REMINDER_ENABLED).setDescription('Enable the maqraah reminder stage'))
-			.addBooleanOption((option) =>
-				option.setName(options.MAQRAAH_TIME_SYNC_ENABLED).setDescription('Automatically adjust the maqraah time from Maghrib prayer time')
-			)
-			.addIntegerOption((option) =>
-				option
-					.setName(options.MAQRAAH_MINUTES_AFTER_MAGHRIB)
-					.setDescription('Minutes after Maghrib for the maqraah time')
-					.setMinValue(0)
-			)
+			.setDescription('Update shared configuration settings')
+			.addStringOption((option) => option.setName(options.TIMEZONE).setDescription('Timezone for all reminders and prayer lookups (e.g., Africa/Cairo)'))
 			.addNumberOption((option) =>
-				option.setName(options.PRAYER_TIME_LATITUDE).setDescription('Latitude for Maghrib prayer time, e.g. 30.0444').setMinValue(-90).setMaxValue(90)
+				option.setName(options.PRAYER_TIME_LATITUDE).setDescription('Latitude for prayer time lookups, e.g. 30.0444').setMinValue(-90).setMaxValue(90)
 			)
 			.addNumberOption((option) =>
 				option
 					.setName(options.PRAYER_TIME_LONGITUDE)
-					.setDescription('Longitude for Maghrib prayer time, e.g. 31.2357')
+					.setDescription('Longitude for prayer time lookups, e.g. 31.2357')
 					.setMinValue(-180)
 					.setMaxValue(180)
 			)
-			.addStringOption((option) => option.setName(options.HIFZ_TIME).setDescription('Hifz (memorization) reminder time (e.g., 6:00 PM)'))
-			.addBooleanOption((option) => option.setName(options.HIFZ_REMINDER_ENABLED).setDescription('Enable the hifz reminder stage'))
-			.addBooleanOption((option) => option.setName(options.HIFZ_PRE_REMINDER_ENABLED).setDescription('Enable the hifz pre-reminder stage'))
 			.addIntegerOption((option) =>
-				option.setName(options.HIFZ_PRE_REMINDER_MINUTES).setDescription('Minutes before the hifz to send the pre-reminder').setMinValue(0)
+				option
+					.setName(options.PRAYER_CALCULATION_METHOD)
+					.setDescription('AlAdhan calculation method id (e.g. 4 = Umm al-Qura, 5 = Egyptian ASA)')
+					.setMinValue(0)
 			)
 	)
-	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW).setDescription('Display current configuration'));
+	.addSubcommand((subcommand) => subcommand.setName(subcommands.SHOW).setDescription('Display current shared configuration'));
 
 export async function execute(interaction: any) {
 	const subcommand = interaction.options.getSubcommand();
@@ -97,47 +65,12 @@ export async function execute(interaction: any) {
 		switch (subcommand) {
 			case subcommands.UPDATE: {
 				const updates: any = {};
-				let replyMessages: string[] = [];
-				const configuration = await configurationRepository.getConfiguration();
-
-				const role = interaction.options.getRole(options.ROLE);
-				if (role) {
-					updates.roleId = role.id;
-					replyMessages.push(`Role set to ${role}.`);
-				}
-
-				const voicechannel = interaction.options.getChannel(options.VOICE_CHANNEL);
-				if (voicechannel) {
-					updates.voiceChannelId = voicechannel.id;
-					replyMessages.push(`Voice channel set to ${voicechannel}.`);
-				}
-
-				const maqraahTime = interaction.options.getString(options.MAQRAAH_TIME);
-				if (maqraahTime) {
-					const parsedTime = parseReminderTime(maqraahTime);
-					if (!parsedTime) {
-						logger.warn(`Invalid maqraah time provided: ${maqraahTime}`, discordContext, {
-							operationType: 'configuration_update',
-							operationStatus: 'failure',
-						});
-						await interaction.reply({
-							content: 'Invalid maqraah time. Please use `H:MM AM/PM`, such as `9:05 PM` or `12:00 AM`.',
-							flags: MessageFlags.Ephemeral,
-						});
-						return;
-					}
-					updates.dailyTime = parsedTime.displayTime;
-					replyMessages.push(`Maqraah time set to \`${parsedTime.displayTime}\`.`);
-				}
+				const replyMessages: string[] = [];
 
 				const timezone = interaction.options.getString(options.TIMEZONE);
 				if (timezone) {
 					const normalizedTimezone = normalizeTimeZone(timezone);
 					if (!normalizedTimezone) {
-						logger.warn(`Invalid timezone provided: ${timezone}`, discordContext, {
-							operationType: 'configuration_update',
-							operationStatus: 'failure',
-						});
 						await interaction.reply({
 							content: 'Invalid timezone. Please use an IANA timezone like `Africa/Cairo`, `America/New_York`, or `Europe/London`.',
 							flags: MessageFlags.Ephemeral,
@@ -146,36 +79,6 @@ export async function execute(interaction: any) {
 					}
 					updates.timezone = normalizedTimezone;
 					replyMessages.push(`Timezone set to \`${normalizedTimezone}\`.`);
-				}
-
-				const preReminderEnabled = interaction.options.getBoolean(options.PRE_REMINDER_ENABLED);
-				if (preReminderEnabled !== null) {
-					updates.preReminderEnabled = preReminderEnabled ? 1 : 0;
-					replyMessages.push(`Pre-reminder stage ${preReminderEnabled ? 'enabled' : 'disabled'}.`);
-				}
-
-				const preReminderMinutes = interaction.options.getInteger(options.PRE_REMINDER_MINUTES);
-				if (preReminderMinutes !== null) {
-					updates.preReminderOffsetMinutes = preReminderMinutes;
-					replyMessages.push(`Pre-reminder set to \`${preReminderMinutes}\` minute(s) before maqraah.`);
-				}
-
-				const maqraahReminderEnabled = interaction.options.getBoolean(options.MAQRAAH_REMINDER_ENABLED);
-				if (maqraahReminderEnabled !== null) {
-					updates.mainReminderEnabled = maqraahReminderEnabled ? 1 : 0;
-					replyMessages.push(`Maqraah reminder stage ${maqraahReminderEnabled ? 'enabled' : 'disabled'}.`);
-				}
-
-				const maqraahTimeSyncEnabled = interaction.options.getBoolean(options.MAQRAAH_TIME_SYNC_ENABLED);
-				if (maqraahTimeSyncEnabled !== null) {
-					updates.maqraahTimeSyncEnabled = maqraahTimeSyncEnabled ? 1 : 0;
-					replyMessages.push(`Maqraah time sync ${maqraahTimeSyncEnabled ? 'enabled' : 'disabled'}.`);
-				}
-
-				const maqraahMinutesAfterMaghrib = interaction.options.getInteger(options.MAQRAAH_MINUTES_AFTER_MAGHRIB);
-				if (maqraahMinutesAfterMaghrib !== null) {
-					updates.maqraahTimeSyncOffsetMinutes = maqraahMinutesAfterMaghrib;
-					replyMessages.push(`Maqraah time sync set to \`${maqraahMinutesAfterMaghrib}\` minute(s) after Maghrib.`);
 				}
 
 				const prayerTimeLatitude = interaction.options.getNumber(options.PRAYER_TIME_LATITUDE);
@@ -191,105 +94,44 @@ export async function execute(interaction: any) {
 					replyMessages.push(`Prayer time latitude set to \`${prayerTimeLatitude}\`.`);
 				}
 
-			const prayerTimeLongitude = interaction.options.getNumber(options.PRAYER_TIME_LONGITUDE);
-			if (prayerTimeLongitude !== null) {
-				if (!isValidLongitude(prayerTimeLongitude)) {
-					await interaction.reply({
-						content: 'Invalid longitude. Please provide a number from -180 to 180.',
-						flags: MessageFlags.Ephemeral,
-					});
-					return;
+				const prayerTimeLongitude = interaction.options.getNumber(options.PRAYER_TIME_LONGITUDE);
+				if (prayerTimeLongitude !== null) {
+					if (!isValidLongitude(prayerTimeLongitude)) {
+						await interaction.reply({
+							content: 'Invalid longitude. Please provide a number from -180 to 180.',
+							flags: MessageFlags.Ephemeral,
+						});
+						return;
+					}
+					updates.maqraahTimeSyncLongitude = prayerTimeLongitude;
+					replyMessages.push(`Prayer time longitude set to \`${prayerTimeLongitude}\`.`);
 				}
-				updates.maqraahTimeSyncLongitude = prayerTimeLongitude;
-				replyMessages.push(`Prayer time longitude set to \`${prayerTimeLongitude}\`.`);
-			}
 
-			const hifzTime = interaction.options.getString(options.HIFZ_TIME);
-			if (hifzTime) {
-				const parsedHifzTime = parseReminderTime(hifzTime);
-				if (!parsedHifzTime) {
-					logger.warn(`Invalid hifz time provided: ${hifzTime}`, discordContext, {
-						operationType: 'configuration_update',
-						operationStatus: 'failure',
-					});
-					await interaction.reply({
-						content: 'Invalid hifz time. Please use `H:MM AM/PM`, such as `6:00 PM` or `12:00 AM`.',
-						flags: MessageFlags.Ephemeral,
-					});
-					return;
+				const prayerCalculationMethod = interaction.options.getInteger(options.PRAYER_CALCULATION_METHOD);
+				if (prayerCalculationMethod !== null) {
+					if (!isValidCalculationMethod(prayerCalculationMethod)) {
+						await interaction.reply({
+							content: 'Invalid calculation method. Please provide a non-negative integer method id.',
+							flags: MessageFlags.Ephemeral,
+						});
+						return;
+					}
+					updates.maqraahTimeSyncCalculationMethod = prayerCalculationMethod;
+					replyMessages.push(`Prayer calculation method set to \`${prayerCalculationMethod}\`.`);
 				}
-				updates.hifzTime = parsedHifzTime.displayTime;
-				replyMessages.push(`Hifz time set to \`${parsedHifzTime.displayTime}\`.`);
-			}
 
-			const hifzReminderEnabled = interaction.options.getBoolean(options.HIFZ_REMINDER_ENABLED);
-			if (hifzReminderEnabled !== null) {
-				updates.hifzReminderEnabled = hifzReminderEnabled ? 1 : 0;
-				replyMessages.push(`Hifz reminder stage ${hifzReminderEnabled ? 'enabled' : 'disabled'}.`);
-			}
-
-			const hifzPreReminderEnabled = interaction.options.getBoolean(options.HIFZ_PRE_REMINDER_ENABLED);
-			if (hifzPreReminderEnabled !== null) {
-				updates.hifzPreReminderEnabled = hifzPreReminderEnabled ? 1 : 0;
-				replyMessages.push(`Hifz pre-reminder stage ${hifzPreReminderEnabled ? 'enabled' : 'disabled'}.`);
-			}
-
-			const hifzPreReminderMinutes = interaction.options.getInteger(options.HIFZ_PRE_REMINDER_MINUTES);
-			if (hifzPreReminderMinutes !== null) {
-				updates.hifzPreReminderOffsetMinutes = hifzPreReminderMinutes;
-				replyMessages.push(`Hifz pre-reminder set to \`${hifzPreReminderMinutes}\` minute(s) before hifz.`);
-			}
-
-			if (Object.keys(updates).length > 0) {
-					logger.info(`Updating configuration with changes`, discordContext, { additionalData: { updates } });
+				if (Object.keys(updates).length > 0) {
 					await configurationRepository.updateConfiguration(updates);
 
-					let voiceChannelTime = updates.dailyTime as string | undefined;
-					if (shouldRescheduleMaqraahTimeSync(updates)) {
-						await scheduleMaqraahTimeSync(interaction.client, false);
-					}
-
-					if (shouldSyncMaqraahTime(updates, configuration)) {
-						try {
-							const syncResult = await syncMaqraahTimeFromMaghrib(interaction.client, {
-								reschedule: false,
-								updateVoiceChannel: false,
-								announceChange: false,
-							});
-							if (syncResult.changed && syncResult.timing) {
-								updates.dailyTime = syncResult.timing.reminderTime;
-								voiceChannelTime = syncResult.timing.reminderTime;
-								replyMessages.push(
-									`<@&${configuration.roleId}> Maqraah Time has been changed to \`${syncResult.timing.reminderTime}\`.`
-								);
-							}
-						} catch (error) {
-							logger.error('Failed to sync maqraah time during configuration update', error as Error, discordContext, {
-								operationType: 'maqraah_time_sync',
-								operationStatus: 'failure',
-							});
-							replyMessages.push('Maqraah time sync failed. The regular checker will retry it.');
-						}
-					}
-
-					if (shouldRescheduleReminder(updates)) {
-						logger.info(`Rescheduling reminder due to configuration changes`, discordContext);
-						await scheduleReminder(interaction.client);
-					}
-
-					if (shouldRescheduleHifzReminder(updates)) {
-						logger.info(`Rescheduling hifz reminder due to configuration changes`, discordContext);
-						await scheduleHifzReminder(interaction.client);
-					}
-
-					if (voiceChannelTime) {
-						await updateReminderVoiceChannelName(interaction.client, voiceChannelTime);
-					}
+					// Timezone and prayer location affect both features' reminders and time-sync crons.
+					await scheduleMaqraahTimeSync(interaction.client, false);
+					await scheduleHifzTimeSync(interaction.client, false);
+					await scheduleReminder(interaction.client);
+					await scheduleHifzReminder(interaction.client);
 
 					logger.info(`Configuration updated successfully`, discordContext, { operationType: 'configuration_update', operationStatus: 'success' });
 					await interaction.reply(replyMessages.join('\n'));
 				} else {
-					logger.info(`No configuration changes provided`, discordContext);
 					await interaction.reply({ content: 'No options provided.', flags: MessageFlags.Ephemeral });
 				}
 				break;
@@ -301,44 +143,28 @@ export async function execute(interaction: any) {
 
 				const embed = new EmbedBuilder()
 					.setTitle('Configuration')
+					.setDescription('Shared settings. Maqraah and hifz-specific settings live under `/maqraah configuration` and `/hifz configuration`.')
 					.addFields(
-						{ name: 'Reminder Time', value: configuration.dailyTime, inline: true },
 						{ name: 'Timezone', value: configuration.timezone, inline: true },
-						{ name: 'Role', value: configuration.roleId ? `<@&${configuration.roleId}>` : 'Not set', inline: true },
-						{ name: 'Voice Channel', value: configuration.voiceChannelId ? `<#${configuration.voiceChannelId}>` : 'Not set', inline: true },
 						{
-							name: 'Pre-reminder',
-							value: formatPreReminderConfig(configuration.preReminderEnabled, configuration.preReminderOffsetMinutes),
+							name: 'Prayer Latitude',
+							value: String(configuration.maqraahTimeSyncLatitude ?? prayerSyncDefaults.latitude),
 							inline: true,
 						},
 						{
-							name: 'Maqraah reminder',
-							value: isReminderStageEnabled(configuration.mainReminderEnabled, defaultReminderCadence.mainReminderEnabled) ? 'Enabled' : 'Disabled',
+							name: 'Prayer Longitude',
+							value: String(configuration.maqraahTimeSyncLongitude ?? prayerSyncDefaults.longitude),
 							inline: true,
 						},
 						{
-						name: 'Maqraah time sync',
-						value: formatMaqraahTimeSyncConfig(configuration),
-						inline: false,
-					},
-					{ name: 'Hifz Time', value: configuration.hifzTime ?? '6:00 PM', inline: true },
-					{
-						name: 'Hifz Pre-reminder',
-						value: formatHifzPreReminderConfig(configuration.hifzPreReminderEnabled, configuration.hifzPreReminderOffsetMinutes),
-						inline: true,
-					},
-					{
-						name: 'Hifz reminder',
-						value: isHifzReminderStageEnabled(configuration.hifzReminderEnabled, defaultHifzCadence.mainReminderEnabled) ? 'Enabled' : 'Disabled',
-						inline: true,
-					}
-				)
-				.setColor(0x0099ff);
+							name: 'Calculation Method',
+							value: String(configuration.maqraahTimeSyncCalculationMethod ?? prayerSyncDefaults.calculationMethod),
+							inline: true,
+						}
+					)
+					.setColor(0x0099ff);
 
-				await interaction.reply({
-					embeds: [embed],
-					ephemeral: true,
-				});
+				await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 				break;
 			}
 		}
@@ -346,83 +172,7 @@ export async function execute(interaction: any) {
 		logger.error(`Error executing configuration subcommand: ${subcommand}`, error as Error, discordContext, {
 			operationType: 'configuration_command',
 			operationStatus: 'failure',
-			additionalData: {
-				subcommand,
-				userId: interaction.user.id,
-				guildId: interaction.guildId?.toString(),
-				channelId: interaction.channelId?.toString(),
-			},
 		});
 		await interaction.reply({ content: 'There was an error executing this command!', flags: MessageFlags.Ephemeral });
 	}
-}
-
-function shouldRescheduleReminder(updates: Record<string, unknown>): boolean {
-	return Boolean(
-		updates.dailyTime ||
-			updates.timezone ||
-			updates.roleId ||
-			updates.preReminderEnabled !== undefined ||
-			updates.preReminderOffsetMinutes !== undefined ||
-			updates.mainReminderEnabled !== undefined
-	);
-}
-
-function shouldRescheduleMaqraahTimeSync(updates: Record<string, unknown>): boolean {
-	return Boolean(updates.maqraahTimeSyncEnabled !== undefined || updates.timezone);
-}
-
-function shouldRescheduleHifzReminder(updates: Record<string, unknown>): boolean {
-	return Boolean(
-		updates.hifzTime ||
-			updates.timezone ||
-			updates.roleId ||
-			updates.hifzReminderEnabled !== undefined ||
-			updates.hifzPreReminderEnabled !== undefined ||
-			updates.hifzPreReminderOffsetMinutes !== undefined
-	);
-}
-
-function shouldSyncMaqraahTime(updates: Record<string, unknown>, configuration: Awaited<ReturnType<typeof configurationRepository.getConfiguration>>): boolean {
-	const nextEnabled =
-		updates.maqraahTimeSyncEnabled !== undefined
-			? isMaqraahTimeSyncEnabled(updates.maqraahTimeSyncEnabled as boolean | number)
-			: isMaqraahTimeSyncEnabled(configuration.maqraahTimeSyncEnabled);
-
-	if (!nextEnabled) {
-		return false;
-	}
-
-	return Boolean(
-		updates.maqraahTimeSyncEnabled !== undefined ||
-			updates.maqraahTimeSyncOffsetMinutes !== undefined ||
-			updates.maqraahTimeSyncLatitude !== undefined ||
-			updates.maqraahTimeSyncLongitude !== undefined ||
-			updates.timezone
-	);
-}
-
-function formatPreReminderConfig(enabledValue: boolean | number, offsetMinutes: number): string {
-	const status = formatStageConfig(enabledValue, defaultReminderCadence.preReminderEnabled);
-	const minutes = getReminderOffset(offsetMinutes, defaultReminderCadence.preReminderOffsetMinutes);
-	return `${status}, ${minutes} minute(s) before`;
-}
-
-function formatHifzPreReminderConfig(enabledValue: boolean | number | undefined, offsetMinutes: number | undefined): string {
-	const status = isHifzReminderStageEnabled(enabledValue, defaultHifzCadence.preReminderEnabled) ? 'Enabled' : 'Disabled';
-	const minutes = getHifzReminderOffset(offsetMinutes, defaultHifzCadence.preReminderOffsetMinutes);
-	return `${status}, ${minutes} minute(s) before`;
-}
-
-function formatMaqraahTimeSyncConfig(configuration: Awaited<ReturnType<typeof configurationRepository.getConfiguration>>): string {
-	if (!isMaqraahTimeSyncEnabled(configuration.maqraahTimeSyncEnabled)) {
-		return 'Disabled';
-	}
-
-	const minutes = getMaqraahTimeSyncOffsetMinutes(configuration.maqraahTimeSyncOffsetMinutes);
-	return `Enabled, ${minutes} minute(s) after Maghrib. Location: ${configuration.maqraahTimeSyncLatitude}, ${configuration.maqraahTimeSyncLongitude}.`;
-}
-
-function formatStageConfig(enabledValue: boolean | number, defaultEnabled: boolean): string {
-	return isReminderStageEnabled(enabledValue, defaultEnabled) ? 'Enabled' : 'Disabled';
 }

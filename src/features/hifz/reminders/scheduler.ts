@@ -5,7 +5,7 @@ import { logger } from '../../../observability/logging/logger';
 import { normalizeTimeZone, parseTimeToCron } from '../../../shared/time';
 import { announcePendingHifzAttendance, type AttendanceAnnouncementChannel } from './attendance';
 import { buildCurrentHifzPagePrompt, buildHifzReminderActionRows } from './components';
-import { buildHifzReminderStageSchedules, hifzReminderStages, HifzReminderStage, HifzReminderStageSchedule } from './cadence';
+import { buildHifzReminderStageSchedules, hifzReminderStages, HifzReminderStage, HifzReminderStageSchedule, isHifzReminderStageEnabled } from './cadence';
 import { buildHifzReminderMessages, buildPreHifzReminderMessage } from './messages';
 import { getHifzReminderSessionId } from './sessionId';
 
@@ -22,6 +22,12 @@ export async function scheduleHifzReminder(client: Client) {
 	stopScheduledHifzJobs();
 
 	const configuration = await configurationRepository.getConfiguration();
+
+	if (!isHifzReminderStageEnabled(configuration.hifzEnabled, true)) {
+		logger.info('Hifz is disabled, skipping hifz reminder scheduling', undefined, { operationType: 'schedule_hifz_reminder' });
+		return;
+	}
+
 	const timezone = normalizeTimeZone(configuration.timezone);
 	if (!timezone) {
 		logger.warn(`Invalid timezone configured: ${configuration.timezone}, skipping hifz reminders`, undefined, {

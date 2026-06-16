@@ -1,9 +1,8 @@
-import type { Configuration } from '../../../storage/sqlite/repositories/ConfigurationRepository';
-import type { PrayerName } from '../../../shared/prayers';
-import { normalizeTimeZone } from '../../../shared/time';
+import type { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
+import type { PrayerName } from '../prayers';
+import { normalizeTimeZone } from '../time';
 
-export const maqraahTimeSyncDefaults = {
-	enabled: false,
+export const prayerSyncDefaults = {
 	offsetMinutes: 30,
 	latitude: 30.0444,
 	longitude: 31.2357,
@@ -11,10 +10,11 @@ export const maqraahTimeSyncDefaults = {
 	bucketMinutes: 5,
 } as const;
 
-export interface MaqraahTimeSyncTiming {
+export interface PrayerSyncTiming {
 	date: string;
-	maghribTime: string;
-	roundedMaghribTime: string;
+	prayer: PrayerName;
+	prayerTime: string;
+	roundedPrayerTime: string;
 	reminderTime: string;
 }
 
@@ -48,19 +48,6 @@ const alAdhanPrayerTimingKeys: Record<PrayerName, AlAdhanPrayerTimingKey> = {
 	maghrib: 'Maghrib',
 	isha: 'Isha',
 };
-
-export async function fetchMaqraahTimeSyncTiming(
-	configuration: Configuration,
-	date: Date = new Date(),
-	fetchImplementation: FetchImplementation = fetch
-): Promise<MaqraahTimeSyncTiming> {
-	const maghribTiming = await fetchPrayerTiming(configuration, 'maghrib', date, fetchImplementation);
-	return buildMaqraahTimeSyncTiming(
-		maghribTiming.date,
-		maghribTiming.rawPrayerTime,
-		getMaqraahTimeSyncOffsetMinutes(configuration.maqraahTimeSyncOffsetMinutes)
-	);
-}
 
 export async function fetchPrayerTiming(
 	configuration: Configuration,
@@ -96,18 +83,36 @@ export async function fetchPrayerTiming(
 	};
 }
 
-export function buildMaqraahTimeSyncTiming(date: string, maghribTime: string, offsetMinutes: number): MaqraahTimeSyncTiming {
-	const maghribMinutes = parsePrayerTimeToMinutes(maghribTime);
-	if (maghribMinutes === null) {
-		throw new Error(`Invalid Maghrib time returned by prayer API: ${maghribTime}`);
+export async function fetchPrayerSyncTiming(
+	configuration: Configuration,
+	prayer: PrayerName,
+	offsetMinutes: number,
+	date: Date = new Date(),
+	fetchImplementation: FetchImplementation = fetch
+): Promise<PrayerSyncTiming> {
+	const timing = await fetchPrayerTiming(configuration, prayer, date, fetchImplementation);
+	return buildPrayerSyncTiming(timing.date, prayer, timing.rawPrayerTime, offsetMinutes);
+}
+
+export function buildPrayerSyncTiming(
+	date: string,
+	prayer: PrayerName,
+	rawPrayerTime: string,
+	offsetMinutes: number,
+	bucketMinutes: number = prayerSyncDefaults.bucketMinutes
+): PrayerSyncTiming {
+	const prayerMinutes = parsePrayerTimeToMinutes(rawPrayerTime);
+	if (prayerMinutes === null) {
+		throw new Error(`Invalid prayer time returned by prayer API: ${rawPrayerTime}`);
 	}
 
-	const roundedMaghribMinutes = floorToBucket(maghribMinutes, maqraahTimeSyncDefaults.bucketMinutes);
+	const roundedPrayerMinutes = floorToBucket(prayerMinutes, bucketMinutes);
 	return {
 		date,
-		maghribTime: minutesToDisplayTime(maghribMinutes),
-		roundedMaghribTime: minutesToDisplayTime(roundedMaghribMinutes),
-		reminderTime: minutesToDisplayTime(roundedMaghribMinutes + offsetMinutes),
+		prayer,
+		prayerTime: minutesToDisplayTime(prayerMinutes),
+		roundedPrayerTime: minutesToDisplayTime(roundedPrayerMinutes),
+		reminderTime: minutesToDisplayTime(roundedPrayerMinutes + offsetMinutes),
 	};
 }
 
@@ -156,9 +161,9 @@ export function minutesToDisplayTime(minutes: number): string {
 	return `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
 }
 
-export function isMaqraahTimeSyncEnabled(value: boolean | number | string | null | undefined): boolean {
+export function isPrayerSyncEnabled(value: boolean | number | string | null | undefined, defaultValue: boolean = false): boolean {
 	if (value === null || value === undefined) {
-		return maqraahTimeSyncDefaults.enabled;
+		return defaultValue;
 	}
 
 	if (typeof value === 'boolean') {
@@ -172,9 +177,9 @@ export function isMaqraahTimeSyncEnabled(value: boolean | number | string | null
 	return value !== '0' && value.toLowerCase() !== 'false';
 }
 
-export function getMaqraahTimeSyncOffsetMinutes(value: number | null | undefined): number {
+export function getPrayerSyncOffsetMinutes(value: number | null | undefined, defaultValue: number = prayerSyncDefaults.offsetMinutes): number {
 	if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-		return maqraahTimeSyncDefaults.offsetMinutes;
+		return defaultValue;
 	}
 
 	return value;
@@ -217,15 +222,15 @@ async function fetchAlAdhanTimings(url: string, fetchImplementation: FetchImplem
 }
 
 function getLatitude(value: number | null | undefined): number {
-	return typeof value === 'number' && isValidLatitude(value) ? value : maqraahTimeSyncDefaults.latitude;
+	return typeof value === 'number' && isValidLatitude(value) ? value : prayerSyncDefaults.latitude;
 }
 
 function getLongitude(value: number | null | undefined): number {
-	return typeof value === 'number' && isValidLongitude(value) ? value : maqraahTimeSyncDefaults.longitude;
+	return typeof value === 'number' && isValidLongitude(value) ? value : prayerSyncDefaults.longitude;
 }
 
 function getCalculationMethod(value: number | null | undefined): number {
-	return typeof value === 'number' && isValidCalculationMethod(value) ? value : maqraahTimeSyncDefaults.calculationMethod;
+	return typeof value === 'number' && isValidCalculationMethod(value) ? value : prayerSyncDefaults.calculationMethod;
 }
 
 function floorToBucket(minutes: number, bucketMinutes: number): number {

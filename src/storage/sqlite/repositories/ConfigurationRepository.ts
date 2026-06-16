@@ -19,6 +19,12 @@ export interface Configuration {
 	hifzReminderEnabled?: boolean | number;
 	hifzPreReminderEnabled?: boolean | number;
 	hifzPreReminderOffsetMinutes?: number;
+	hifzEnabled?: boolean | number;
+	hifzRoleId?: string;
+	hifzTimeSyncEnabled?: boolean | number;
+	hifzTimeSyncPrayer?: string;
+	hifzTimeSyncOffsetMinutes?: number;
+	maqraahTimeSyncPrayer?: string;
 }
 
 export class ConfigurationRepository {

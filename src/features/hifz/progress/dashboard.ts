@@ -4,7 +4,9 @@ import type { HifzProgress } from '../../../storage/sqlite/repositories/HifzProg
 import { TOTAL_QURAN_PAGES } from '../../../shared/quran/progress';
 import { normalizeTimeZone, parseReminderTime } from '../../../shared/time';
 import { defaultHifzCadence, isHifzReminderStageEnabled } from '../reminders/cadence';
+import { isHifzEnabled } from '../reminders/hifzTimeSync';
 import { getUpcomingHifzSessionId } from '../reminders/sessionId';
+import { resolveHifzRoleId } from '../role';
 
 interface HifzProgressDashboardInput {
 	configuration: Configuration;
@@ -21,6 +23,9 @@ interface ResolvedDisplay {
 
 export function buildHifzProgressDashboardReply(input: HifzProgressDashboardInput) {
 	const warnings: string[] = [];
+	if (!isHifzEnabled(input.configuration)) {
+		warnings.push('Hifz is disabled.');
+	}
 	const timezone = normalizeTimeZone(input.configuration.timezone);
 	const hifzTime = input.configuration.hifzTime ?? '6:00 PM';
 	const parsedTime = parseReminderTime(hifzTime);
@@ -38,7 +43,7 @@ export function buildHifzProgressDashboardReply(input: HifzProgressDashboardInpu
 		warnings.push('Hifz reminders are disabled.');
 	}
 
-	const roleDisplay = resolveRoleDisplay(input.configuration.roleId, guild);
+	const roleDisplay = resolveRoleDisplay(resolveHifzRoleId(input.configuration), guild);
 	warnings.push(...roleDisplay.warnings);
 
 	const reminderChannelDisplay = resolveReminderChannelDisplay(input.interaction);

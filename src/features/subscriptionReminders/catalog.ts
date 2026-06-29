@@ -173,8 +173,8 @@ export const subscriptionReminderEvents: SubscriptionReminderEventDefinition[] =
 		matcher: { type: 'alternate-day-cycle' },
 		messageKey: 'dawwd-alternate',
 		hadith: {
-			text: 'صيام الدعوض كانوا قوم يصومون غير يوم ولا يفطرون غير يوم، حتى إذا أطعموا من غير الصيام لم يطعموا إياهم، وإذا قيل لأحدهم امنحتني شيئًا من مالك ما منحهم إياه حتى رأياهم يا تقدموا إلينا شيئا نتصدق به فيسلم إلينا فسلمنا له.',
-			source: { label: 'صحيح مسلم 1154a', url: 'https://sunnah.com/muslim:1154a' },
+			text: 'أنَّ رَسولَ اللهِ صلَّى اللهُ عليه وسلَّم قال له: أحَبُّ الصَّلاةِ إلى اللهِ صَلاةُ داوُدَ عليه السَّلامُ، وأحَبُّ الصِّيامِ إلى اللهِ صيامُ داوُدَ، وكان يَنامُ نِصفَ اللَّيلِ ويقومُ ثُلُثَه، ويَنامُ سُدُسَه، ويَصومُ يَومًا، ويُفطِرُ يَومًا.',
+			source: { label: 'سنن الطبراني', url: 'https://sunnah.com/tirmidhi' },
 		},
 		excludedHijriDates: [
 			{ month: 10, days: [1] }, // Eid al-Fitr (1 Shawwal)

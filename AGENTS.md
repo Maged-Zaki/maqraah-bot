@@ -374,7 +374,7 @@ Example record: `{ id: 1, name: "001_initial_schema", appliedAt: "2026-05-29T12:
 
 ### `fasting_cycle_state`
 
-Purpose: tracks the last fasted date for the dawwd alternate-day fasting pattern. Write frequency: per dawwd reminder sent.
+Purpose: tracks the last fasted date for the dawood alternate-day fasting pattern. Write frequency: per dawood reminder sent.
 
 | Column | Type | Nullable | Default | Index |
 | --- | --- | --- | --- | --- |

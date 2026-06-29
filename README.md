@@ -173,8 +173,9 @@ There is no `/notes add`, `/add-note`, `/notes remove-my`, or `/notes remove-all
   Updates the optional-reminder send time or channel. `time` accepts `H:MM AM/PM`, such as `6:00 PM`, or `sync-to-<name>`, such as `sync-to-isha`. Supported sync names are `fajr`, `sunrise`, `dhuhr`, `asr`, `maghrib`, and `isha`. Event lead times are hard-coded in the bot.
 
 Fasting reminder categories:
-- **muhammed-way**: Prophet's way fasting (Monday, Thursday, White Days)
-- **dawwd-alternate**: Alternate day fasting pattern
+- **muhammed-way**: Prophet's Fasting (e.g., Monday, Thursday, White Days)
+- **dawwd-alternate**: Dawood's Fasting (alternate day pattern)
+- **special-occasions**: Occasional Fasting (e.g., Ashura, Arafah, Tasua)
 
 ### Help
 

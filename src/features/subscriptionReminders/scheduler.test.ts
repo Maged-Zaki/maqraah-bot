@@ -25,7 +25,7 @@ test('scheduler sends reminders at the configured time', async () => {
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' }),
+		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' }),
 	});
 
 	assert.equal(sentPayloads.length, 1);
@@ -48,7 +48,7 @@ test('scheduler skips runs outside the configured time', async () => {
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' }),
+		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' }),
 	});
 
 	assert.equal(sentPayloads.length, 0);
@@ -66,7 +66,7 @@ test('scheduler sends prayer-synced reminders at the exact prayer minute', async
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' }),
+		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' }),
 		fetchPrayerTiming: async (_configuration, prayer) => {
 			requestedPrayers.push(prayer);
 			return buildPrayerTiming({ prayer, rawPrayerTime: '20:17', prayerTime: '8:17 PM', minutesSinceMidnight: 20 * 60 + 17 });
@@ -89,7 +89,7 @@ test('scheduler skips prayer-synced runs outside the exact prayer minute without
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' }),
+		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' }),
 		fetchPrayerTiming: async (_configuration, prayer) =>
 			buildPrayerTiming({ prayer, rawPrayerTime: '20:17', prayerTime: '8:17 PM', minutesSinceMidnight: 20 * 60 + 17 }),
 	});
@@ -108,7 +108,7 @@ test('scheduler skips prayer-synced reminders when the prayer time cannot be res
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' }),
+		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' }),
 		fetchPrayerTiming: async () => {
 			throw new Error('AlAdhan is unavailable');
 		},
@@ -129,7 +129,7 @@ test('scheduler keeps fixed-time behavior when prayer sync is not enabled', asyn
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' }),
+		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' }),
 		fetchPrayerTiming: async () => {
 			prayerLookups += 1;
 			throw new Error('should not look up prayer time');
@@ -150,7 +150,7 @@ test('scheduler ignores the legacy days-before value and uses hard-coded event l
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' }),
+		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' }),
 	});
 
 	assert.equal(sentPayloads.length, 1);
@@ -169,7 +169,7 @@ test('scheduler does not resend an already recorded reminder', async () => {
 		recordEventSent: async () => {
 			throw new Error('should not record');
 		},
-		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' }),
+		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' }),
 	});
 
 	assert.equal(sentPayloads.length, 0);
@@ -236,7 +236,7 @@ test('scheduler recovers missing category roles before sending', async () => {
 			if (categoryKey === 'islamic-events') {
 				return { id: 'role-islamic-events', name: 'تذكيرات المناسبات الإسلامية' };
 			}
-			return { id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' };
+			return { id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' };
 		},
 	});
 
@@ -387,7 +387,7 @@ test('scheduler skips Monday fasting reminder during Days of Tashriq (11 Dhul-Hi
 		},
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' }),
+		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' }),
 	});
 
 	assert.equal(sentPayloads.length, 0);
@@ -409,7 +409,7 @@ test('scheduler skips Thursday fasting reminder during Days of Tashriq (13 Dhul-
 		},
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' }),
+		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' }),
 	});
 
 	// When Thursday is 13 Dhul-Hijjah, the Thursday fasting reminder should be skipped
@@ -436,7 +436,7 @@ test('scheduler sends Monday fasting reminder normally when target date is not d
 		},
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' }),
+		ensureCategoryRole: async () => ({ id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' }),
 	});
 
 	assert.equal(sentPayloads.length, 1);
@@ -461,7 +461,7 @@ test('scheduler sends dawwd alternate day reminder when no last fast date record
 			recordedEvents.push(event.eventKey);
 			return true;
 		},
-		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الدعوض' }),
+		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الداوود' }),
 		checkDawwdCycle: async () => ({ isFastDay: true, targetDate: '2026-04-22' }),
 		recordDawwdFast: async () => undefined,
 	});
@@ -483,7 +483,7 @@ test('scheduler skips dawwd reminder when last fasted date is yesterday', async 
 		},
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الدعوض' }),
+		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الداوود' }),
 		checkDawwdCycle: async () => ({ isFastDay: false, targetDate: '2026-04-20' }),
 		recordDawwdFast: async () => undefined,
 	});
@@ -508,7 +508,7 @@ test('scheduler sends dawwd reminder when last fasted date is 2+ days ago', asyn
 			recordedEvents.push(event.eventKey);
 			return true;
 		},
-		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الدعوض' }),
+		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الداوود' }),
 		checkDawwdCycle: async () => ({ isFastDay: true, targetDate: '2026-04-21' }),
 		recordDawwdFast: async (date) => {
 			recordedLastFastedDates.push(date);
@@ -537,7 +537,7 @@ test('scheduler skips dawwd reminder on Eid al-Fitr day', async () => {
 		},
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الدعوض' }),
+		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الداوود' }),
 		checkDawwdCycle: async () => ({ isFastDay: false, targetDate: '2026-05-11' }),
 	});
 
@@ -564,7 +564,7 @@ test('scheduler skips dawwd reminder on Eid al-Adha day', async () => {
 		},
 		hasEvent: async () => false,
 		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الدعوض' }),
+		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الداوود' }),
 		checkDawwdCycle: async () => ({ isFastDay: false, targetDate: '2026-06-18' }),
 	});
 

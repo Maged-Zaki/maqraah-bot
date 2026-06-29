@@ -27,6 +27,8 @@ function buildTemplateLine(event: SubscriptionReminderEventDefinition, hijriDate
 			return 'غدا صيام يوم الخميس.';
 		case 'white-days':
 			return `غدا صيام اليوم الأبيض ${hijriDate?.hijriDay ?? ''} من ${getHijriMonthName(hijriDate)}.`;
+		case 'dawwd-alternate':
+			return 'غدا صيام الدعوض.';
 		case 'six-shawwal':
 			return 'من غد يبدأ صيام الست من شوال، وصمها قبل نهاية شوال.';
 		case 'arafah':

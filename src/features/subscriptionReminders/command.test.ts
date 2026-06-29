@@ -20,14 +20,14 @@ test('/reminders subscribe adds the category subscription privately', { concurre
 
 	await withCommandMocks(
 		{
-			subscribeMemberToCategory: async () => ({ changed: true, role: { id: 'role-fasting', name: 'تذكيرات الصيام' } }),
+			subscribeMemberToCategory: async () => ({ changed: true, role: { id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' } }),
 		},
 		async () => {
-			await command.execute(createInteraction({ subcommand: 'subscribe', category: 'fasting', replies }));
+			await command.execute(createInteraction({ subcommand: 'subscribe', category: 'muhammed-way', replies }));
 		}
 	);
 
-	assert.deepEqual(replies, [{ content: 'You are subscribed to تذكيرات الصيام.', flags: MessageFlags.Ephemeral }]);
+	assert.deepEqual(replies, [{ content: 'You are subscribed to تذكيرات صيام المحمد.', flags: MessageFlags.Ephemeral }]);
 });
 
 test('/reminders unsubscribe removes the category subscription privately', { concurrency: false }, async () => {
@@ -35,19 +35,19 @@ test('/reminders unsubscribe removes the category subscription privately', { con
 
 	await withCommandMocks(
 		{
-			unsubscribeMemberFromCategory: async () => ({ changed: true, role: { id: 'role-fasting', name: 'تذكيرات الصيام' } }),
+			unsubscribeMemberFromCategory: async () => ({ changed: true, role: { id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' } }),
 		},
 		async () => {
-			await command.execute(createInteraction({ subcommand: 'unsubscribe', category: 'fasting', replies }));
+			await command.execute(createInteraction({ subcommand: 'unsubscribe', category: 'muhammed-way', replies }));
 		}
 	);
 
-	assert.deepEqual(replies, [{ content: 'You are unsubscribed from تذكيرات الصيام.', flags: MessageFlags.Ephemeral }]);
+	assert.deepEqual(replies, [{ content: 'You are unsubscribed from تذكيرات صيام المحمد.', flags: MessageFlags.Ephemeral }]);
 });
 
 test('/reminders list shows the caller subscriptions privately', { concurrency: false }, async () => {
 	const replies: any[] = [];
-	const role = { id: 'role-fasting', name: 'تذكيرات الصيام' };
+	const role = { id: 'role-muhammed-way', name: 'تذكيرات صيام المحمد' };
 
 	await command.execute(
 		createInteraction({
@@ -59,7 +59,7 @@ test('/reminders list shows the caller subscriptions privately', { concurrency: 
 	);
 
 	assert.equal(replies[0].flags, MessageFlags.Ephemeral);
-	assert.match(replies[0].content, /Subscribed: تذكيرات الصيام/);
+	assert.match(replies[0].content, /Subscribed: تذكيرات صيام المحمد/);
 	assert.match(replies[0].content, /Not subscribed: تذكيرات المناسبات الإسلامية/);
 });
 
@@ -254,7 +254,7 @@ test('/reminders subscribe surfaces role permission failures clearly', { concurr
 			},
 		},
 		async () => {
-			await command.execute(createInteraction({ subcommand: 'subscribe', category: 'fasting', replies }));
+			await command.execute(createInteraction({ subcommand: 'subscribe', category: 'muhammed-way', replies }));
 		}
 	);
 

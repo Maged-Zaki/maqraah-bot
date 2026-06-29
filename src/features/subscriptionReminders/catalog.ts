@@ -1,9 +1,21 @@
 export const subscriptionReminderCategories = {
-	fasting: {
-		key: 'fasting',
-		roleName: 'تذكيرات الصيام',
-		label: 'Fasting',
-		description: 'Optional fasting reminders',
+	'muhammed-way': {
+		key: 'muhammed-way',
+		roleName: 'تذكيرات صيام المحمد',
+		label: "Prophet's Way Fasting",
+		description: 'Monday, Thursday, and White Days (13th, 14th, 15th of each month)',
+	},
+	'dawwd-alternate': {
+		key: 'dawwd-alternate',
+		roleName: 'تذكيرات صيام الدعوض',
+		label: 'Alternate Day Fasting',
+		description: 'Every other day fasting pattern',
+	},
+	'special-occasions': {
+		key: 'special-occasions',
+		roleName: 'تذكيرات المناسبات الخاصة',
+		label: 'Special Occasions',
+		description: 'Ashura, Arafah, Tasua, and Six Shawwal fasting',
 	},
 	'islamic-events': {
 		key: 'islamic-events',
@@ -26,6 +38,9 @@ export type ReminderMatcher =
 			type: 'hijri-date';
 			month: number;
 			days: number[];
+	  }
+	| {
+			type: 'alternate-day-cycle';
 	  };
 
 export interface ReminderSourceReference {
@@ -59,7 +74,8 @@ export interface SubscriptionReminderEventDefinition {
 		| 'ramadan-start'
 		| 'eid-fitr'
 		| 'dhul-hijjah-ten'
-		| 'eid-adha';
+		| 'eid-adha'
+		| 'dawwd-alternate';
 	hadith: ReminderHadithReference;
 	excludedHijriDates?: ExcludedHijriDateRange[];
 }
@@ -67,7 +83,7 @@ export interface SubscriptionReminderEventDefinition {
 export const subscriptionReminderEvents: SubscriptionReminderEventDefinition[] = [
 	{
 		key: 'fasting-monday',
-		categoryKey: 'fasting',
+		categoryKey: 'muhammed-way',
 		leadDays: 1,
 		matcher: { type: 'gregorian-weekday', weekday: 1 },
 		messageKey: 'fasting-monday',
@@ -82,7 +98,7 @@ export const subscriptionReminderEvents: SubscriptionReminderEventDefinition[] =
 	},
 	{
 		key: 'fasting-thursday',
-		categoryKey: 'fasting',
+		categoryKey: 'muhammed-way',
 		leadDays: 1,
 		matcher: { type: 'gregorian-weekday', weekday: 4 },
 		messageKey: 'fasting-thursday',
@@ -97,7 +113,7 @@ export const subscriptionReminderEvents: SubscriptionReminderEventDefinition[] =
 	},
 	{
 		key: 'white-days',
-		categoryKey: 'fasting',
+		categoryKey: 'muhammed-way',
 		leadDays: 1,
 		matcher: { type: 'hijri-date', month: 0, days: [13, 14, 15] },
 		messageKey: 'white-days',
@@ -108,7 +124,7 @@ export const subscriptionReminderEvents: SubscriptionReminderEventDefinition[] =
 	},
 	{
 		key: 'six-shawwal',
-		categoryKey: 'fasting',
+		categoryKey: 'special-occasions',
 		leadDays: 1,
 		matcher: { type: 'hijri-date', month: 10, days: [2] },
 		messageKey: 'six-shawwal',
@@ -119,7 +135,7 @@ export const subscriptionReminderEvents: SubscriptionReminderEventDefinition[] =
 	},
 	{
 		key: 'arafah',
-		categoryKey: 'fasting',
+		categoryKey: 'special-occasions',
 		leadDays: 1,
 		matcher: { type: 'hijri-date', month: 12, days: [9] },
 		messageKey: 'arafah',
@@ -130,7 +146,7 @@ export const subscriptionReminderEvents: SubscriptionReminderEventDefinition[] =
 	},
 	{
 		key: 'tasua',
-		categoryKey: 'fasting',
+		categoryKey: 'special-occasions',
 		leadDays: 1,
 		matcher: { type: 'hijri-date', month: 1, days: [9] },
 		messageKey: 'tasua',
@@ -141,7 +157,7 @@ export const subscriptionReminderEvents: SubscriptionReminderEventDefinition[] =
 	},
 	{
 		key: 'ashura',
-		categoryKey: 'fasting',
+		categoryKey: 'special-occasions',
 		leadDays: 1,
 		matcher: { type: 'hijri-date', month: 1, days: [10] },
 		messageKey: 'ashura',
@@ -149,6 +165,21 @@ export const subscriptionReminderEvents: SubscriptionReminderEventDefinition[] =
 			text: 'صيام يوم عاشوراء يكفر السنة الماضية.',
 			source: { label: 'صحيح مسلم 1162b', url: 'https://sunnah.com/urn/226030' },
 		},
+	},
+	{
+		key: 'dawwd-alternate',
+		categoryKey: 'dawwd-alternate',
+		leadDays: 1,
+		matcher: { type: 'alternate-day-cycle' },
+		messageKey: 'dawwd-alternate',
+		hadith: {
+			text: 'صيام الدعوض كانوا قوم يصومون غير يوم ولا يفطرون غير يوم، حتى إذا أطعموا من غير الصيام لم يطعموا إياهم، وإذا قيل لأحدهم امنحتني شيئًا من مالك ما منحهم إياه حتى رأياهم يا تقدموا إلينا شيئا نتصدق به فيسلم إلينا فسلمنا له.',
+			source: { label: 'صحيح مسلم 1154a', url: 'https://sunnah.com/muslim:1154a' },
+		},
+		excludedHijriDates: [
+			{ month: 10, days: [1] }, // Eid al-Fitr (1 Shawwal)
+			{ month: 12, days: [10, 11, 12, 13] }, // Eid al-Adha + Days of Tashriq (10-13 Dhul-Hijjah)
+		],
 	},
 	{
 		key: 'ramadan-start',

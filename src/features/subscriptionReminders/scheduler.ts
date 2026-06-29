@@ -19,6 +19,11 @@ import { addDaysToDateKey, formatLocalDateKey, getWeekdayFromDateKey, isSameLoca
 import { buildSubscriptionReminderMessage } from './messages';
 import { ensureCategoryRole } from './roleManager';
 import { refreshHijriCalendarCache } from './calendarCache';
+import {
+	checkDawwdCycle,
+	recordDawwdFast,
+	isAlternateDayFromLastFasted,
+} from './fastingCycle';
 
 export let scheduledSubscriptionReminderJobs: cron.ScheduledTask[] = [];
 
@@ -37,6 +42,8 @@ export interface SubscriptionReminderSchedulerDependencies {
 	recordEventSent?: typeof subscriptionReminderEventsRepository.recordEventSent;
 	ensureCategoryRole?: typeof ensureCategoryRole;
 	fetchPrayerTiming?: typeof fetchPrayerTimingFromAlAdhan;
+	checkDawwdCycle?: typeof checkDawwdCycle;
+	recordDawwdFast?: typeof recordDawwdFast;
 }
 
 export async function scheduleSubscriptionReminders(client: Client): Promise<void> {
@@ -119,6 +126,8 @@ export async function executeSubscriptionReminderRun(
 		dependencies.recordEventSent ?? subscriptionReminderEventsRepository.recordEventSent.bind(subscriptionReminderEventsRepository);
 	const resolveCategoryRole = dependencies.ensureCategoryRole ?? ensureCategoryRole;
 	const fetchPrayerTiming = dependencies.fetchPrayerTiming ?? fetchPrayerTimingFromAlAdhan;
+	const checkDawwdCycleFn = dependencies.checkDawwdCycle ?? checkDawwdCycle;
+	const recordDawwdFastFn = dependencies.recordDawwdFast ?? recordDawwdFast;
 
 	const configuration = await getConfiguration();
 	const timezone = normalizeTimeZone(configuration.timezone);
@@ -158,7 +167,7 @@ export async function executeSubscriptionReminderRun(
 	}
 
 	const sendDate = formatLocalDateKey(now, timezone);
-	const dueEvents = await getDueSubscriptionReminderEventsForSendDate(sendDate, getCachedHijriDate);
+	const dueEvents = await getDueSubscriptionReminderEventsForSendDate(sendDate, getCachedHijriDate, checkDawwdCycleFn);
 	for (const { event, targetDate, hijriDate } of dueEvents) {
 		const occurrenceKey = buildOccurrenceEventKey(event, targetDate);
 		if (await hasEvent(occurrenceKey)) {
@@ -189,6 +198,11 @@ export async function executeSubscriptionReminderRun(
 				scheduledFor: now.toISOString(),
 				sentAt: new Date().toISOString(),
 			});
+
+			// Record dawwd cycle state if this was a dawwd fast reminder
+			if (event.matcher.type === 'alternate-day-cycle') {
+				await recordDawwdFastFn(targetDate);
+			}
 
 			logger.recordSchedulerEvent('executed', {
 				stage: 'subscription_reminders',
@@ -285,7 +299,8 @@ interface DueSubscriptionReminderEvent {
 
 async function getDueSubscriptionReminderEventsForSendDate(
 	sendDate: string,
-	getCachedHijriDate: typeof hijriCalendarCacheRepository.getByGregorianDate
+	getCachedHijriDate: typeof hijriCalendarCacheRepository.getByGregorianDate,
+	checkDawwdCycleFn: typeof checkDawwdCycle = checkDawwdCycle
 ): Promise<DueSubscriptionReminderEvent[]> {
 	const dueEvents: DueSubscriptionReminderEvent[] = [];
 	const hijriDateCache = new Map<string, HijriCalendarCacheEntry | null>();
@@ -293,6 +308,17 @@ async function getDueSubscriptionReminderEventsForSendDate(
 
 	for (const event of subscriptionReminderEvents) {
 		const targetDate = addDaysToDateKey(sendDate, event.leadDays);
+
+		if (event.matcher.type === 'alternate-day-cycle') {
+			const { isFastDay, targetDate: cycleTargetDate } = await checkDawwdCycleFn(targetDate, getCachedHijriDate);
+
+			if (isFastDay) {
+				const hijriDate = await getCachedHijriDate(cycleTargetDate);
+				dueEvents.push({ event, targetDate: cycleTargetDate, hijriDate });
+			}
+
+			continue;
+		}
 
 		if (event.matcher.type === 'gregorian-weekday') {
 			if (event.matcher.weekday === getWeekdayFromDateKey(targetDate)) {
@@ -354,6 +380,10 @@ export function getDueSubscriptionReminderEvents(
 	const weekday = getWeekdayFromDateKey(targetDate);
 
 	return subscriptionReminderEvents.filter((event) => {
+		if (event.matcher.type === 'alternate-day-cycle') {
+			return false;
+		}
+
 		if (event.matcher.type === 'gregorian-weekday') {
 			return event.matcher.weekday === weekday;
 		}

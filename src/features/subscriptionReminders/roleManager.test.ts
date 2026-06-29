@@ -14,23 +14,23 @@ test('subscribing creates the category role and assigns it to the member', { con
 	const storedRoles = new Map<string, ReminderCategoryRole>();
 
 	await withRoleRepositoryStore(storedRoles, async () => {
-		const result = await subscribeMemberToCategory(guild, member, 'fasting');
+		const result = await subscribeMemberToCategory(guild, member, 'muhammed-way');
 
 		assert.equal(result.changed, true);
-		assert.equal(result.role.name, 'تذكيرات الصيام');
+		assert.equal(result.role.name, 'تذكيرات صيام المحمد');
 		assert.equal(member.roles.cache.has(result.role.id), true);
-		assert.equal(storedRoles.get('fasting')?.roleId, result.role.id);
+		assert.equal(storedRoles.get('muhammed-way')?.roleId, result.role.id);
 	});
 });
 
 test('subscribing reuses an existing category role by name', { concurrency: false }, async () => {
-	const existingRole = { id: 'existing-role', name: 'تذكيرات الصيام' };
+	const existingRole = { id: 'existing-role', name: 'تذكيرات صيام المحمد' };
 	const guild = createGuild({ roles: [existingRole] });
 	const member = createMember();
 	const storedRoles = new Map<string, ReminderCategoryRole>();
 
 	await withRoleRepositoryStore(storedRoles, async () => {
-		const result = await subscribeMemberToCategory(guild, member, 'fasting');
+		const result = await subscribeMemberToCategory(guild, member, 'muhammed-way');
 
 		assert.equal(result.role.id, existingRole.id);
 		assert.equal(guild.createdRoles.length, 0);
@@ -39,13 +39,13 @@ test('subscribing reuses an existing category role by name', { concurrency: fals
 });
 
 test('unsubscribing removes the category role from the member', { concurrency: false }, async () => {
-	const existingRole = { id: 'existing-role', name: 'تذكيرات الصيام' };
+	const existingRole = { id: 'existing-role', name: 'تذكيرات صيام المحمد' };
 	const guild = createGuild({ roles: [existingRole] });
 	const member = createMember([existingRole.id]);
-	const storedRoles = new Map<string, ReminderCategoryRole>([['fasting', buildStoredRole('fasting', existingRole.id, existingRole.name)]]);
+	const storedRoles = new Map<string, ReminderCategoryRole>([['muhammed-way', buildStoredRole('muhammed-way', existingRole.id, existingRole.name)]]);
 
 	await withRoleRepositoryStore(storedRoles, async () => {
-		const result = await unsubscribeMemberFromCategory(guild, member, 'fasting');
+		const result = await unsubscribeMemberFromCategory(guild, member, 'muhammed-way');
 
 		assert.equal(result.changed, true);
 		assert.equal(member.roles.cache.has(existingRole.id), false);
@@ -54,14 +54,14 @@ test('unsubscribing removes the category role from the member', { concurrency: f
 
 test('missing stored roles are recreated when reminders need a category role', { concurrency: false }, async () => {
 	const guild = createGuild();
-	const storedRoles = new Map<string, ReminderCategoryRole>([['fasting', buildStoredRole('fasting', 'deleted-role', 'تذكيرات الصيام')]]);
+	const storedRoles = new Map<string, ReminderCategoryRole>([['muhammed-way', buildStoredRole('muhammed-way', 'deleted-role', 'تذكيرات صيام المحمد')]]);
 
 	await withRoleRepositoryStore(storedRoles, async () => {
-		const role = await ensureCategoryRole(guild, 'fasting', true);
+		const role = await ensureCategoryRole(guild, 'muhammed-way', true);
 
-		assert.equal(role?.name, 'تذكيرات الصيام');
+		assert.equal(role?.name, 'تذكيرات صيام المحمد');
 		assert.notEqual(role?.id, 'deleted-role');
-		assert.equal(storedRoles.get('fasting')?.roleId, role?.id);
+		assert.equal(storedRoles.get('muhammed-way')?.roleId, role?.id);
 	});
 });
 
@@ -71,7 +71,7 @@ test('permission failures return a clear Manage Roles error', { concurrency: fal
 	const storedRoles = new Map<string, ReminderCategoryRole>();
 
 	await withRoleRepositoryStore(storedRoles, async () => {
-		await assert.rejects(() => subscribeMemberToCategory(guild, member, 'fasting'), /Manage Roles/);
+		await assert.rejects(() => subscribeMemberToCategory(guild, member, 'muhammed-way'), /Manage Roles/);
 	});
 });
 

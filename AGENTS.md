@@ -4,7 +4,7 @@
      always update AGENTS.md, README.md, and any related documentation to stay in sync.
      Out-of-date docs are a bug. -->
 
-<!-- hash updated after hifz-weekdays changes -->
+<!-- hash updated after fasting subcategories changes -->
 
 ## 1. Project Identity
 
@@ -371,6 +371,18 @@ Purpose: idempotency ledger tracking which schema migrations have been applied. 
 | `appliedAt` | TEXT | no | none | none |
 
 Example record: `{ id: 1, name: "001_initial_schema", appliedAt: "2026-05-29T12:00:00.000Z" }`.
+
+### `fasting_cycle_state`
+
+Purpose: tracks the last fasted date for the dawwd alternate-day fasting pattern. Write frequency: per dawwd reminder sent.
+
+| Column | Type | Nullable | Default | Index |
+| --- | --- | --- | --- | --- |
+| `cycleKey` | TEXT PRIMARY KEY | no | none | PK |
+| `lastFastedDate` | TEXT | yes | null | none |
+| `updatedAt` | TEXT | yes | null | none |
+
+Example record: `{ cycleKey: "dawwd-alternate", lastFastedDate: "2026-04-20", updatedAt: "2026-04-20T18:00:00.000Z" }`.
 
 ## 8. Rate Limits & Quotas
 

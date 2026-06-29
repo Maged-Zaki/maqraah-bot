@@ -2,26 +2,26 @@ export const subscriptionReminderCategories = {
 	'muhammed-way': {
 		key: 'muhammed-way',
 		roleName: 'تذكيرات صيام الأنبياء',
-		label: "Prophet's Fasting",
-		description: 'e.g., Monday, Thursday, White Days',
+		label: 'Prophet\'s Fasting (e.g., Monday, Thursday, White Days)',
+		description: 'Fasting reminders for Mondays, Thursdays, and 13th-15th of Hijri months',
 	},
 	'dawwd-alternate': {
 		key: 'dawwd-alternate',
 		roleName: 'تذكيرات صيام الداوود',
-		label: "Dawood's Fasting",
-		description: 'e.g., alternate day fasting',
+		label: 'Dawood\'s Fasting (e.g., alternate day)',
+		description: 'Fasting every other day (Dawood ibn Tamim\'s method)',
 	},
 	'special-occasions': {
 		key: 'special-occasions',
 		roleName: 'تذكيرات الصيام المناسبات',
-		label: 'Occasional Fasting',
-		description: 'e.g., Ashura, Arafah, Tasua, Six Shawwal',
+		label: 'Occasional Fasting (e.g., Ashura, Arafah)',
+		description: 'Fasting on special days: Ashura, Arafah, Tasua, Six Shawwal',
 	},
 	'islamic-events': {
 		key: 'islamic-events',
 		roleName: 'تذكيرات المناسبات الإسلامية',
-		label: 'Islamic events',
-		description: 'Optional Islamic event reminders',
+		label: 'Islamic events (e.g., Ramadan, Eid)',
+		description: 'Islamic calendar event reminders: Ramadan start, Eid al-Fitr, Eid al-Adha, etc.',
 	},
 } as const;
 

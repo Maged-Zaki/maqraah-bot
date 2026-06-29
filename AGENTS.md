@@ -4,7 +4,7 @@
      always update AGENTS.md, README.md, and any related documentation to stay in sync.
      Out-of-date docs are a bug. -->
 
-<!-- hash updated after fasting subcategories changes -->
+<!-- hash updated after fasting subcategories role name changes -->
 
 ## 1. Project Identity
 

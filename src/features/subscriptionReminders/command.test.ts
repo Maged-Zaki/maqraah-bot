@@ -20,14 +20,14 @@ test('/reminders subscribe adds the category subscription privately', { concurre
 
 	await withCommandMocks(
 		{
-			subscribeMemberToCategory: async () => ({ changed: true, role: { id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' } }),
+			subscribeMemberToCategory: async () => ({ changed: true, role: { id: 'role-muhammed-way', name: 'صيام محمد ﷺ' } }),
 		},
 		async () => {
 			await command.execute(createInteraction({ subcommand: 'subscribe', category: 'muhammed-way', replies }));
 		}
 	);
 
-	assert.deepEqual(replies, [{ content: 'You are subscribed to تذكيرات صيام الأنبياء.', flags: MessageFlags.Ephemeral }]);
+	assert.deepEqual(replies, [{ content: 'You are subscribed to صيام محمد ﷺ.', flags: MessageFlags.Ephemeral }]);
 });
 
 test('/reminders unsubscribe removes the category subscription privately', { concurrency: false }, async () => {
@@ -35,19 +35,19 @@ test('/reminders unsubscribe removes the category subscription privately', { con
 
 	await withCommandMocks(
 		{
-			unsubscribeMemberFromCategory: async () => ({ changed: true, role: { id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' } }),
+			unsubscribeMemberFromCategory: async () => ({ changed: true, role: { id: 'role-muhammed-way', name: 'صيام محمد ﷺ' } }),
 		},
 		async () => {
 			await command.execute(createInteraction({ subcommand: 'unsubscribe', category: 'muhammed-way', replies }));
 		}
 	);
 
-	assert.deepEqual(replies, [{ content: 'You are unsubscribed from تذكيرات صيام الأنبياء.', flags: MessageFlags.Ephemeral }]);
+	assert.deepEqual(replies, [{ content: 'You are unsubscribed from صيام محمد ﷺ.', flags: MessageFlags.Ephemeral }]);
 });
 
 test('/reminders list shows the caller subscriptions privately', { concurrency: false }, async () => {
 	const replies: any[] = [];
-	const role = { id: 'role-muhammed-way', name: 'تذكيرات صيام الأنبياء' };
+	const role = { id: 'role-muhammed-way', name: 'صيام محمد ﷺ' };
 
 	await command.execute(
 		createInteraction({
@@ -59,7 +59,7 @@ test('/reminders list shows the caller subscriptions privately', { concurrency: 
 	);
 
 	assert.equal(replies[0].flags, MessageFlags.Ephemeral);
-	assert.match(replies[0].content, /Subscribed: تذكيرات صيام الأنبياء/);
+	assert.match(replies[0].content, /Subscribed: صيام محمد ﷺ/);
 	assert.match(replies[0].content, /Not subscribed: تذكيرات المناسبات الإسلامية/);
 });
 

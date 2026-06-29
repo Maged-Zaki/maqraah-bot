@@ -1,7 +1,7 @@
 export const subscriptionReminderCategories = {
 	'muhammed-way': {
 		key: 'muhammed-way',
-		roleName: 'تذكيرات صيام الأنبياء',
+		roleName: 'صيام محمد ﷺ',
 		label: 'Prophet\'s Fasting (e.g., Monday, Thursday, White Days)',
 		description: 'Fasting reminders for Mondays, Thursdays, and 13th-15th of Hijri months',
 	},

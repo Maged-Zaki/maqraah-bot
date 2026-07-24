@@ -39,9 +39,6 @@ export type ReminderMatcher =
 			month: number;
 			days: number[];
 	  }
-	| {
-			type: 'alternate-day-cycle';
-	  };
 
 export interface ReminderSourceReference {
 	label: string;
@@ -75,7 +72,7 @@ export interface SubscriptionReminderEventDefinition {
 		| 'eid-fitr'
 		| 'dhul-hijjah-ten'
 		| 'eid-adha'
-		| 'dawwd-alternate';
+
 	hadith: ReminderHadithReference;
 	excludedHijriDates?: ExcludedHijriDateRange[];
 }
@@ -166,21 +163,7 @@ export const subscriptionReminderEvents: SubscriptionReminderEventDefinition[] =
 			source: { label: 'صحيح مسلم 1162b', url: 'https://sunnah.com/urn/226030' },
 		},
 	},
-	{
-		key: 'dawwd-alternate',
-		categoryKey: 'dawwd-alternate',
-		leadDays: 1,
-		matcher: { type: 'alternate-day-cycle' },
-		messageKey: 'dawwd-alternate',
-		hadith: {
-			text: 'أنَّ رَسولَ اللهِ صلَّى اللهُ عليه وسلَّم قال له: أحَبُّ الصَّلاةِ إلى اللهِ صَلاةُ داوُدَ عليه السَّلامُ، وأحَبُّ الصِّيامِ إلى اللهِ صيامُ داوُدَ، وكان يَنامُ نِصفَ اللَّيلِ ويقومُ ثُلُثَه، ويَنامُ سُدُسَه، ويَصومُ يَومًا، ويُفطِرُ يَومًا.',
-			source: { label: 'سنن الطبراني', url: 'https://sunnah.com/tirmidhi' },
-		},
-		excludedHijriDates: [
-			{ month: 10, days: [1] }, // Eid al-Fitr (1 Shawwal)
-			{ month: 12, days: [10, 11, 12, 13] }, // Eid al-Adha + Days of Tashriq (10-13 Dhul-Hijjah)
-		],
-	},
+
 	{
 		key: 'ramadan-start',
 		categoryKey: 'islamic-events',
@@ -226,7 +209,6 @@ export const subscriptionReminderEvents: SubscriptionReminderEventDefinition[] =
 		},
 	},
 ];
-
 export function getSubscriptionReminderCategory(categoryKey: string | null | undefined) {
 	if (!categoryKey || !isSubscriptionReminderCategoryKey(categoryKey)) {
 		return null;

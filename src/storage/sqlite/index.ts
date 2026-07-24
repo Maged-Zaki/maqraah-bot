@@ -11,7 +11,6 @@ import { ReminderSettingsRepository } from './repositories/ReminderSettingsRepos
 import { HijriCalendarCacheRepository } from './repositories/HijriCalendarCacheRepository';
 import { SubscriptionReminderEventsRepository } from './repositories/SubscriptionReminderEventsRepository';
 import { HifzProgressRepository } from './repositories/HifzProgressRepository';
-import { FastingCycleStateRepository } from './repositories/FastingCycleStateRepository';
 import { runMigrations } from './migrations/runner';
 import { logger } from '../../observability/logging/logger';
 
@@ -42,4 +41,3 @@ export const reminderSettingsRepository = new ReminderSettingsRepository(db);
 export const hijriCalendarCacheRepository = new HijriCalendarCacheRepository(db);
 export const subscriptionReminderEventsRepository = new SubscriptionReminderEventsRepository(db);
 export const hifzProgressRepository = new HifzProgressRepository(db);
-export const fastingCycleStateRepository = new FastingCycleStateRepository(db);

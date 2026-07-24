@@ -10,17 +10,11 @@ process.env.GUILD_ID = 'guild-1';
 const { reminderSendTimeModes } = require('../../storage/sqlite/repositories/ReminderSettingsRepository') as typeof import('../../storage/sqlite/repositories/ReminderSettingsRepository');
 const { clearSubscriptionReminderPrayerTimeCache, executeSubscriptionReminderRun } = require('./scheduler') as typeof import('./scheduler');
 
-const defaultDawwdDeps = {
-	checkDawwdCycle: async () => ({ isFastDay: false, targetDate: '2026-04-20' }),
-	recordDawwdFast: async () => undefined,
-};
-
 test('scheduler sends reminders at the configured time', async () => {
 	const sentPayloads: any[] = [];
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+				getConfiguration: async () => ({ timezone: 'UTC' } as any),
 		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
@@ -42,8 +36,7 @@ test('scheduler skips runs outside the configured time', async () => {
 	const sentPayloads: any[] = [];
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T17:59:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+				getConfiguration: async () => ({ timezone: 'UTC' } as any),
 		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
@@ -60,8 +53,7 @@ test('scheduler sends prayer-synced reminders at the exact prayer minute', async
 	const requestedPrayers: string[] = [];
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T20:17:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => buildConfiguration({ timezone: 'UTC' }),
+				getConfiguration: async () => buildConfiguration({ timezone: 'UTC' }),
 		getSettings: async () => buildSettings({ sendTimeMode: reminderSendTimeModes.PRAYER, sendPrayer: 'isha' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
@@ -83,8 +75,7 @@ test('scheduler skips prayer-synced runs outside the exact prayer minute without
 	const sentPayloads: any[] = [];
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T20:16:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => buildConfiguration({ timezone: 'UTC' }),
+				getConfiguration: async () => buildConfiguration({ timezone: 'UTC' }),
 		getSettings: async () => buildSettings({ sendTimeMode: reminderSendTimeModes.PRAYER, sendPrayer: 'isha' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
@@ -102,8 +93,7 @@ test('scheduler skips prayer-synced reminders when the prayer time cannot be res
 	const sentPayloads: any[] = [];
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T03:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => buildConfiguration({ timezone: 'UTC' }),
+				getConfiguration: async () => buildConfiguration({ timezone: 'UTC' }),
 		getSettings: async () => buildSettings({ sendTimeMode: reminderSendTimeModes.PRAYER, sendPrayer: 'fajr' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
@@ -123,8 +113,7 @@ test('scheduler keeps fixed-time behavior when prayer sync is not enabled', asyn
 	let prayerLookups = 0;
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => buildConfiguration({ timezone: 'UTC' }),
+				getConfiguration: async () => buildConfiguration({ timezone: 'UTC' }),
 		getSettings: async () => buildSettings({ sendTimeMode: reminderSendTimeModes.FIXED, sendTime: '6:00 PM' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
@@ -144,8 +133,7 @@ test('scheduler ignores the legacy days-before value and uses hard-coded event l
 	const sentPayloads: any[] = [];
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+				getConfiguration: async () => ({ timezone: 'UTC' } as any),
 		getSettings: async () => buildSettings({ daysBefore: 0, sendTime: '6:00 PM' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
@@ -161,8 +149,7 @@ test('scheduler does not resend an already recorded reminder', async () => {
 	const sentPayloads: any[] = [];
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+				getConfiguration: async () => ({ timezone: 'UTC' } as any),
 		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => true,
@@ -181,8 +168,7 @@ test('scheduler sends the six Shawwal reminder once on Eid day for fasting from 
 	const cachedDateLookups: string[] = [];
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-20T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+				getConfiguration: async () => ({ timezone: 'UTC' } as any),
 		getSettings: async () => buildSettings({ daysBefore: 0, sendTime: '6:00 PM' }),
 		getCachedHijriDate: async (dateKey) => {
 			cachedDateLookups.push(dateKey);
@@ -208,8 +194,7 @@ test('scheduler skips Hijri-based reminders when provider and cache data are una
 	const sentPayloads: any[] = [];
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-20T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+				getConfiguration: async () => ({ timezone: 'UTC' } as any),
 		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
@@ -225,8 +210,7 @@ test('scheduler recovers missing category roles before sending', async () => {
 	const ensuredCategories: string[] = [];
 
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+				getConfiguration: async () => ({ timezone: 'UTC' } as any),
 		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async () => null,
 		hasEvent: async () => false,
@@ -319,8 +303,7 @@ test('scheduler skips Monday fasting reminder when target date is Eid al-Fitr (1
 	// Sunday 2026-05-10, reminder for Monday 2026-05-11 which is 1 Shawwal (Eid al-Fitr)
 	// The Monday fasting reminder should be skipped, but the Eid al-Fitr reminder should still be sent
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-05-10T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+				getConfiguration: async () => ({ timezone: 'UTC' } as any),
 		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async (dateKey) => {
 			if (dateKey === '2026-05-11') {
@@ -348,8 +331,7 @@ test('scheduler skips Thursday fasting reminder when target date is Eid al-Adha 
 	// Wednesday 2026-06-17, reminder for Thursday 2026-06-18 which is 10 Dhul-Hijjah (Eid al-Adha)
 	// The Thursday fasting reminder should be skipped, but the Eid al-Adha reminder should still be sent
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-06-17T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+				getConfiguration: async () => ({ timezone: 'UTC' } as any),
 		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async (dateKey) => {
 			if (dateKey === '2026-06-18') {
@@ -376,8 +358,7 @@ test('scheduler skips Monday fasting reminder during Days of Tashriq (11 Dhul-Hi
 
 	// Sunday 2026-06-21, reminder for Monday 2026-06-22 which is 11 Dhul-Hijjah (Day of Tashriq)
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-06-21T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+				getConfiguration: async () => ({ timezone: 'UTC' } as any),
 		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async (dateKey) => {
 			if (dateKey === '2026-06-22') {
@@ -398,8 +379,7 @@ test('scheduler skips Thursday fasting reminder during Days of Tashriq (13 Dhul-
 
 	// Wednesday 2026-06-17, reminder for Thursday 2026-06-18 which is 13 Dhul-Hijjah (Day of Tashriq)
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-06-17T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+				getConfiguration: async () => ({ timezone: 'UTC' } as any),
 		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async (dateKey) => {
 			if (dateKey === '2026-06-18') {
@@ -424,8 +404,7 @@ test('scheduler sends Monday fasting reminder normally when target date is not d
 
 	// Sunday 2026-04-19, reminder for Monday 2026-04-20 which is 2 Ramadan (not Eid)
 	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-19T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
+				getConfiguration: async () => ({ timezone: 'UTC' } as any),
 		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
 		getCachedHijriDate: async (dateKey) => {
 			hijriDateLookups.push(dateKey);
@@ -442,134 +421,4 @@ test('scheduler sends Monday fasting reminder normally when target date is not d
 	assert.equal(sentPayloads.length, 1);
 	assert.match(sentPayloads[0].content, /صيام يوم الاثنين/);
 	assert.deepEqual(hijriDateLookups, ['2026-04-20']);
-});
-
-test('scheduler sends dawwd alternate day reminder when no last fast date recorded', async () => {
-	const sentPayloads: any[] = [];
-	const recordedEvents: string[] = [];
-
-	// Use a Tuesday to avoid triggering Monday fasting
-	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-21T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
-		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
-		getCachedHijriDate: async (dateKey) => {
-			return buildHijriDate({ gregorianDate: dateKey, hijriMonth: 9, hijriDay: 10 });
-		},
-		hasEvent: async () => false,
-		recordEventSent: async (event) => {
-			recordedEvents.push(event.eventKey);
-			return true;
-		},
-		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الداوود' }),
-		checkDawwdCycle: async () => ({ isFastDay: true, targetDate: '2026-04-22' }),
-		recordDawwdFast: async () => undefined,
-	});
-
-	assert.equal(sentPayloads.length, 1);
-	assert.match(sentPayloads[0].content, /صيام الدعوض/);
-	assert.match(sentPayloads[0].content, /الحديث:/);
-});
-
-test('scheduler skips dawwd reminder when last fasted date is yesterday', async () => {
-	const sentPayloads: any[] = [];
-
-	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-20T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
-		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
-		getCachedHijriDate: async (dateKey) => {
-			return buildHijriDate({ gregorianDate: dateKey, hijriMonth: 9, hijriDay: 10 });
-		},
-		hasEvent: async () => false,
-		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الداوود' }),
-		checkDawwdCycle: async () => ({ isFastDay: false, targetDate: '2026-04-20' }),
-		recordDawwdFast: async () => undefined,
-	});
-
-	assert.equal(sentPayloads.length, 0);
-});
-
-test('scheduler sends dawwd reminder when last fasted date is 2+ days ago', async () => {
-	const sentPayloads: any[] = [];
-	const recordedEvents: string[] = [];
-	const recordedLastFastedDates: string[] = [];
-
-	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-04-21T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
-		getSettings: async () => buildSettings({ sendTime: '6:00 PM' }),
-		getCachedHijriDate: async (dateKey) => {
-			return buildHijriDate({ gregorianDate: dateKey, hijriMonth: 9, hijriDay: 10 });
-		},
-		hasEvent: async () => false,
-		recordEventSent: async (event) => {
-			recordedEvents.push(event.eventKey);
-			return true;
-		},
-		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الداوود' }),
-		checkDawwdCycle: async () => ({ isFastDay: true, targetDate: '2026-04-21' }),
-		recordDawwdFast: async (date) => {
-			recordedLastFastedDates.push(date);
-		},
-	});
-
-	assert.equal(sentPayloads.length, 1);
-	assert.match(sentPayloads[0].content, /صيام الدعوض/);
-	assert.deepEqual(recordedLastFastedDates, ['2026-04-21']);
-});
-
-test('scheduler skips dawwd reminder on Eid al-Fitr day', async () => {
-	const sentPayloads: any[] = [];
-
-	// 2026-05-11 is a Monday which is Eid al-Fitr (1 Shawwal)
-	// The dawwd reminder should be skipped, but Eid al-Fitr reminder should be sent
-	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-05-10T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
-		getSettings: async () => buildSettings({ daysBefore: 0, sendTime: '6:00 PM' }),
-		getCachedHijriDate: async (dateKey) => {
-			if (dateKey === '2026-05-11') {
-				return buildHijriDate({ gregorianDate: dateKey, hijriMonth: 10, hijriDay: 1 });
-			}
-			return null;
-		},
-		hasEvent: async () => false,
-		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الداوود' }),
-		checkDawwdCycle: async () => ({ isFastDay: false, targetDate: '2026-05-11' }),
-	});
-
-	// Eid al-Fitr reminder should be sent, dawwd should be skipped
-	assert.equal(sentPayloads.length, 1);
-	assert.doesNotMatch(sentPayloads[0].content, /صيام الدعوض/);
-	assert.match(sentPayloads[0].content, /عيد الفطر/);
-});
-
-test('scheduler skips dawwd reminder on Eid al-Adha day', async () => {
-	const sentPayloads: any[] = [];
-
-	// 2026-06-18 is a Thursday which is Eid al-Adha (10 Dhul-Hijjah)
-	// The dawwd reminder should be skipped, but Eid al-Adha reminder should be sent
-	await executeSubscriptionReminderRun(createClient(sentPayloads), new Date('2026-06-17T18:00:00.000Z'), {
-		...defaultDawwdDeps,
-		getConfiguration: async () => ({ timezone: 'UTC' } as any),
-		getSettings: async () => buildSettings({ daysBefore: 0, sendTime: '6:00 PM' }),
-		getCachedHijriDate: async (dateKey) => {
-			if (dateKey === '2026-06-18') {
-				return buildHijriDate({ gregorianDate: dateKey, hijriMonth: 12, hijriDay: 10 });
-			}
-			return null;
-		},
-		hasEvent: async () => false,
-		recordEventSent: async () => true,
-		ensureCategoryRole: async () => ({ id: 'role-dawwd-alternate', name: 'تذكيرات صيام الداوود' }),
-		checkDawwdCycle: async () => ({ isFastDay: false, targetDate: '2026-06-18' }),
-	});
-
-	// Eid al-Adha reminder should be sent, dawwd should be skipped
-	assert.equal(sentPayloads.length, 1);
-	assert.doesNotMatch(sentPayloads[0].content, /صيام الدعوض/);
-	assert.match(sentPayloads[0].content, /عيد الأضحى/);
 });

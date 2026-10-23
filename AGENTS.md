@@ -43,7 +43,7 @@ src/                         source TypeScript
     confirmations/           in-memory destructive confirmation button workflow
     content/                 message chunking helper
     prayerSync/              shared AlAdhan prayer-time lookup and time-sync math
-    quran/                   Qur'an page metadata helpers
+    quran/                   Qur'an page metadata and page-image URL helper
     time/                    time/timezone parsing helpers
 dist/                        generated CommonJS build output from `npm run build`; ignored by git
 .github/
@@ -71,6 +71,7 @@ The app starts in `src/index.ts`, loads `dotenv/config` and `newrelic`, then cal
 - Event bus pattern: direct `client.once()` and `client.on()` calls in `src/app/bot.ts`; there is no event module auto-loader.
 - Middleware chain: no formal middleware layer. `src/app/interactionRouter.ts` routes buttons first, then chat input commands, wraps command execution in New Relic and try/catch, and logs success/failure.
 - Module boundary rule: feature commands own Discord interaction parsing and user replies; repositories own SQLite queries; `shared/` holds reusable pure or low-Discord helpers; observability code lives under `src/observability`.
+- Qur'an page image source: `src/shared/quran/pageImages.ts` points at `jahedev/tajweed-quran-pages` on GitHub Raw. It maps page numbers 1–604 to `hafs/tajweed-NNN.jpg`; the README credits that repository and EasyQuran / Dar Al Maarifah. The bot links remote image URLs and does not package the image files locally.
 - Shard setup: none. There is no `ShardingManager`, shard count strategy, or IPC layer.
 - Worker threads: none. Cron jobs and command handlers run in the Node.js process.
 - Scheduler pattern: `node-cron` jobs are held in module-level arrays and stopped/rebuilt when configuration or schedules change.

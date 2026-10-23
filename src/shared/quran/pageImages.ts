@@ -1,7 +1,7 @@
 import { TOTAL_QURAN_PAGES } from './progress';
 
 const quranPageReadBaseUrl = 'https://quran.com/page';
-const quranPageImageBaseUrl = 'https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/easyquran.com/hafs-tajweed';
+const quranPageImageBaseUrl = 'https://raw.githubusercontent.com/jahedev/tajweed-quran-pages/master/hafs';
 
 export function buildQuranPageReadUrl(page: number): string {
 	assertValidQuranPage(page);
@@ -10,7 +10,7 @@ export function buildQuranPageReadUrl(page: number): string {
 
 export function buildQuranPageImageUrl(page: number): string {
 	assertValidQuranPage(page);
-	return `${quranPageImageBaseUrl}/${page}.jpg`;
+	return `${quranPageImageBaseUrl}/tajweed-${String(page).padStart(3, '0')}.jpg`;
 }
 
 export function isValidQuranPage(page: number): boolean {

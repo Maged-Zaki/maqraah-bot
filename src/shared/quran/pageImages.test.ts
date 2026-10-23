@@ -5,7 +5,7 @@ import { buildQuranPageImageUrl, buildQuranPageReadUrl, isValidQuranPage } from 
 test('quran page URL helpers build read and image URLs', () => {
 	for (const page of [1, 13, 604]) {
 		assert.equal(buildQuranPageReadUrl(page), `https://quran.com/page/${page}`);
-		assert.equal(buildQuranPageImageUrl(page), `https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/easyquran.com/hafs-tajweed/${page}.jpg`);
+		assert.equal(buildQuranPageImageUrl(page), `https://raw.githubusercontent.com/jahedev/tajweed-quran-pages/master/hafs/tajweed-${String(page).padStart(3, '0')}.jpg`);
 		assert.equal(isValidQuranPage(page), true);
 	}
 });

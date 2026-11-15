@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { before } from 'node:test';
 import { ApplicationCommandOptionType, MessageFlags } from 'discord.js';
 import { Configuration } from '../../storage/sqlite/repositories/ConfigurationRepository';
 
 process.env.DATABASE_PATH ??= ':memory:';
 
-const { attendanceRepository, configurationRepository, reminderEventsRepository } = require('../../storage/sqlite') as typeof import('../../storage/sqlite');
+const { attendanceRepository, configurationRepository, reminderEventsRepository, dbReady } = require('../../storage/sqlite') as typeof import('../../storage/sqlite');
 const { attendanceStatuses } = require('./reminders/attendance') as typeof import('./reminders/attendance');
 const { data, handleMaqraahCommand } = require('./command') as typeof import('./command');
+
+before(async () => {
+	await dbReady;
+});
 
 test('maqraah command keeps attendance subcommands and exposes progress group', () => {
 	const command = data.toJSON() as any;
@@ -20,7 +24,11 @@ test('maqraah command keeps attendance subcommands and exposes progress group', 
 	const cannotAttendSubcommand = command.options.find((option: any) => option.name === 'cannot-attend-upcoming-maqraah');
 	assert.deepEqual(
 		cannotAttendSubcommand.options.map((option: any) => ({ name: option.name, type: option.type, required: option.required ?? false })),
-		[{ name: 'dates', type: ApplicationCommandOptionType.String, required: false }]
+		[
+			{ name: 'dates', type: ApplicationCommandOptionType.String, required: false },
+			{ name: 'user', type: ApplicationCommandOptionType.User, required: false },
+			{ name: 'send-now', type: ApplicationCommandOptionType.Boolean, required: false },
+		]
 	);
 
 	const clearSubcommand = command.options.find((option: any) => option.name === 'clear-upcoming-maqraah-status');
@@ -338,6 +346,176 @@ test('explicit maqraah dates refuse when any selected pre reminder already went 
 	]);
 });
 
+test('cannot-attend preregisters another member when the user option is set', { concurrency: false }, async () => {
+	const replies: any[] = [];
+	const upserts: Array<{ sessionId: string; userId: string; status: string; announcedAt: string | null }> = [];
+
+	await withCommandRepositoryMocks(
+		{
+			getConfiguration: async () => buildConfiguration({ dailyTime: '7:00 PM', timezone: 'UTC' }),
+			hasSentEvent: async () => false,
+			upsertAttendance: async (sessionId: string, userId: string, status: string, announcedAt: string | null = null) => {
+				upserts.push({ sessionId, userId, status, announcedAt });
+			},
+		},
+		async () => {
+			await handleMaqraahCommand(
+				buildInteraction({
+					subcommand: 'cannot-attend-upcoming-maqraah',
+					targetUser: { id: 'user-2', username: 'User Two' },
+					replies,
+				}) as any,
+				new Date('2026-04-15T18:00:00.000Z')
+			);
+		}
+	);
+
+	assert.deepEqual(upserts, [{ sessionId: '2026-04-15', userId: 'user-2', status: attendanceStatuses.CANNOT_MAKE_IT, announcedAt: null }]);
+	assert.deepEqual(replies, [{ content: '<@user-2> is marked as unable to attend the upcoming maqraah.', flags: MessageFlags.Ephemeral }]);
+});
+
+test('send-now announces another member absence despite an already sent pre reminder', { concurrency: false }, async () => {
+	const replies: any[] = [];
+	const { channel, sent } = buildAnnouncementChannel();
+
+	try {
+		await withCommandRepositoryMocks(
+			{
+				getConfiguration: async () => buildConfiguration({ dailyTime: '7:00 PM', timezone: 'UTC' }),
+				hasSentEvent: async () => true,
+			},
+			async () => {
+				await handleMaqraahCommand(
+					buildInteraction({
+						subcommand: 'cannot-attend-upcoming-maqraah',
+						targetUser: { id: 'user-7', username: 'User Seven' },
+						sendNow: true,
+						client: buildClientWithChannel(channel),
+						replies,
+					}) as any,
+					new Date('2026-04-17T18:00:00.000Z')
+				);
+			}
+		);
+
+		const saved = await attendanceRepository.getAttendance('2026-04-17', 'user-7');
+		assert.equal(saved?.status, attendanceStatuses.CANNOT_MAKE_IT);
+		assert.ok(saved?.announcedAt);
+		assert.equal(sent.length, 1);
+		assert.match(sent[0].content, /<@user-7> مش هيقدر يحضر المقراة النهارده\./);
+		assert.deepEqual(replies, [
+			{
+				content: '<@user-7> is marked as unable to attend the upcoming maqraah.\nThe attendance update was posted in the reminder channel.',
+				flags: MessageFlags.Ephemeral,
+			},
+		]);
+	} finally {
+		await attendanceRepository.deleteAttendance('2026-04-17', 'user-7');
+	}
+});
+
+test('send-now reports when the absence was already announced', { concurrency: false }, async () => {
+	const replies: any[] = [];
+	const { channel, sent } = buildAnnouncementChannel();
+
+	try {
+		await attendanceRepository.upsertAttendance('2026-04-18', 'user-8', attendanceStatuses.CANNOT_MAKE_IT, new Date().toISOString());
+
+		await withCommandRepositoryMocks(
+			{
+				getConfiguration: async () => buildConfiguration({ dailyTime: '7:00 PM', timezone: 'UTC' }),
+				hasSentEvent: async () => true,
+			},
+			async () => {
+				await handleMaqraahCommand(
+					buildInteraction({
+						subcommand: 'cannot-attend-upcoming-maqraah',
+						targetUser: { id: 'user-8', username: 'User Eight' },
+						sendNow: true,
+						client: buildClientWithChannel(channel),
+						replies,
+					}) as any,
+					new Date('2026-04-18T18:00:00.000Z')
+				);
+			}
+		);
+
+		assert.equal(sent.length, 0);
+		assert.deepEqual(replies, [
+			{
+				content: '<@user-8> is marked as unable to attend the upcoming maqraah.\nThe attendance update was already posted.',
+				flags: MessageFlags.Ephemeral,
+			},
+		]);
+	} finally {
+		await attendanceRepository.deleteAttendance('2026-04-18', 'user-8');
+	}
+});
+
+test('send-now works for the caller after the pre reminder went out', { concurrency: false }, async () => {
+	const replies: any[] = [];
+	const { channel, sent } = buildAnnouncementChannel();
+
+	try {
+		await withCommandRepositoryMocks(
+			{
+				getConfiguration: async () => buildConfiguration({ dailyTime: '7:00 PM', timezone: 'UTC' }),
+				hasSentEvent: async () => true,
+			},
+			async () => {
+				await handleMaqraahCommand(
+					buildInteraction({
+						subcommand: 'cannot-attend-upcoming-maqraah',
+						sendNow: true,
+						client: buildClientWithChannel(channel),
+						replies,
+					}) as any,
+					new Date('2026-04-19T18:00:00.000Z')
+				);
+			}
+		);
+
+		assert.equal(sent.length, 1);
+		assert.match(sent[0].content, /<@user-1> مش هيقدر يحضر المقراة النهارده\./);
+		assert.deepEqual(replies, [
+			{
+				content: 'You are marked as unable to attend the upcoming maqraah.\nThe attendance update was posted in the reminder channel.',
+				flags: MessageFlags.Ephemeral,
+			},
+		]);
+	} finally {
+		await attendanceRepository.deleteAttendance('2026-04-19', 'user-1');
+	}
+});
+
+test('cannot-attend for another member suggests send-now after the pre reminder went out', { concurrency: false }, async () => {
+	const replies: any[] = [];
+
+	await withCommandRepositoryMocks(
+		{
+			getConfiguration: async () => buildConfiguration({ dailyTime: '7:00 PM', timezone: 'UTC' }),
+			hasSentEvent: async () => true,
+		},
+		async () => {
+			await handleMaqraahCommand(
+				buildInteraction({
+					subcommand: 'cannot-attend-upcoming-maqraah',
+					targetUser: { id: 'user-9', username: 'User Nine' },
+					replies,
+				}) as any,
+				new Date('2026-04-15T18:00:00.000Z')
+			);
+		}
+	);
+
+	assert.deepEqual(replies, [
+		{
+			content: 'The pre-maqraah reminder for that session has already been sent. Rerun this command with send-now enabled to announce it now.',
+			flags: MessageFlags.Ephemeral,
+		},
+	]);
+});
+
 async function withCommandRepositoryMocks(
 	overrides: Partial<
 		Pick<typeof configurationRepository, 'getConfiguration'> &
@@ -377,7 +555,14 @@ async function withCommandRepositoryMocks(
 	}
 }
 
-function buildInteraction(options: { subcommand: string; replies: any[]; dates?: string | null }): Record<string, unknown> {
+function buildInteraction(options: {
+	subcommand: string;
+	replies: any[];
+	dates?: string | null;
+	targetUser?: { id: string; username: string } | null;
+	sendNow?: boolean;
+	client?: any;
+}): Record<string, unknown> {
 	return {
 		options: {
 			getSubcommand: () => options.subcommand,
@@ -388,15 +573,54 @@ function buildInteraction(options: { subcommand: string; replies: any[]; dates?:
 
 				return null;
 			},
+			getUser: (optionName: string) => {
+				if (optionName === 'user') {
+					return options.targetUser ?? null;
+				}
+
+				return null;
+			},
+			getBoolean: (optionName: string) => {
+				if (optionName === 'send-now') {
+					return options.sendNow ?? null;
+				}
+
+				return null;
+			},
 		},
 		user: {
 			id: 'user-1',
 			username: 'User One',
 		},
+		client: options.client,
 		guildId: 'guild-1',
 		channelId: 'channel-1',
 		reply: async (payload: any) => {
 			options.replies.push(payload);
+		},
+	};
+}
+
+function buildAnnouncementChannel(): { channel: any; sent: any[] } {
+	process.env.CHANNEL_ID ??= 'channel-1';
+	const sent: any[] = [];
+	const channel = {
+		id: process.env.CHANNEL_ID,
+		send: async (payload: any) => {
+			sent.push(payload);
+			return { id: `message-${sent.length}` };
+		},
+	};
+
+	return { channel, sent };
+}
+
+function buildClientWithChannel(channel: any): any {
+	return {
+		channels: {
+			cache: {
+				get: (channelId: string) => (channelId === process.env.CHANNEL_ID ? channel : undefined),
+			},
 		},
 	};
 }

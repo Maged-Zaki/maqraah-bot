@@ -4,7 +4,7 @@ import { logger, DiscordContext } from '../../observability/logging/logger';
 import { addProgressSubcommands, progressCommandGroup } from './progress/builders';
 import { handleProgressCommand } from './progress/handler';
 import { addMaqraahConfigurationSubcommands, handleMaqraahConfigurationCommand, maqraahConfigurationGroup } from './configurationCommand';
-import { attendanceStatuses } from './reminders/attendance';
+import { attendanceStatuses, syncAttendanceAnnouncementMessage, type AttendanceAnnouncementChannel } from './reminders/attendance';
 import { defaultReminderCadence, isReminderStageEnabled, reminderStages } from './reminders/cadence';
 import { getUpcomingSessionId } from './reminders/sessionId';
 import { parseIsoDateList } from '../../shared/isoDates';
@@ -17,12 +17,27 @@ const subcommands = {
 
 const options = {
 	DATES: 'dates',
+	USER: 'user',
+	SEND_NOW: 'send-now',
 } as const;
+
+const announcementOutcomes = {
+	POSTED: 'posted',
+	ALREADY: 'already',
+	FAILED: 'failed',
+} as const;
+
+type AnnouncementOutcome = (typeof announcementOutcomes)[keyof typeof announcementOutcomes];
 
 interface TargetSessionIds {
 	sessionIds: string[];
 	hasExplicitDates: boolean;
 	error?: string;
+}
+
+interface AttendanceTarget {
+	userId: string;
+	isSelf: boolean;
 }
 
 export const data = new SlashCommandBuilder()
@@ -31,8 +46,10 @@ export const data = new SlashCommandBuilder()
 	.addSubcommand((subcommand) =>
 		subcommand
 			.setName(subcommands.CANNOT_ATTEND)
-			.setDescription('Preregister that you cannot attend the upcoming maqraah')
+			.setDescription('Preregister that you or another member cannot attend the upcoming maqraah')
 			.addStringOption((option) => option.setName(options.DATES).setDescription('Maqraah dates in YYYY-MM-DD, comma-separated'))
+			.addUserOption((option) => option.setName(options.USER).setDescription('Member who cannot attend (defaults to you)'))
+			.addBooleanOption((option) => option.setName(options.SEND_NOW).setDescription('Post the attendance update right away'))
 	)
 	.addSubcommand((subcommand) => subcommand.setName(subcommands.WILL_BE_LATE).setDescription('Preregister that you will be late to the upcoming maqraah'))
 	.addSubcommand((subcommand) =>
@@ -101,6 +118,9 @@ export async function handleMaqraahCommand(interaction: any, now: Date = new Dat
 			return;
 		}
 
+		const target = getAttendanceTarget(interaction);
+		const sendNow = subcommand === subcommands.CANNOT_ATTEND && getBooleanOption(interaction, options.SEND_NOW) === true;
+
 		const sentPreReminderSessionIds: string[] = [];
 		for (const sessionId of targetSessionIds.sessionIds) {
 			if (await reminderEventsRepository.hasSentEvent(sessionId, reminderStages.PRE)) {
@@ -108,26 +128,46 @@ export async function handleMaqraahCommand(interaction: any, now: Date = new Dat
 			}
 		}
 
-		if (sentPreReminderSessionIds.length > 0) {
+		if (!sendNow && sentPreReminderSessionIds.length > 0) {
 			await interaction.reply({
-				content: buildPreReminderAlreadySentMessage(sentPreReminderSessionIds, targetSessionIds.hasExplicitDates),
+				content: buildPreReminderAlreadySentMessage(sentPreReminderSessionIds, targetSessionIds.hasExplicitDates, target.isSelf),
 				flags: MessageFlags.Ephemeral,
 			});
 			return;
 		}
 
 		switch (subcommand) {
-			case subcommands.CANNOT_ATTEND:
+			case subcommands.CANNOT_ATTEND: {
+				const outcomes = new Set<AnnouncementOutcome>();
 				for (const sessionId of targetSessionIds.sessionIds) {
-					await attendanceRepository.upsertAttendance(sessionId, interaction.user.id, attendanceStatuses.CANNOT_MAKE_IT, null);
+					const existingAttendance = await attendanceRepository.getAttendance(sessionId, target.userId);
+					const alreadyAnnounced = existingAttendance?.status === attendanceStatuses.CANNOT_MAKE_IT && Boolean(existingAttendance.announcedAt);
+
+					await attendanceRepository.upsertAttendance(sessionId, target.userId, attendanceStatuses.CANNOT_MAKE_IT, null);
+
+					if (!sendNow) {
+						continue;
+					}
+
+					if (alreadyAnnounced) {
+						outcomes.add(announcementOutcomes.ALREADY);
+						continue;
+					}
+
+					outcomes.add(await announceMaqraahAbsence(interaction, sessionId, discordContext));
 				}
+
 				await interaction.reply({
-					content: targetSessionIds.hasExplicitDates
-						? `You are marked as unable to attend these maqraah dates: ${formatSessionIdList(targetSessionIds.sessionIds)}.`
-						: 'You are marked as unable to attend the upcoming maqraah.',
+					content: buildCannotAttendMessage(
+						target,
+						targetSessionIds.sessionIds,
+						targetSessionIds.hasExplicitDates,
+						sendNow ? outcomes : null
+					),
 					flags: MessageFlags.Ephemeral,
 				});
 				return;
+			}
 			case subcommands.WILL_BE_LATE:
 				await attendanceRepository.upsertAttendance(upcomingSessionId, interaction.user.id, attendanceStatuses.LATE, null);
 				await interaction.reply({
@@ -206,12 +246,102 @@ function getStringOption(interaction: any, optionName: string): string | null {
 	return interaction.options.getString(optionName);
 }
 
-function buildPreReminderAlreadySentMessage(sessionIds: string[], hasExplicitDates: boolean): string {
-	if (!hasExplicitDates) {
-		return 'The pre-maqraah reminder for that session has already been sent. Please use the reminder buttons instead.';
+function getAttendanceTarget(interaction: any): AttendanceTarget {
+	const pickedUser = typeof interaction.options.getUser === 'function' ? interaction.options.getUser(options.USER) : null;
+
+	if (pickedUser?.id && pickedUser.id !== interaction.user.id) {
+		return { userId: pickedUser.id, isSelf: false };
 	}
 
-	return `The pre-maqraah reminder has already been sent for: ${formatSessionIdList(sessionIds)}. Please use the reminder buttons instead.`;
+	return { userId: interaction.user.id, isSelf: true };
+}
+
+function getBooleanOption(interaction: any, optionName: string): boolean | null {
+	if (typeof interaction.options.getBoolean !== 'function') {
+		return null;
+	}
+
+	const value = interaction.options.getBoolean(optionName);
+	return typeof value === 'boolean' ? value : null;
+}
+
+function getAttendanceAnnouncementChannel(interaction: any): AttendanceAnnouncementChannel | null {
+	const channelId = process.env.CHANNEL_ID;
+	if (!channelId) {
+		return null;
+	}
+
+	const channel = interaction.client?.channels?.cache?.get?.(channelId);
+	if (!channel || typeof channel.send !== 'function') {
+		return null;
+	}
+
+	return channel as AttendanceAnnouncementChannel;
+}
+
+async function announceMaqraahAbsence(interaction: any, sessionId: string, discordContext: DiscordContext): Promise<AnnouncementOutcome> {
+	const channel = getAttendanceAnnouncementChannel(interaction);
+	if (!channel) {
+		logger.warn('Reminder channel unavailable while announcing maqraah absence', discordContext, {
+			operationType: 'maqraah_command',
+			additionalData: { channelId: process.env.CHANNEL_ID, sessionId },
+		});
+		return announcementOutcomes.FAILED;
+	}
+
+	try {
+		await syncAttendanceAnnouncementMessage(channel, sessionId);
+		return announcementOutcomes.POSTED;
+	} catch (error) {
+		logger.error('Failed to announce maqraah absence', error as Error, discordContext, {
+			operationType: 'maqraah_command',
+			operationStatus: 'failure',
+			additionalData: { sessionId },
+		});
+		return announcementOutcomes.FAILED;
+	}
+}
+
+function buildCannotAttendMessage(
+	target: AttendanceTarget,
+	sessionIds: string[],
+	hasExplicitDates: boolean,
+	outcomes: Set<AnnouncementOutcome> | null
+): string {
+	const subject = target.isSelf ? 'You are' : `<@${target.userId}> is`;
+	const lines = [
+		hasExplicitDates
+			? `${subject} marked as unable to attend these maqraah dates: ${formatSessionIdList(sessionIds)}.`
+			: `${subject} marked as unable to attend the upcoming maqraah.`,
+	];
+
+	if (!outcomes) {
+		return lines.join('\n');
+	}
+
+	if (outcomes.has(announcementOutcomes.FAILED)) {
+		lines.push('The absence was saved, but posting the attendance update failed.');
+	}
+
+	if (outcomes.has(announcementOutcomes.POSTED)) {
+		lines.push('The attendance update was posted in the reminder channel.');
+	} else if (outcomes.has(announcementOutcomes.ALREADY)) {
+		lines.push('The attendance update was already posted.');
+	}
+
+	return lines.join('\n');
+}
+
+function buildPreReminderAlreadySentMessage(sessionIds: string[], hasExplicitDates: boolean, isSelf: boolean): string {
+	const hint = isSelf
+		? 'Please use the reminder buttons instead.'
+		: 'Rerun this command with send-now enabled to announce it now.';
+
+	if (!hasExplicitDates) {
+		return `The pre-maqraah reminder for that session has already been sent. ${hint}`;
+	}
+
+	return `The pre-maqraah reminder has already been sent for: ${formatSessionIdList(sessionIds)}. ${hint}`;
 }
 
 function buildExplicitClearStatusMessage(clearedSessionIds: string[], missingSessionIds: string[]): string {

@@ -79,8 +79,8 @@ There is no `/configuration set` command in the current bot.
 
 ### `/maqraah`
 
-- `/maqraah cannot-attend-upcoming-maqraah [dates]`
-  Marks you as unable to attend. Without `dates`, this applies to the upcoming maqraah. `dates` accepts comma-separated maqraah session dates in `YYYY-MM-DD`, such as `2026-04-20, 2026-04-22`.
+- `/maqraah cannot-attend-upcoming-maqraah [dates] [user] [send-now]`
+  Marks you (or the selected `user`) as unable to attend. Without `dates`, this applies to the upcoming maqraah. `dates` accepts comma-separated maqraah session dates in `YYYY-MM-DD`, such as `2026-04-20, 2026-04-22`. `send-now: true` posts or edits the channel's attendance update immediately (the same message the reminder buttons update), so an absence can be announced while the maqraah is already running. Without `send-now`, the absence is preregistered and announced with the pre-reminder; if that pre-reminder already went out, you are asked to rerun with `send-now`.
 - `/maqraah will-be-late-upcoming-maqraah`
   Marks you as arriving late for the upcoming maqraah.
 - `/maqraah clear-upcoming-maqraah-status [dates]`
